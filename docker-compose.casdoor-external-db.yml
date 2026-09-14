@@ -1,59 +1,33 @@
 version: '3.8'
 
 services:
-  # Casdoor 服务（使用外部数据库）
+  # Casdoor 服务（使用外部数据库 - host 网络模式）
   casdoor:
     image: casbin/casdoor:latest
     container_name: casdoor
-    ports:
-      - "8000:8000"
+    network_mode: host
     environment:
       - RUNNING_IN_DOCKER=true
     volumes:
       - ./casdoor/conf:/conf
       - casdoor_data:/var/lib/casdoor
-    networks:
-      - consul_mgr_network
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8000/api/get-global-providers"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-      start_period: 30s
 
-  # Consul Manager 后端
+  # Consul Manager 后端（使用 GitHub Actions 构建的镜像）
   consul_mgr_api:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: iflyelf/consul-mgr:latest
     container_name: consul_mgr_api
-    ports:
-      - "8080:8080"
+    network_mode: host
     environment:
       - DATABASE_URL=postgresql://iflyelf:1q23l@Yc45j@10.0.51.88:6000/consul_mgr?sslmode=disable
-      - CASDOOR_ENDPOINT=http://casdoor:8000
+      - CASDOOR_ENDPOINT=http://localhost:8000
       - CASDOOR_CLIENT_ID=${CASDOOR_CLIENT_ID}
       - CASDOOR_CLIENT_SECRET=${CASDOOR_CLIENT_SECRET}
       - CASDOOR_ORGANIZATION=consul_mgr
       - CASDOOR_APPLICATION=consul_manager
       - JWT_SECRET=${JWT_SECRET:-consul_mgr_jwt_secret_key_min_32_chars}
-    depends_on:
-      casdoor:
-        condition: service_healthy
-    networks:
-      - consul_mgr_network
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
 
 volumes:
   casdoor_data:
     driver: local
-
-networks:
-  consul_mgr_network:
-    driver: bridge
