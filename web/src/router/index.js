@@ -18,6 +18,24 @@ const routes = [
         name: 'Groups',
         component: () => import('@/views/Groups.vue'),
         meta: { title: '服务组管理' }
+      },
+      {
+        path: 'services',
+        name: 'Services',
+        component: () => import('@/views/Services.vue'),
+        meta: { title: 'Services 管理' }
+      },
+      {
+        path: 'service-detail',
+        name: 'ServiceDetail',
+        component: () => import('@/views/ServiceDetail.vue'),
+        meta: { title: '服务详情' }
+      },
+      {
+        path: 'instances',
+        name: 'Instances',
+        component: () => import('@/views/Instances.vue'),
+        meta: { title: 'Instances 管理' }
       }
     ]
   }

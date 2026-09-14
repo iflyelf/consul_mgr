@@ -41,6 +41,14 @@
             <el-icon><Grid /></el-icon>
             <span>服务组管理</span>
           </el-menu-item>
+          <el-menu-item index="/services">
+            <el-icon><Connection /></el-icon>
+            <span>Services 管理</span>
+          </el-menu-item>
+          <el-menu-item index="/instances">
+            <el-icon><Monitor /></el-icon>
+            <span>Instances 管理</span>
+          </el-menu-item>
         </el-menu>
       </el-aside>
       
@@ -54,7 +62,7 @@
 <script setup>
 import { useRouter } from 'vue-router'
 import { ElMessageBox } from 'element-plus'
-import { UserFilled, SwitchButton, Sunny, Grid } from '@element-plus/icons-vue'
+import { UserFilled, SwitchButton, Sunny, Grid, Connection, Monitor } from '@element-plus/icons-vue'
 import { useUserStore } from '@/store/user'
 import { useThemeStore } from '@/store/theme'
 import { logout } from '@/api/auth'

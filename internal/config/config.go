@@ -6,16 +6,16 @@ type Config struct {
 	rest.RestConf
 	
 	Database struct {
-		DSN             string `json:",env=DATABASE_URL"`
-		Host            string `json:",default=localhost,env=DB_HOST"`
-		Port            int    `json:",default=5432,env=DB_PORT"`
-		User            string `json:",default=postgres,env=DB_USER"`
-		Password        string `json:",env=DB_PASSWORD"`
-		DBName          string `json:",default=consul_mgr,env=DB_NAME"`
-		SSLMode         string `json:",default=disable,env=DB_SSLMODE"`
-		MaxOpenConns    int    `json:",default=100"`
-		MaxIdleConns    int    `json:",default=10"`
-		ConnMaxLifetime int    `json:",default=3600"` // seconds
+		DSN             string `json:",optional,env=DATABASE_URL"`
+		Host            string `json:",optional,default=localhost,env=DB_HOST"`
+		Port            int    `json:",optional,default=5432,env=DB_PORT"`
+		User            string `json:",optional,default=postgres,env=DB_USER"`
+		Password        string `json:",optional,env=DB_PASSWORD"`
+		DBName          string `json:",optional,default=consul_mgr,env=DB_NAME"`
+		SSLMode         string `json:",optional,default=disable,env=DB_SSLMODE"`
+		MaxOpenConns    int    `json:",optional,default=100"`
+		MaxIdleConns    int    `json:",optional,default=10"`
+		ConnMaxLifetime int    `json:",optional,default=3600"` // seconds
 	}
 	
 	JWT struct {

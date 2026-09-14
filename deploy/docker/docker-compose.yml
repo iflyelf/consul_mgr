@@ -1,23 +1,79 @@
-version: '3.8'
-
+# =============================================================================
+# consul-mgr 单容器编排 (host 网络模式)
+#
+#   Consul 服务管理平台 (Go + Vue 3, 支持多集群管理)。
+#   提供 Consul Services 和 Instances 的完整生命周期管理:
+#     - 服务组管理 (多 Consul 集群配置)
+#     - Services 增删改查、批量操作
+#     - Instances 注册/更新/删除、批量导入导出
+#     - Tags、Meta、健康检查可视化配置
+#
+#   直接使用已构建镜像, 无需本地编译。
+#     启动: docker compose up -d
+#     更新: docker compose pull && docker compose up -d
+#     日志: docker logs -f consul-mgr
+# =============================================================================
 services:
-  consul_mgr:
-    image: iflyelf/consul_mgr:latest
-    container_name: consul_mgr
-    restart: unless-stopped
+  consul-mgr:
+    # 已构建好的镜像 (由 GitHub Action 多架构发布: amd64 / arm64)
+    image: iflyelf/consul-mgr:latest
+    # 容器名, 便于 docker exec / docker logs 直接引用
+    container_name: consul-mgr
+    # 分配伪终端, 便于 docker exec 交互调试
+    tty: true
+    # 保持标准输入打开
+    stdin_open: true
+    # 容器异常退出或宿主重启后始终自动拉起
+    restart: always
+    # 停止时发送 SIGTERM 并预留 30s, 让服务完成清理再退出
+    stop_signal: SIGTERM
+    stop_grace_period: 30s
+
+    # host 网络模式: API 服务直接监听宿主机端口
+    #   优点: 无需端口映射, 简化网络配置
+    #   注意: 服务端口由 config.yaml 的 Port 控制, 默认 8080
     network_mode: host
+
+    # 以 root 运行: 访问配置文件和日志目录
+    user: root
+    # 最小权限: 仅授予网络绑定能力
+    cap_add:
+      - NET_BIND_SERVICE
+
+    # 环境变量 (必填项)
     environment:
-      - DATABASE_URL=postgresql://iflyelf:1q23l@Yc45j@10.0.51.88:6000/consul_mgr?sslmode=disable
-      - JWT_SECRET=consul_mgr_jwt_secret_2024_min_32_chars
-      - ADMIN_PASSWORD=ysyh!9Sky
-      - ADMIN_USERNAME=iflyelf
-      - ADMIN_EMAIL=iflyelf@gmail.com
+      # 数据库连接 (必填)
+      - DATABASE_URL=postgresql://user:password@host:5432/consul_mgr?sslmode=disable
+      # 管理员账号 (必填)
+      - ADMIN_USERNAME=admin
+      - ADMIN_PASSWORD=change_me_please
+      - ADMIN_EMAIL=admin@example.com
+      # JWT 密钥 (可选, 建议修改)
+      - JWT_SECRET=consul_mgr_jwt_secret_key_min_32_chars
+      # 服务配置 (可选)
+      - SERVER_HOST=0.0.0.0
+      - SERVER_PORT=8080
+
     volumes:
-      - ./config.yaml:/app/etc/config.yaml:ro
-      - ./logs:/var/log/consul_mgr
+      # 配置文件 (首次运行前先在当前目录准备好 config.yaml)
+      - ./config.yaml:/app/etc/config.yaml:rw
+      # 日志目录持久化到宿主机 ./logs
+      - ./logs:/app/logs:rw
+      # 与宿主机保持一致的时区
+      - /usr/share/zoneinfo:/usr/share/zoneinfo:ro
+      - /etc/localtime:/etc/localtime:ro
+
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/health"]
+      # 探测健康检查接口
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/health"]
       interval: 30s
-      timeout: 10s
+      timeout: 5s
       retries: 3
-      start_period: 40s
+      start_period: 15s
+
+    # 放宽进程数与文件描述符上限
+    ulimits:
+      nproc: 65535
+      nofile:
+        soft: 65535
+        hard: 65535

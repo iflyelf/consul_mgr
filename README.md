@@ -301,37 +301,7 @@ Web:
   Host: ${WEB_HOST:0.0.0.0}
 ```
 
-### Docker Compose
 
-```yaml
-version: '3.8'
-
-services:
-  postgres:
-    image: postgres:15
-    environment:
-      POSTGRES_DB: consul_mgr
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-
-  consul-mgr:
-    build: .
-    ports:
-      - "8080:8080"
-    environment:
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/consul_mgr?sslmode=disable
-      ADMIN_PASSWORD: admin123
-      JWT_SECRET: your_jwt_secret_key_min_32_characters
-    depends_on:
-      - postgres
-
-volumes:
-  postgres_data:
-```
 
 ## 故障排查
 
@@ -363,20 +333,68 @@ cd web && npm run dev
 
 ## 生产部署
 
-### systemd 服务
+### 方式一：systemd（推荐，直接跑在宿主机）
 
 ```bash
-# 复制文件
-sudo cp consul_mgr /usr/local/bin/
-sudo cp deploy/systemd/consul_mgr.service /etc/systemd/system/
+# 1. 下载二进制到 /tmp 并解压
+wget -q -c --no-check-certificate -O /tmp/consul-mgr.tar.gz \
+  "https://github.com/iflyelf/consul_mgr/releases/latest/download/consul_mgr-linux-amd64.tar.gz"
+tar -xzf /tmp/consul-mgr.tar.gz -C /tmp
 
-# 编辑服务文件，设置环境变量
-sudo vi /etc/systemd/system/consul_mgr.service
+# 2. 替换二进制(mv -f 原子覆盖)
+mv -f /tmp/consul_mgr-linux-amd64 /usr/local/bin/consul-mgr
+chmod +x /usr/local/bin/consul-mgr
 
-# 启动服务
-sudo systemctl daemon-reload
-sudo systemctl enable consul_mgr
-sudo systemctl start consul_mgr
+# 3. 创建配置目录并编辑配置
+mkdir -p /etc/consul-mgr
+vi /etc/consul-mgr/config.yaml
+
+# 4. 配置环境变量(在配置文件中设置或导出)
+# 必填:
+#   DATABASE_URL="postgresql://user:pass@host:5432/consul_mgr"
+#   ADMIN_PASSWORD="your_password"
+# 可选:
+#   JWT_SECRET="your_jwt_secret_min_32_chars"
+
+# 5. 下载 systemd 单元到 /tmp 再替换
+wget -q -c --no-check-certificate -O /tmp/consul-mgr.service \
+  "https://raw.githubusercontent.com/iflyelf/consul_mgr/main/deploy/systemd/consul-mgr.service"
+mv -f /tmp/consul-mgr.service /etc/systemd/system/consul-mgr.service
+
+# 6. 启动服务
+systemctl daemon-reload
+systemctl enable --now consul-mgr
+
+# 7. 查看状态
+systemctl status consul-mgr
+journalctl -u consul-mgr -f
+```
+
+### 方式二：Docker（host 网络 + 特权）
+
+```bash
+# 1. 创建工作目录
+mkdir -p consul-mgr && cd consul-mgr
+
+# 2. 下载 docker-compose.yml 与配置模板到 /tmp 再替换
+wget -q -c --no-check-certificate -O /tmp/docker-compose.yml \
+  "https://raw.githubusercontent.com/iflyelf/consul_mgr/main/deploy/docker/docker-compose.yml"
+mv -f /tmp/docker-compose.yml ./docker-compose.yml
+
+wget -q -c --no-check-certificate -O /tmp/config.yaml \
+  "https://raw.githubusercontent.com/iflyelf/consul_mgr/main/etc/config.yaml"
+mv -f /tmp/config.yaml ./config.yaml
+
+# 3. 修改配置文件和环境变量
+vi ./config.yaml
+vi ./docker-compose.yml  # 修改环境变量
+
+# 4. 启动
+docker compose up -d
+
+# 5. 查看日志
+docker compose logs -f          # 容器 stdout
+tail -f ./logs/consul_mgr.log   # 文件日志(如果配置了)
 ```
 
 ### Nginx 反向代理

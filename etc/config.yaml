@@ -1,19 +1,10 @@
 Name: consul_mgr
-Host: ${SERVER_HOST:0.0.0.0}
-Port: ${SERVER_PORT:8080}
-Mode: ${SERVER_MODE:dev}
+Host: 0.0.0.0
+Port: 8080
+Mode: dev
 
 Database:
   DSN: ${DATABASE_URL}
-  Host: ${DB_HOST:localhost}
-  Port: ${DB_PORT:5432}
-  User: ${DB_USER:postgres}
-  Password: ${DB_PASSWORD}
-  DBName: ${DB_NAME:consul_mgr}
-  SSLMode: ${DB_SSLMODE:disable}
-  MaxOpenConns: 100
-  MaxIdleConns: 10
-  ConnMaxLifetime: 3600
 
 JWT:
   Secret: ${JWT_SECRET}
@@ -22,25 +13,19 @@ JWT:
   Issuer: consul_mgr
 
 Admin:
-  Username: ${ADMIN_USERNAME:admin}
+  Username: ${ADMIN_USERNAME}
   Password: ${ADMIN_PASSWORD}
   Email: ${ADMIN_EMAIL}
-
-Consul:
-  DefaultAddress: ${CONSUL_ADDRESS}
-  DefaultToken: ${CONSUL_TOKEN}
-  DefaultDatacenter: ${CONSUL_DATACENTER:dc1}
-  Timeout: 10
 
 Web:
   Embedded: true
   StaticDir: ./web/dist
-  Port: ${WEB_PORT:5173}
+  Port: 5173
 
 LogConfig:
-  Level: ${LOG_LEVEL:info}
-  Format: ${LOG_FORMAT:json}
+  Level: info
+  Format: json
 
 Audit:
-  Enabled: ${AUDIT_ENABLED:true}
-  RetentionDays: ${AUDIT_RETENTION_DAYS:90}
+  Enabled: true
+  RetentionDays: 90
