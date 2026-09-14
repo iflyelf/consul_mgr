@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 #############################
 #     设置公共的变量         #
 #############################
@@ -6,7 +7,9 @@ FROM ubuntu:${BASE_IMAGE_TAG}
 
 # 作者描述信息
 LABEL org.opencontainers.image.authors="iflyelf" \
-      org.opencontainers.image.vendor="iflyelf"
+      org.opencontainers.image.vendor="iflyelf" \
+      org.opencontainers.image.source="https://github.com/iflyelf/consul_mgr" \
+      org.opencontainers.image.description="Consul 服务管理平台 (Go + Vue 3, 支持多集群管理)"
 
 ARG TARGETARCH
 ARG TARGETVARIANT
@@ -37,47 +40,158 @@ ARG GOROOT=/opt/go
 ENV GOROOT=$GOROOT
 ARG GOPATH=/opt/golang
 ENV GOPATH=$GOPATH
-ENV PATH=$PATH:$GOROOT/bin:$GOPATH/bin
+# Go 模块代理(加速依赖下载, 国内构建必备; 海外可改为 https://proxy.golang.org,direct)
+ARG GOPROXY=https://goproxy.cn,direct
+ENV GOPROXY=$GOPROXY
 
-# 工作目录
-ARG DOWNLOAD_SRC=/tmp/src
-ENV DOWNLOAD_SRC=$DOWNLOAD_SRC
-RUN mkdir -p ${DOWNLOAD_SRC}
+# 版本号(由 CI 通过 --build-arg VERSION=<git tag> 注入, 缺省为 dev)
+ARG VERSION=dev
+ENV VERSION=$VERSION
 
-# 源设置（阿里云Ubuntu镜像）
-RUN sed -i 's@//.*archive.ubuntu.com@//mirrors.aliyun.com@g' /etc/apt/sources.list && \
-    sed -i 's/security.ubuntu.com/mirrors.aliyun.com/g' /etc/apt/sources.list
+ARG PKG_DEPS="\
+    zsh \
+    bash \
+    bash-doc \
+    bash-completion \
+    conntrack \
+    ipset \
+    ipvsadm \
+    nftables \
+    bind9-dnsutils \
+    iproute2 \
+    net-tools \
+    iptables \
+    bridge-utils \
+    openvswitch-switch \
+    libseccomp2 \
+    nfs-common \
+    rsync \
+    socat \
+    psmisc \
+    procps \
+    sysstat \
+    firewalld \
+    chrony \
+    ntpsec-ntpdate \
+    tcpdump \
+    telnet \
+    lsof \
+    iftop \
+    htop \
+    nmap \
+    nmap-common \
+    jq \
+    curl \
+    wget \
+    axel \
+    git \
+    vim \
+    tree \
+    unzip \
+    zip \
+    tar \
+    subversion \
+    lrzsz \
+    gcc \
+    g++ \
+    build-essential \
+    binutils \
+    autoconf \
+    automake \
+    libtool \
+    gettext \
+    autopoint \
+    asciidoc \
+    gawk \
+    patch \
+    flex \
+    texinfo \
+    device-tree-compiler \
+    zlib1g-dev \
+    libjpeg-dev \
+    libelf-dev \
+    libssl-dev \
+    openssl \
+    libffi-dev \
+    libglib2.0-dev \
+    xmlto \
+    libncurses-dev \
+    locate \
+    lvm2 \
+    rsyslog \
+    ca-certificates \
+    gnupg2 \
+    debsums \
+    locales \
+    tzdata \
+    fonts-droid-fallback \
+    fonts-wqy-zenhei \
+    fonts-wqy-microhei \
+    fonts-arphic-ukai \
+    fonts-arphic-uming \
+    language-pack-zh-hans \
+    numactl \
+    xz-utils \
+    libaio-dev \
+    python3 \
+    python3-dev \
+    python3-pip \
+    python3-yaml \
+    python3-venv \
+    python-is-python3 \
+    supervisor \
+    tini \
+    sshpass \
+    iputils-ping \
+    ncat \
+    upx-ucl \
+    libxml2-dev \
+    libxslt1-dev \
+    cargo \
+    rustc \
+    sudo \
+    npm \
+    uglifyjs"
+ENV PKG_DEPS=$PKG_DEPS
 
-# 安装基础软件
-RUN apt-get update && \
-    apt-get install -y \
-        tzdata \
-        locales \
-        ca-certificates \
-        wget \
-        curl \
-        tar \
-        gzip \
-        vim \
-        net-tools \
-        iputils-ping \
-        dnsutils \
-        telnet \
-        iproute2 \
-        procps && \
-    # 设置时区
-    ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && \
-    echo $TZ > /etc/timezone && \
-    # 设置语言
-    locale-gen ${LANG} && \
-    update-locale LANG=${LANG} && \
-    # 清理
-    rm -rf /var/lib/apt/lists/*
+# ***** 安装依赖 *****
+RUN set -eux && \
+   # 更新源地址
+   sed -i 's@URIs: http://[a-z.]*\.ubuntu\.com/ubuntu/@URIs: https://mirrors.aliyun.com/ubuntu/@g' /etc/apt/sources.list.d/ubuntu.sources && \
+   sed -i 's@^Types: deb$@Types: deb deb-src@' /etc/apt/sources.list.d/ubuntu.sources && \
+   # 解决证书认证失败问题
+   touch /etc/apt/apt.conf.d/99verify-peer.conf && echo >>/etc/apt/apt.conf.d/99verify-peer.conf "Acquire { https::Verify-Peer false }" && \
+   # 更新系统软件
+   DEBIAN_FRONTEND=noninteractive apt-get update -qqy && apt-get upgrade -qqy && \
+   # 安装依赖包
+   DEBIAN_FRONTEND=noninteractive apt-get install -qqy --no-install-recommends $PKG_DEPS --option=Dpkg::Options::=--force-confdef && \
+   # multilib/i386 交叉编译包仅 amd64 架构提供, 其他架构跳过
+   if [ "${TARGETARCH}" = "amd64" ]; then \
+       DEBIAN_FRONTEND=noninteractive apt-get install -qqy --no-install-recommends \
+           gcc-multilib g++-multilib libc6-dev-i386 --option=Dpkg::Options::=--force-confdef ; \
+   fi && \
+   DEBIAN_FRONTEND=noninteractive apt-get -qqy --no-install-recommends autoremove --purge && \
+   DEBIAN_FRONTEND=noninteractive apt-get -qqy --no-install-recommends autoclean && \
+   rm -rf /var/lib/apt/lists/* && \
+   # 更新时区
+   ln -sf /usr/share/zoneinfo/${TZ} /etc/localtime && \
+   # 更新时间
+   echo ${TZ} > /etc/timezone && \
+   # 更改为zsh
+   sh -c "$(curl -fsSL https://raw.github.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" || true && \
+   sed -i -e "s/bin\/ash/bin\/zsh/" /etc/passwd && \
+   # vim 默认配置文件存在时才关闭 mouse(不同版本路径不同, 用 find 定位)
+   find /usr/share/vim -name defaults.vim -exec sed -i -e 's/mouse=/mouse-=/g' {} + && \
+   locale-gen zh_CN.UTF-8 && localedef -f UTF-8 -i zh_CN zh_CN.UTF-8 && locale-gen
 
-# 安装 Go（根据架构选择）
-RUN case ${TARGETARCH} in \
-        amd64)   GO_ARCH=amd64 ;; \
-        arm64)   GO_ARCH=arm64 ;; \
+# ***** 安装golang *****
+RUN set -eux && \
+    # 映射 buildx TARGETARCH 到 Go 官方包名 (arm -> armv6l, 其他直接用)
+    case "${TARGETARCH}" in \
+        amd64)   GO_ARCH=amd64   ;; \
+        arm64)   GO_ARCH=arm64   ;; \
+        arm)     GO_ARCH=armv6l  ;; \
+        386)     GO_ARCH=386     ;; \
         *)       echo "不支持的架构: ${TARGETARCH}" && exit 1 ;; \
     esac && \
     echo "目标架构: ${TARGETARCH} => Go 包: linux-${GO_ARCH}" && \
@@ -85,39 +199,31 @@ RUN case ${TARGETARCH} in \
          -O /tmp/go-${GO_ARCH}.tar.gz && \
     tar xzf /tmp/go-${GO_ARCH}.tar.gz -C /opt && \
     mkdir -pv ${GOPATH}/bin && \
-    # 仅删除 Go 压缩包, 不清空整个 /tmp (避免误删 DOWNLOAD_SRC=/tmp/src)
     rm -f /tmp/go-${GO_ARCH}.tar.gz && \
     # 软链 go 到 /usr/bin, 后续 RUN 层无需配 PATH
     ln -sf /opt/go/bin/* /usr/bin/ && \
-    # 验证版本
     go version
 
-# 设置 Go 代理
-ENV GOPROXY=https://goproxy.cn,direct
-
-# 复制源码
-WORKDIR /build
+# ***** 编译 consul_mgr *****
+# CGO_ENABLED=0 生成纯静态二进制; VERSION 注入生产版本号
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN --mount=type=cache,target=/root/.cache/go-build \
+    --mount=type=cache,target=/opt/golang/pkg/mod \
+    go mod download
 COPY . .
+RUN --mount=type=cache,target=/root/.cache/go-build \
+    --mount=type=cache,target=/opt/golang/pkg/mod \
+    set -eux && \
+    CGO_ENABLED=0 go build -trimpath \
+        -ldflags "-s -w -X main.version=${VERSION}" \
+        -o /usr/local/bin/consul_mgr ./cmd/api && \
+    /usr/local/bin/consul_mgr --version
 
-# 编译
-RUN go mod download && \
-    CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} \
-    go build -trimpath -ldflags "-s -w" -o consul_mgr ./cmd/api
-
-# 创建运行目录
-RUN mkdir -p /app/logs /app/etc && \
-    mv consul_mgr /app/ && \
-    cp etc/config.yaml /app/etc/
-
-# 工作目录
-WORKDIR /app
-
-# 暴露端口
+# ***** 运行配置 *****
+WORKDIR /
 EXPOSE 8080
 
-# 健康检查
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8080/health || exit 1
-
-# 启动命令
-CMD ["/app/consul_mgr", "-c", "/app/etc/config.yaml"]
+# 默认配置文件路径, 可通过挂载卷覆盖
+ENTRYPOINT ["/usr/local/bin/consul_mgr"]
+CMD ["-c", "/etc/consul_mgr/config.yaml"]
