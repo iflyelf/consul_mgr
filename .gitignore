@@ -1,0 +1,54 @@
+# Binaries
+consul_mgr
+consul_mgr-*
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool
+*.out
+coverage.txt
+
+# Go workspace file
+go.work
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs
+*.log
+logs/
+tmp/
+
+# Config (local overrides)
+etc/config.local.yaml
+.env
+.env.local
+
+# Frontend
+web/node_modules/
+web/dist/
+web/.vite/
+web/.cache/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# OS
+Thumbs.db
+
+# Temporary files
+/tmp/
+*.tmp
+nohup.out

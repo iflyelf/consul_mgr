@@ -1,0 +1,93 @@
+:root {
+  --bg-color: #f5f7fa;
+  --card-bg: #ffffff;
+  --text-color: #303133;
+  --text-secondary: #606266;
+  --border-color: #dcdfe6;
+  --primary-color: #409eff;
+}
+
+[data-theme="dark"] {
+  --bg-color: #1a1a1a;
+  --card-bg: #2d2d2d;
+  --text-color: #e5e7eb;
+  --text-secondary: #9ca3af;
+  --border-color: #4b5563;
+  --primary-color: #409eff;
+  
+  .el-table {
+    --el-table-bg-color: #2d2d2d;
+    --el-table-tr-bg-color: #2d2d2d;
+    --el-table-header-bg-color: #1f1f1f;
+    --el-table-border-color: #4b5563;
+    --el-table-text-color: #e5e7eb;
+    --el-table-header-text-color: #e5e7eb;
+  }
+  
+  .el-card {
+    --el-card-bg-color: #2d2d2d;
+    --el-card-border-color: #4b5563;
+  }
+  
+  .el-dialog {
+    --el-dialog-bg-color: #2d2d2d;
+  }
+  
+  .el-form-item__label {
+    color: #e5e7eb;
+  }
+  
+  .el-input__wrapper {
+    background-color: #1f1f1f;
+  }
+}
+
+[data-theme="blue"] {
+  --bg-color: #e3f2fd;
+  --card-bg: #ffffff;
+  --text-color: #1565c0;
+  --text-secondary: #1976d2;
+  --border-color: #90caf9;
+  --primary-color: #2196f3;
+  
+  .el-button--primary {
+    --el-button-bg-color: #2196f3;
+    --el-button-border-color: #2196f3;
+  }
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  transition: background-color 0.3s, color 0.3s;
+}
+
+#app {
+  width: 100%;
+  min-height: 100vh;
+}
+
+.page-container {
+  padding: 20px;
+  
+  @media (max-width: 768px) {
+    padding: 10px;
+  }
+}
+
+.card-container {
+  background: var(--card-bg);
+  border-radius: 4px;
+  transition: background-color 0.3s;
+}

@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  consul_mgr:
+    image: iflyelf/consul_mgr:latest
+    container_name: consul_mgr
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      - DATABASE_URL=postgresql://iflyelf:1q23l@Yc45j@10.0.51.88:6000/consul_mgr?sslmode=disable
+      - JWT_SECRET=consul_mgr_jwt_secret_2024_min_32_chars
+      - ADMIN_PASSWORD=ysyh!9Sky
+      - ADMIN_USERNAME=iflyelf
+      - ADMIN_EMAIL=iflyelf@gmail.com
+    volumes:
+      - ./config.yaml:/app/etc/config.yaml:ro
+      - ./logs:/var/log/consul_mgr
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s

@@ -1,0 +1,30 @@
+[Unit]
+Description=Consul Manager Service
+Documentation=https://github.com/iflyelf/consul_mgr
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/etc/consul_mgr
+ExecStart=/usr/local/bin/consul_mgr -c /etc/consul_mgr/config.yaml
+Restart=always
+RestartSec=5
+LimitNOFILE=65536
+
+# 环境变量
+Environment="DATABASE_URL=postgresql://iflyelf:password@10.0.51.88:6000/consul_mgr?sslmode=disable"
+Environment="JWT_SECRET=consul_mgr_jwt_secret_2024_min_32_chars"
+Environment="ADMIN_PASSWORD=ysyh!9Sky"
+
+# 安全配置
+NoNewPrivileges=true
+PrivateTmp=true
+
+# 日志配置
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=consul_mgr
+
+[Install]
+WantedBy=multi-user.target

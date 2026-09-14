@@ -1,0 +1,123 @@
+package types
+
+// ConsulServiceInfo Consul 服务信息
+type ConsulServiceInfo struct {
+	ID              string            `json:"id"`
+	Service         string            `json:"service"`
+	Tags            []string          `json:"tags"`
+	Meta            map[string]string `json:"meta"`
+	Address         string            `json:"address"`
+	Port            int               `json:"port"`
+	Datacenter      string            `json:"datacenter"`
+	HealthStatus    string            `json:"health_status"` // passing, warning, critical
+	InstanceCount   int               `json:"instance_count"`
+	HealthyCount    int               `json:"healthy_count"`
+	UnhealthyCount  int               `json:"unhealthy_count"`
+}
+
+// ConsulInstanceInfo Consul 实例信息
+type ConsulInstanceInfo struct {
+	ID              string                 `json:"id"`
+	Service         string                 `json:"service"`
+	Tags            []string               `json:"tags"`
+	Meta            map[string]string      `json:"meta"`
+	Address         string                 `json:"address"`
+	Port            int                    `json:"port"`
+	Datacenter      string                 `json:"datacenter"`
+	HealthStatus    string                 `json:"health_status"`
+	Checks          []ConsulHealthCheck    `json:"checks"`
+}
+
+// ConsulHealthCheck 健康检查信息
+type ConsulHealthCheck struct {
+	CheckID     string `json:"check_id"`
+	Name        string `json:"name"`
+	Status      string `json:"status"`
+	Notes       string `json:"notes"`
+	Output      string `json:"output"`
+	ServiceID   string `json:"service_id"`
+	ServiceName string `json:"service_name"`
+}
+
+// RegisterInstanceRequest 注册实例请求
+type RegisterInstanceRequest struct {
+	GroupID         int64              `json:"group_id" validate:"required"`
+	Service         string             `json:"service" validate:"required"`
+	ID              string             `json:"id,omitempty"`
+	Tags            []string           `json:"tags,omitempty"`
+	Meta            map[string]string  `json:"meta,omitempty"`
+	Address         string             `json:"address" validate:"required"`
+	Port            int                `json:"port" validate:"required,min=1,max=65535"`
+	Check           *HealthCheckConfig `json:"check,omitempty"`
+}
+
+// UpdateInstanceRequest 更新实例请求
+type UpdateInstanceRequest struct {
+	Tags  []string          `json:"tags,omitempty"`
+	Meta  map[string]string `json:"meta,omitempty"`
+	Check *HealthCheckConfig `json:"check,omitempty"`
+}
+
+// HealthCheckConfig 健康检查配置
+type HealthCheckConfig struct {
+	Type     string `json:"type" validate:"required,oneof=http tcp ttl script grpc"` // http, tcp, ttl, script, grpc
+	HTTP     string `json:"http,omitempty"`
+	TCP      string `json:"tcp,omitempty"`
+	Interval string `json:"interval,omitempty" validate:"omitempty"`
+	Timeout  string `json:"timeout,omitempty" validate:"omitempty"`
+	TTL      string `json:"ttl,omitempty"`
+	Script   string `json:"script,omitempty"`
+	GRPC     string `json:"grpc,omitempty"`
+	GRPCUseTLS bool `json:"grpc_use_tls,omitempty"`
+	Method   string `json:"method,omitempty"`
+	Header   map[string][]string `json:"header,omitempty"`
+	Body     string `json:"body,omitempty"`
+}
+
+// BatchDeleteRequest 批量删除请求
+type BatchDeleteRequest struct {
+	GroupID int64    `json:"group_id" validate:"required"`
+	IDs     []string `json:"ids" validate:"required,min=1"`
+}
+
+// ImportInstancesRequest 批量导入请求
+type ImportInstancesRequest struct {
+	GroupID   int64  `json:"group_id" validate:"required"`
+	Format    string `json:"format" validate:"required,oneof=json yaml csv"`
+	Data      string `json:"data" validate:"required"`
+	OverWrite bool   `json:"overwrite,omitempty"` // 是否覆盖已存在的实例
+}
+
+// ExportInstancesRequest 批量导出请求
+type ExportInstancesRequest struct {
+	GroupID int64  `form:"group_id" validate:"required"`
+	Service string `form:"service,optional"`
+	Format  string `form:"format,default=json" validate:"oneof=json yaml csv"`
+}
+
+// InstanceImportData 导入数据结构
+type InstanceImportData struct {
+	Instances []RegisterInstanceRequest `json:"instances"`
+}
+
+// ServiceHealthSummary 服务健康状态汇总
+type ServiceHealthSummary struct {
+	Service        string `json:"service"`
+	TotalInstances int    `json:"total_instances"`
+	Passing        int    `json:"passing"`
+	Warning        int    `json:"warning"`
+	Critical       int    `json:"critical"`
+}
+
+// QueryServicesRequest 查询服务请求
+type QueryServicesRequest struct {
+	GroupID int64  `form:"group_id,optional"`
+	Keyword string `form:"keyword,optional"`
+}
+
+// QueryInstancesRequest 查询实例请求
+type QueryInstancesRequest struct {
+	GroupID int64  `form:"group_id,optional"`
+	Service string `form:"service,optional"`
+	Status  string `form:"status,optional"` // passing, warning, critical
+}

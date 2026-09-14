@@ -1,0 +1,46 @@
+Name: consul_mgr
+Host: 0.0.0.0
+Port: 8080
+Mode: dev
+
+Database:
+  DSN: ${DATABASE_URL}
+  # 或者分开配置
+  Host: ${DB_HOST:10.0.51.88}
+  Port: 6000
+  User: ${DB_USER:iflyelf}
+  Password: ${DB_PASSWORD}
+  DBName: ${DB_NAME:consul_mgr}
+  SSLMode: ${DB_SSLMODE:disable}
+  MaxOpenConns: 100
+  MaxIdleConns: 10
+  ConnMaxLifetime: 3600
+
+JWT:
+  Secret: ${JWT_SECRET}
+  AccessExpire: 7200
+  RefreshExpire: 604800
+  Issuer: consul_mgr
+
+Admin:
+  Username: ${ADMIN_USERNAME:iflyelf}
+  Password: ${ADMIN_PASSWORD}
+  Email: ${ADMIN_EMAIL:iflyelf@gmail.com}
+
+Consul:
+  DefaultAddress: http://10.0.56.118:8510
+  DefaultToken: a597a2fa-fbcb-9aba-e743-5043ea6cd673
+  DefaultDatacenter: dc1
+  Timeout: 10
+
+Web:
+  Embedded: true
+  StaticDir: ./web/dist
+
+LogConfig:
+  Level: info
+  Format: json
+
+Audit:
+  Enabled: true
+  RetentionDays: 90
