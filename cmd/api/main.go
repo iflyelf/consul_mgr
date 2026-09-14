@@ -10,17 +10,18 @@ import (
 	"github.com/zeromicro/go-zero/rest"
 
 	"github.com/iflyelf/consul_mgr/internal/config"
+	auditHandler "github.com/iflyelf/consul_mgr/internal/handler/audit"
 	authHandler "github.com/iflyelf/consul_mgr/internal/handler/auth"
 	"github.com/iflyelf/consul_mgr/internal/handler/group"
 	"github.com/iflyelf/consul_mgr/internal/handler/instance"
-	"github.com/iflyelf/consul_mgr/internal/handler/service"
+	permissionHandler "github.com/iflyelf/consul_mgr/internal/handler/permission"
 	"github.com/iflyelf/consul_mgr/internal/middleware"
 	"github.com/iflyelf/consul_mgr/internal/svc"
 )
 
 var (
 	configFile = flag.String("c", "etc/config.yaml", "配置文件路径")
-	version    = "dev"
+	version    = "1.0.0"
 )
 
 func main() {
@@ -62,19 +63,18 @@ func registerHandlers(server *rest.Server, ctx *svc.ServiceContext) {
 	// 创建中间件
 	casdoorAuth := middleware.NewCasdoorAuthMiddleware(ctx.CasdoorClient)
 	permissionMw := middleware.NewPermissionMiddleware(ctx.CasdoorClient)
+	auditMw := middleware.NewAuditMiddleware(ctx)
 	
 	// ============================================================
 	// 公开路由（无需认证）
 	// ============================================================
 	
-	// 健康检查
 	server.AddRoute(rest.Route{
 		Method:  http.MethodGet,
 		Path:    "/health",
 		Handler: healthHandler(),
 	})
 	
-	// 认证相关
 	server.AddRoutes([]rest.Route{
 		{
 			Method:  http.MethodGet,
@@ -92,71 +92,43 @@ func registerHandlers(server *rest.Server, ctx *svc.ServiceContext) {
 	// 需要认证的路由
 	// ============================================================
 	
-	server.AddRoutes(
-		[]rest.Route{
-			// 认证相关
-			{
-				Method:  http.MethodGet,
-				Path:    "/api/auth/userinfo",
-				Handler: authHandler.GetUserInfoHandler(ctx.CasdoorClient),
-			},
-			{
-				Method:  http.MethodPost,
-				Path:    "/api/auth/refresh",
-				Handler: authHandler.RefreshTokenHandler(ctx.CasdoorClient),
-			},
-			{
-				Method:  http.MethodPost,
-				Path:    "/api/auth/logout",
-				Handler: authHandler.LogoutHandler(),
-			},
-		},
-		rest.WithJwt(ctx.Config.JWT.Secret), // 使用 JWT 中间件（可选，主要用 Casdoor Token）
-		rest.WithPrefix("/"),
-	)
+	// 认证相关
+	server.AddRoute(rest.Route{
+		Method:  http.MethodGet,
+		Path:    "/api/auth/userinfo",
+		Handler: casdoorAuth.Handle(authHandler.GetUserInfoHandler(ctx.CasdoorClient)),
+	})
+	
+	server.AddRoute(rest.Route{
+		Method:  http.MethodPost,
+		Path:    "/api/auth/refresh",
+		Handler: casdoorAuth.Handle(authHandler.RefreshTokenHandler(ctx.CasdoorClient)),
+	})
+	
+	server.AddRoute(rest.Route{
+		Method:  http.MethodPost,
+		Path:    "/api/auth/logout",
+		Handler: casdoorAuth.Handle(authHandler.LogoutHandler()),
+	})
 	
 	// ============================================================
 	// 服务组管理（需要权限：consul_group）
 	// ============================================================
 	
-	server.AddRoutes(
-		[]rest.Route{
-			{
-				Method:  http.MethodGet,
-				Path:    "/api/groups",
-				Handler: group.ListGroupsHandler(ctx),
-			},
-		},
-		rest.WithPrefix("/"),
-	)
+	server.AddRoute(rest.Route{
+		Method:  http.MethodGet,
+		Path:    "/api/groups",
+		Handler: casdoorAuth.Handle(group.ListGroupsHandler(ctx)),
+	})
 	
-	// 使用自定义中间件链
 	server.AddRoute(rest.Route{
 		Method: http.MethodPost,
 		Path:   "/api/groups",
 		Handler: casdoorAuth.Handle(
-			permissionMw.RequirePermission("consul_group", "write")(
-				group.CreateGroupHandler(ctx),
-			),
-		),
-	})
-	
-	server.AddRoute(rest.Route{
-		Method: http.MethodPut,
-		Path:   "/api/groups/:id",
-		Handler: casdoorAuth.Handle(
-			permissionMw.RequirePermission("consul_group", "write")(
-				group.UpdateGroupHandler(ctx),
-			),
-		),
-	})
-	
-	server.AddRoute(rest.Route{
-		Method: http.MethodDelete,
-		Path:   "/api/groups/:id",
-		Handler: casdoorAuth.Handle(
-			permissionMw.RequirePermission("consul_group", "delete")(
-				group.DeleteGroupHandler(ctx),
+			auditMw.Handle(
+				permissionMw.RequirePermission("consul_group", "write")(
+					group.CreateGroupHandler(ctx),
+				),
 			),
 		),
 	})
@@ -169,25 +141,27 @@ func registerHandlers(server *rest.Server, ctx *svc.ServiceContext) {
 		),
 	})
 	
-	// ============================================================
-	// 服务管理（需要权限：consul_service）
-	// ============================================================
-	
 	server.AddRoute(rest.Route{
-		Method: http.MethodGet,
-		Path:   "/api/services",
+		Method: http.MethodPut,
+		Path:   "/api/groups/:id",
 		Handler: casdoorAuth.Handle(
-			permissionMw.RequireServiceGroupAccess("read")(
-				service.ListServicesHandler(ctx),
+			auditMw.Handle(
+				permissionMw.RequirePermission("consul_group", "write")(
+					group.UpdateGroupHandler(ctx),
+				),
 			),
 		),
 	})
 	
 	server.AddRoute(rest.Route{
-		Method: http.MethodGet,
-		Path:   "/api/services/:name",
+		Method: http.MethodDelete,
+		Path:   "/api/groups/:id",
 		Handler: casdoorAuth.Handle(
-			service.GetServiceHandler(ctx),
+			auditMw.Handle(
+				permissionMw.RequirePermission("consul_group", "delete")(
+					group.DeleteGroupHandler(ctx),
+				),
+			),
 		),
 	})
 	
@@ -206,11 +180,33 @@ func registerHandlers(server *rest.Server, ctx *svc.ServiceContext) {
 	})
 	
 	server.AddRoute(rest.Route{
+		Method: http.MethodGet,
+		Path:   "/api/instances/:id",
+		Handler: casdoorAuth.Handle(
+			instance.GetInstanceHandler(ctx),
+		),
+	})
+	
+	server.AddRoute(rest.Route{
 		Method: http.MethodPost,
 		Path:   "/api/instances",
 		Handler: casdoorAuth.Handle(
-			permissionMw.RequireServiceGroupAccess("write")(
-				instance.RegisterInstanceHandler(ctx),
+			auditMw.Handle(
+				permissionMw.RequireServiceGroupAccess("write")(
+					instance.RegisterInstanceHandler(ctx),
+				),
+			),
+		),
+	})
+	
+	server.AddRoute(rest.Route{
+		Method: http.MethodPut,
+		Path:   "/api/instances/:id",
+		Handler: casdoorAuth.Handle(
+			auditMw.Handle(
+				permissionMw.RequireServiceGroupAccess("write")(
+					instance.UpdateInstanceHandler(ctx),
+				),
 			),
 		),
 	})
@@ -219,8 +215,136 @@ func registerHandlers(server *rest.Server, ctx *svc.ServiceContext) {
 		Method: http.MethodDelete,
 		Path:   "/api/instances/:id",
 		Handler: casdoorAuth.Handle(
-			permissionMw.RequireServiceGroupAccess("delete")(
-				instance.DeregisterInstanceHandler(ctx),
+			auditMw.Handle(
+				permissionMw.RequireServiceGroupAccess("delete")(
+					instance.DeregisterInstanceHandler(ctx),
+				),
+			),
+		),
+	})
+	
+	server.AddRoute(rest.Route{
+		Method: http.MethodPost,
+		Path:   "/api/instances/batch-delete",
+		Handler: casdoorAuth.Handle(
+			auditMw.Handle(
+				permissionMw.RequireServiceGroupAccess("delete")(
+					instance.BatchDeleteHandler(ctx),
+				),
+			),
+		),
+	})
+	
+	server.AddRoute(rest.Route{
+		Method: http.MethodGet,
+		Path:   "/api/instances/datacenters",
+		Handler: casdoorAuth.Handle(
+			instance.GetDatacentersHandler(ctx),
+		),
+	})
+	
+	server.AddRoute(rest.Route{
+		Method: http.MethodGet,
+		Path:   "/api/instances/services",
+		Handler: casdoorAuth.Handle(
+			instance.GetServicesHandler(ctx),
+		),
+	})
+	
+	// ============================================================
+	// 权限管理（需要权限：admin）
+	// ============================================================
+	
+	// 用户权限
+	server.AddRoute(rest.Route{
+		Method: http.MethodGet,
+		Path:   "/api/permissions/users",
+		Handler: casdoorAuth.Handle(
+			permissionMw.RequireAdmin()(
+				permissionHandler.ListUserPermissionsHandler(ctx),
+			),
+		),
+	})
+	
+	server.AddRoute(rest.Route{
+		Method: http.MethodPost,
+		Path:   "/api/permissions/users",
+		Handler: casdoorAuth.Handle(
+			auditMw.Handle(
+				permissionMw.RequireAdmin()(
+					permissionHandler.GrantUserPermissionHandler(ctx),
+				),
+			),
+		),
+	})
+	
+	server.AddRoute(rest.Route{
+		Method: http.MethodDelete,
+		Path:   "/api/permissions/users",
+		Handler: casdoorAuth.Handle(
+			auditMw.Handle(
+				permissionMw.RequireAdmin()(
+					permissionHandler.RevokeUserPermissionHandler(ctx),
+				),
+			),
+		),
+	})
+	
+	// 角色权限
+	server.AddRoute(rest.Route{
+		Method: http.MethodGet,
+		Path:   "/api/permissions/roles",
+		Handler: casdoorAuth.Handle(
+			permissionMw.RequireAdmin()(
+				permissionHandler.ListRolePermissionsHandler(ctx),
+			),
+		),
+	})
+	
+	server.AddRoute(rest.Route{
+		Method: http.MethodPost,
+		Path:   "/api/permissions/roles",
+		Handler: casdoorAuth.Handle(
+			auditMw.Handle(
+				permissionMw.RequireAdmin()(
+					permissionHandler.GrantRolePermissionHandler(ctx),
+				),
+			),
+		),
+	})
+	
+	server.AddRoute(rest.Route{
+		Method: http.MethodDelete,
+		Path:   "/api/permissions/roles",
+		Handler: casdoorAuth.Handle(
+			auditMw.Handle(
+				permissionMw.RequireAdmin()(
+					permissionHandler.RevokeRolePermissionHandler(ctx),
+				),
+			),
+		),
+	})
+	
+	// ============================================================
+	// 审计日志（需要权限：audit_log）
+	// ============================================================
+	
+	server.AddRoute(rest.Route{
+		Method: http.MethodGet,
+		Path:   "/api/audit-logs",
+		Handler: casdoorAuth.Handle(
+			permissionMw.RequirePermission("audit_log", "read")(
+				auditHandler.ListAuditLogsHandler(ctx),
+			),
+		),
+	})
+	
+	server.AddRoute(rest.Route{
+		Method: http.MethodGet,
+		Path:   "/api/audit-logs/export",
+		Handler: casdoorAuth.Handle(
+			permissionMw.RequirePermission("audit_log", "export")(
+				auditHandler.ExportAuditLogsHandler(ctx),
 			),
 		),
 	})
@@ -250,14 +374,13 @@ func healthHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"status":"ok","message":"Consul Manager is running"}`))
+		w.Write([]byte(`{"status":"ok","message":"Consul Manager is running","version":"1.0.0"}`))
 	}
 }
 
 // serveEmbeddedWeb 提供嵌入式 Web 界面
 func serveEmbeddedWeb() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// 读取嵌入的 index.html
 		content, err := webFS.ReadFile("web/dist/index.html")
 		if err != nil {
 			http.Error(w, "Web UI not found", http.StatusNotFound)
@@ -273,14 +396,12 @@ func serveEmbeddedWeb() http.HandlerFunc {
 // serveEmbeddedAssets 提供嵌入式静态资源
 func serveEmbeddedAssets() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// 从 URL 路径获取文件名
 		file := r.URL.Query().Get(":file")
 		if file == "" {
 			http.Error(w, "File not specified", http.StatusBadRequest)
 			return
 		}
 		
-		// 读取嵌入的文件
 		path := fmt.Sprintf("web/dist/assets/%s", file)
 		content, err := webFS.ReadFile(path)
 		if err != nil {
@@ -288,7 +409,6 @@ func serveEmbeddedAssets() http.HandlerFunc {
 			return
 		}
 		
-		// 设置 Content-Type
 		contentType := getContentType(file)
 		w.Header().Set("Content-Type", contentType)
 		w.WriteHeader(http.StatusOK)
