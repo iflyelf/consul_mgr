@@ -35,7 +35,7 @@ etc/config.local.yaml
 
 # Frontend
 web/node_modules/
-web/dist/
+# web/dist/  # 注释掉，因为使用 embed 需要提交 dist
 web/.vite/
 web/.cache/
 
