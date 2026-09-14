@@ -1,5 +1,5 @@
 # =============================================================================
-# consul-mgr 单容器编排 (host 网络模式)
+# consul_mgr 单容器编排 (host 网络模式)
 #
 #   Consul 服务管理平台 (Go + Vue 3, 支持多集群管理)。
 #   提供 Consul Services 和 Instances 的完整生命周期管理:
@@ -11,14 +11,14 @@
 #   直接使用已构建镜像, 无需本地编译。
 #     启动: docker compose up -d
 #     更新: docker compose pull && docker compose up -d
-#     日志: docker logs -f consul-mgr
+#     日志: docker logs -f consul_mgr
 # =============================================================================
 services:
-  consul-mgr:
+  consul_mgr:
     # 已构建好的镜像 (由 GitHub Action 多架构发布: amd64 / arm64)
     image: iflyelf/consul-mgr:latest
     # 容器名, 便于 docker exec / docker logs 直接引用
-    container_name: consul-mgr
+    container_name: consul_mgr
     # 分配伪终端, 便于 docker exec 交互调试
     tty: true
     # 保持标准输入打开

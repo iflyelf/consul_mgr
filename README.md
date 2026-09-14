@@ -337,17 +337,17 @@ cd web && npm run dev
 
 ```bash
 # 1. 下载二进制到 /tmp 并解压
-wget -q -c --no-check-certificate -O /tmp/consul-mgr.tar.gz \
+wget -q -c --no-check-certificate -O /tmp/consul_mgr.tar.gz \
   "https://github.com/iflyelf/consul_mgr/releases/latest/download/consul_mgr-linux-amd64.tar.gz"
-tar -xzf /tmp/consul-mgr.tar.gz -C /tmp
+tar -xzf /tmp/consul_mgr.tar.gz -C /tmp
 
 # 2. 替换二进制(mv -f 原子覆盖)
-mv -f /tmp/consul_mgr-linux-amd64 /usr/local/bin/consul-mgr
-chmod +x /usr/local/bin/consul-mgr
+mv -f /tmp/consul_mgr-linux-amd64 /usr/local/bin/consul_mgr
+chmod +x /usr/local/bin/consul_mgr
 
 # 3. 创建配置目录并编辑配置
-mkdir -p /etc/consul-mgr
-vi /etc/consul-mgr/config.yaml
+mkdir -p /etc/consul_mgr
+vi /etc/consul_mgr/config.yaml
 
 # 4. 配置环境变量(在配置文件中设置或导出)
 # 必填:
@@ -357,24 +357,24 @@ vi /etc/consul-mgr/config.yaml
 #   JWT_SECRET="your_jwt_secret_min_32_chars"
 
 # 5. 下载 systemd 单元到 /tmp 再替换
-wget -q -c --no-check-certificate -O /tmp/consul-mgr.service \
-  "https://raw.githubusercontent.com/iflyelf/consul_mgr/main/deploy/systemd/consul-mgr.service"
-mv -f /tmp/consul-mgr.service /etc/systemd/system/consul-mgr.service
+wget -q -c --no-check-certificate -O /tmp/consul_mgr.service \
+  "https://raw.githubusercontent.com/iflyelf/consul_mgr/main/deploy/systemd/consul_mgr.service"
+mv -f /tmp/consul_mgr.service /etc/systemd/system/consul_mgr.service
 
 # 6. 启动服务
 systemctl daemon-reload
-systemctl enable --now consul-mgr
+systemctl enable --now consul_mgr
 
 # 7. 查看状态
-systemctl status consul-mgr
-journalctl -u consul-mgr -f
+systemctl status consul_mgr
+journalctl -u consul_mgr -f
 ```
 
 ### 方式二：Docker（host 网络 + 特权）
 
 ```bash
 # 1. 创建工作目录
-mkdir -p consul-mgr && cd consul-mgr
+mkdir -p consul_mgr && cd consul_mgr
 
 # 2. 下载 docker-compose.yml 与配置模板到 /tmp 再替换
 wget -q -c --no-check-certificate -O /tmp/docker-compose.yml \
@@ -402,7 +402,7 @@ tail -f ./logs/consul_mgr.log   # 文件日志(如果配置了)
 ```nginx
 server {
     listen 80;
-    server_name consul-mgr.example.com;
+    server_name consul_mgr.example.com;
 
     location / {
         proxy_pass http://localhost:5173;
