@@ -54,4 +54,18 @@ type Config struct {
 		Enabled       bool `json:",default=true,env=AUDIT_ENABLED"`
 		RetentionDays int  `json:",default=90,env=AUDIT_RETENTION_DAYS"`
 	}
+	
+	Casdoor struct {
+		Endpoint         string `json:",env=CASDOOR_ENDPOINT"`
+		ClientId         string `json:",env=CASDOOR_CLIENT_ID"`
+		ClientSecret     string `json:",env=CASDOOR_CLIENT_SECRET"`
+		Certificate      string `json:",optional,env=CASDOOR_CERTIFICATE"`
+		OrganizationName string `json:",default=consul_mgr,env=CASDOOR_ORGANIZATION"`
+		ApplicationName  string `json:",default=consul_manager,env=CASDOOR_APPLICATION"`
+	}
+	
+	Permission struct {
+		EnableServiceGroupAuth bool     `json:",default=true"`
+		DefaultPermissions     []string `json:",default=[read]"`
+	}
 }

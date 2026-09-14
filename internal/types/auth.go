@@ -1,127 +1,50 @@
-package types
-
-// LoginRequest 登录请求
-type LoginRequest struct {
-	Username string `json:"username" validate:"required"`
-	Password string `json:"password" validate:"required"`
-}
+// Package auth 提供认证相关的类型定义
+package auth
 
 // LoginResponse 登录响应
 type LoginResponse struct {
-	AccessToken  string `json:"access_token"`
-	RefreshToken string `json:"refresh_token"`
-	ExpiresIn    int64  `json:"expires_in"`
-	UserInfo     UserInfo `json:"user_info"`
+	LoginUrl string `json:"login_url"` // Casdoor 登录 URL
 }
 
-// RefreshTokenRequest 刷新令牌请求
-type RefreshTokenRequest struct {
-	RefreshToken string `json:"refresh_token" validate:"required"`
+// CallbackRequest OAuth 回调请求
+type CallbackRequest struct {
+	Code  string `json:"code" form:"code"`   // 授权码
+	State string `json:"state" form:"state"` // 状态码
 }
 
-// RefreshTokenResponse 刷新令牌响应
-type RefreshTokenResponse struct {
-	AccessToken string `json:"access_token"`
-	ExpiresIn   int64  `json:"expires_in"`
+// CallbackResponse OAuth 回调响应
+type CallbackResponse struct {
+	AccessToken  string    `json:"access_token"`  // 访问令牌
+	RefreshToken string    `json:"refresh_token"` // 刷新令牌
+	ExpiresIn    int64     `json:"expires_in"`    // 过期时间（秒）
+	TokenType    string    `json:"token_type"`    // Token 类型
+	UserInfo     *UserInfo `json:"user_info"`     // 用户信息
 }
 
 // UserInfo 用户信息
 type UserInfo struct {
-	ID        int64    `json:"id"`
-	Username  string   `json:"username"`
-	Email     string   `json:"email,omitempty"`
-	RealName  string   `json:"real_name,omitempty"`
-	Status    int      `json:"status"`
-	Roles     []string `json:"roles"`
-	CreatedAt string   `json:"created_at,omitempty"`
-	UpdatedAt string   `json:"updated_at,omitempty"`
+	Id          string   `json:"id"`           // 用户 ID
+	Name        string   `json:"name"`         // 用户名
+	DisplayName string   `json:"display_name"` // 显示名称
+	Email       string   `json:"email"`        // 邮箱
+	Phone       string   `json:"phone"`        // 电话
+	Avatar      string   `json:"avatar"`       // 头像
+	IsAdmin     bool     `json:"is_admin"`     // 是否管理员
+	Roles       []string `json:"roles"`        // 角色列表
 }
 
-// CreateUserRequest 创建用户请求
-type CreateUserRequest struct {
-	Username string   `json:"username" validate:"required"`
-	Password string   `json:"password" validate:"required,min=6"`
-	Email    string   `json:"email,omitempty" validate:"omitempty,email"`
-	RealName string   `json:"real_name,omitempty"`
-	RoleIDs  []int64  `json:"role_ids,omitempty"`
+// RefreshTokenRequest 刷新 Token 请求
+type RefreshTokenRequest struct {
+	RefreshToken string `json:"refresh_token"` // 刷新令牌
 }
 
-// UpdateUserRequest 更新用户请求
-type UpdateUserRequest struct {
-	Email    string  `json:"email,omitempty" validate:"omitempty,email"`
-	RealName string  `json:"real_name,omitempty"`
-	Status   *int    `json:"status,omitempty"`
+// RefreshTokenResponse 刷新 Token 响应
+type RefreshTokenResponse struct {
+	AccessToken string `json:"access_token"` // 新的访问令牌
+	ExpiresIn   int64  `json:"expires_in"`   // 过期时间（秒）
 }
 
-// ChangePasswordRequest 修改密码请求
-type ChangePasswordRequest struct {
-	OldPassword string `json:"old_password,omitempty"`
-	NewPassword string `json:"new_password" validate:"required,min=6"`
-}
-
-// AssignRolesRequest 分配角色请求
-type AssignRolesRequest struct {
-	RoleIDs []int64 `json:"role_ids" validate:"required"`
-}
-
-// CreateRoleRequest 创建角色请求
-type CreateRoleRequest struct {
-	Name        string  `json:"name" validate:"required"`
-	Code        string  `json:"code" validate:"required"`
-	Description string  `json:"description,omitempty"`
-	PermissionIDs []int64 `json:"permission_ids,omitempty"`
-}
-
-// UpdateRoleRequest 更新角色请求
-type UpdateRoleRequest struct {
-	Name        string `json:"name,omitempty"`
-	Description string `json:"description,omitempty"`
-	Status      *int   `json:"status,omitempty"`
-}
-
-// AssignPermissionsRequest 分配权限请求
-type AssignPermissionsRequest struct {
-	PermissionIDs []int64 `json:"permission_ids" validate:"required"`
-}
-
-// AssignGroupsRequest 授权服务组请求
-type AssignGroupsRequest struct {
-	GroupID     int64    `json:"group_id" validate:"required"`
-	Permissions []string `json:"permissions" validate:"required"` // ["read", "write", "delete"]
-}
-
-// CreateGroupRequest 创建服务组请求
-type CreateGroupRequest struct {
-	Name             string `json:"name" validate:"required"`
-	Code             string `json:"code" validate:"required"`
-	Description      string `json:"description,omitempty"`
-	ConsulAddress    string `json:"consul_address" validate:"required,url"`
-	ConsulToken      string `json:"consul_token,omitempty"`
-	ConsulDatacenter string `json:"consul_datacenter,omitempty"`
-}
-
-// UpdateGroupRequest 更新服务组请求
-type UpdateGroupRequest struct {
-	Name             string `json:"name,omitempty"`
-	Description      string `json:"description,omitempty"`
-	ConsulAddress    string `json:"consul_address,omitempty" validate:"omitempty,url"`
-	ConsulToken      string `json:"consul_token,omitempty"`
-	ConsulDatacenter string `json:"consul_datacenter,omitempty"`
-	Status           *int   `json:"status,omitempty"`
-}
-
-// QueryRequest 通用查询请求
-type QueryRequest struct {
-	Page     int    `form:"page,default=1"`
-	PageSize int    `form:"page_size,default=20"`
-	Keyword  string `form:"keyword,optional"`
-	Status   *int   `form:"status,optional"`
-}
-
-// PageResponse 分页响应
-type PageResponse struct {
-	Total    int64       `json:"total"`
-	Page     int         `json:"page"`
-	PageSize int         `json:"page_size"`
-	List     interface{} `json:"list"`
+// GetUserInfoResponse 获取用户信息响应
+type GetUserInfoResponse struct {
+	UserInfo *UserInfo `json:"user_info"` // 用户信息
 }

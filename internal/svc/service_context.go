@@ -10,17 +10,18 @@ import (
 	"github.com/zeromicro/go-zero/core/stores/sqlx"
 
 	"github.com/iflyelf/consul_mgr/internal/config"
+	"github.com/iflyelf/consul_mgr/internal/pkg/casdoor"
 	"github.com/iflyelf/consul_mgr/internal/pkg/consul"
 	"github.com/iflyelf/consul_mgr/internal/pkg/jwt"
-	"github.com/iflyelf/consul_mgr/internal/pkg/password"
 )
 
 // ServiceContext 服务上下文
 type ServiceContext struct {
-	Config        config.Config
-	DB            sqlx.SqlConn
-	JWTManager    *jwt.JWTManager
-	ConsulManager *consul.Manager
+	Config         config.Config
+	DB             sqlx.SqlConn
+	JWTManager     *jwt.JWTManager
+	ConsulManager  *consul.Manager
+	CasdoorClient  *casdoor.Client
 }
 
 // NewServiceContext 创建服务上下文
@@ -28,7 +29,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	// 初始化数据库连接
 	db := initDB(c)
 	
-	// 初始化数据库表和数据
+	// 初始化数据库表（不再创建用户表，由 Casdoor 管理）
 	if err := initSchema(db, c); err != nil {
 		log.Fatalf("初始化数据库失败: %v", err)
 	}
@@ -44,11 +45,18 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	// 初始化 Consul 管理器
 	consulManager := consul.NewManager()
 	
+	// 初始化 Casdoor 客户端
+	casdoorClient, err := initCasdoorClient(c)
+	if err != nil {
+		log.Fatalf("初始化 Casdoor 客户端失败: %v", err)
+	}
+	
 	return &ServiceContext{
-		Config:        c,
-		DB:            sqlx.NewSqlConnFromDB(db),
-		JWTManager:    jwtManager,
-		ConsulManager: consulManager,
+		Config:         c,
+		DB:             sqlx.NewSqlConnFromDB(db),
+		JWTManager:     jwtManager,
+		ConsulManager:  consulManager,
+		CasdoorClient:  casdoorClient,
 	}
 }
 
@@ -87,13 +95,12 @@ func initDB(c config.Config) *sql.DB {
 
 // initSchema 初始化数据库表结构和数据
 func initSchema(db *sql.DB, c config.Config) error {
-	// 执行 schema.sql
+	// 检查 service_groups 表是否存在
 	schemaSQL := `
-		-- 检查表是否存在
 		SELECT EXISTS (
 			SELECT FROM information_schema.tables 
 			WHERE table_schema = 'public' 
-			AND table_name = 'users'
+			AND table_name = 'service_groups'
 		);
 	`
 	
@@ -104,35 +111,13 @@ func initSchema(db *sql.DB, c config.Config) error {
 	
 	if !exists {
 		log.Println("首次启动，初始化数据库表结构...")
-		// 这里简化处理，实际应该读取 SQL 文件执行
-		// 为了简化，直接在代码中执行必要的建表语句
-		if err := executeSchemaSQL(db); err != nil {
+		// 创建服务组相关表
+		if err := createServiceGroupTables(db); err != nil {
 			return err
 		}
-		
-		log.Println("初始化权限和角色数据...")
-		if err := executeInitDataSQL(db); err != nil {
-			return err
-		}
-		
-		log.Println("创建管理员账号...")
-		if err := createAdminUser(db, c); err != nil {
-			return err
-		}
-		
 		log.Println("数据库初始化完成")
 	} else {
 		log.Println("数据库表已存在，跳过初始化")
-		
-		// 确保角色数据存在
-		if err := ensureRolesExist(db); err != nil {
-			return err
-		}
-		
-		// 检查管理员账号是否存在
-		if err := ensureAdminExists(db, c); err != nil {
-			return err
-		}
 	}
 	
 	return nil
@@ -367,5 +352,100 @@ func ensureRolesExist(db *sql.DB) error {
 	}
 	
 	log.Printf("角色数据已存在，共 %d 个角色", count)
+	return nil
+}
+
+// initCasdoorClient 初始化 Casdoor 客户端
+func initCasdoorClient(c config.Config) (*casdoor.Client, error) {
+	// 构造 Casdoor 配置
+	casdoorConfig := &casdoor.Config{
+		Endpoint:         c.Casdoor.Endpoint,
+		ClientId:         c.Casdoor.ClientId,
+		ClientSecret:     c.Casdoor.ClientSecret,
+		Certificate:      c.Casdoor.Certificate,
+		OrganizationName: c.Casdoor.OrganizationName,
+		ApplicationName:  c.Casdoor.ApplicationName,
+	}
+	
+	// 创建 Casdoor 客户端
+	client, err := casdoor.NewClient(casdoorConfig)
+	if err != nil {
+		return nil, fmt.Errorf("创建 Casdoor 客户端失败: %w", err)
+	}
+	
+	log.Printf("Casdoor 客户端初始化成功: %s", c.Casdoor.Endpoint)
+	return client, nil
+}
+
+// createServiceGroupTables 创建服务组相关表
+func createServiceGroupTables(db *sql.DB) error {
+	schema := `
+	-- 服务组表
+	CREATE TABLE IF NOT EXISTS service_groups (
+		id BIGSERIAL PRIMARY KEY,
+		name VARCHAR(100) NOT NULL UNIQUE,
+		consul_address VARCHAR(255) NOT NULL,
+		consul_token VARCHAR(255),
+		datacenter VARCHAR(50) DEFAULT 'dc1',
+		description TEXT,
+		created_at TIMESTAMP DEFAULT NOW(),
+		updated_at TIMESTAMP DEFAULT NOW()
+	);
+
+	-- 服务组用户权限表
+	CREATE TABLE IF NOT EXISTS service_group_users (
+		id BIGSERIAL PRIMARY KEY,
+		group_id BIGINT NOT NULL,
+		user_id VARCHAR(100) NOT NULL,
+		permissions TEXT[] DEFAULT '{}',
+		created_at TIMESTAMP DEFAULT NOW(),
+		FOREIGN KEY (group_id) REFERENCES service_groups(id) ON DELETE CASCADE,
+		UNIQUE(group_id, user_id)
+	);
+
+	-- 服务组角色权限表
+	CREATE TABLE IF NOT EXISTS service_group_roles (
+		id BIGSERIAL PRIMARY KEY,
+		group_id BIGINT NOT NULL,
+		role_name VARCHAR(100) NOT NULL,
+		permissions TEXT[] DEFAULT '{}',
+		created_at TIMESTAMP DEFAULT NOW(),
+		FOREIGN KEY (group_id) REFERENCES service_groups(id) ON DELETE CASCADE,
+		UNIQUE(group_id, role_name)
+	);
+
+	-- 审计日志表
+	CREATE TABLE IF NOT EXISTS audit_logs (
+		id BIGSERIAL PRIMARY KEY,
+		user_id VARCHAR(100),
+		username VARCHAR(100),
+		action VARCHAR(50),
+		resource_type VARCHAR(50),
+		resource_id VARCHAR(100),
+		resource_name VARCHAR(255),
+		group_id BIGINT,
+		details JSONB,
+		ip_address VARCHAR(50),
+		user_agent TEXT,
+		status VARCHAR(20),
+		error_message TEXT,
+		created_at TIMESTAMP DEFAULT NOW()
+	);
+
+	-- 创建索引
+	CREATE INDEX IF NOT EXISTS idx_service_group_users_group ON service_group_users(group_id);
+	CREATE INDEX IF NOT EXISTS idx_service_group_users_user ON service_group_users(user_id);
+	CREATE INDEX IF NOT EXISTS idx_service_group_roles_group ON service_group_roles(group_id);
+	CREATE INDEX IF NOT EXISTS idx_audit_logs_user ON audit_logs(user_id);
+	CREATE INDEX IF NOT EXISTS idx_audit_logs_created ON audit_logs(created_at DESC);
+	CREATE INDEX IF NOT EXISTS idx_audit_logs_group ON audit_logs(group_id);
+	`
+	
+	_, err := db.Exec(schema)
+	if err != nil {
+		return fmt.Errorf("创建表失败: %w", err)
+	}
+	
+	log.Println("服务组相关表创建成功")
 	return nil
 }
