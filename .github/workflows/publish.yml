@@ -30,7 +30,8 @@ on:
 
 jobs:
   # 编译多架构二进制并更新 latest Release
-  二进制文件:
+  binaries:
+    name: 二进制文件
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -155,7 +156,8 @@ jobs:
             dist/checksums.txt
 
   # 构建并推送镜像到 latest
-  Docker镜像:
+  docker:
+    name: Docker镜像
     runs-on: ubuntu-latest
     permissions:
       actions: write
