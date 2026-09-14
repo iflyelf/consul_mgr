@@ -1,0 +1,126 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        goos: [linux, darwin, windows]
+        goarch: [amd64, arm64]
+        exclude:
+          - goos: windows
+            goarch: arm64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+
+      - name: Get version
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Build
+        env:
+          CGO_ENABLED: 0
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          OUTPUT_NAME="consul_mgr-${{ matrix.goos }}-${{ matrix.goarch }}"
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            OUTPUT_NAME="${OUTPUT_NAME}.exe"
+          fi
+          go build -trimpath -ldflags "-s -w -X main.version=${{ steps.version.outputs.VERSION }}" -o ${OUTPUT_NAME} ./cmd/api
+          
+      - name: Archive
+        run: |
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            zip consul_mgr-${{ matrix.goos }}-${{ matrix.goarch }}.zip consul_mgr-${{ matrix.goos }}-${{ matrix.goarch }}.exe
+          else
+            tar czf consul_mgr-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz consul_mgr-${{ matrix.goos }}-${{ matrix.goarch }}
+          fi
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: consul_mgr-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: consul_mgr-${{ matrix.goos }}-${{ matrix.goarch }}.*
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Get version
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Prepare release files
+        run: |
+          mkdir -p release
+          cd artifacts
+          for dir in */; do
+            cp -r "$dir"* ../release/
+          done
+          cd ../release
+          ls -lh
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: release/*
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          body: |
+            ## Consul Manager ${{ steps.version.outputs.VERSION }}
+            
+            ### Downloads
+            
+            - Linux (amd64): `consul_mgr-linux-amd64.tar.gz`
+            - Linux (arm64): `consul_mgr-linux-arm64.tar.gz`
+            - macOS (amd64): `consul_mgr-darwin-amd64.tar.gz`
+            - macOS (arm64): `consul_mgr-darwin-arm64.tar.gz`
+            - Windows (amd64): `consul_mgr-windows-amd64.zip`
+            
+            ### Installation
+            
+            ```bash
+            # Linux/macOS
+            tar xzf consul_mgr-*.tar.gz
+            chmod +x consul_mgr-*
+            ./consul_mgr-* -c etc/config.yaml
+            
+            # Windows
+            unzip consul_mgr-windows-amd64.zip
+            consul_mgr-windows-amd64.exe -c etc/config.yaml
+            ```
+            
+            ### Environment Variables
+            
+            - `DATABASE_URL` - PostgreSQL connection string (required)
+            - `ADMIN_PASSWORD` - Admin password (required)
+            - `JWT_SECRET` - JWT secret key
+            - `SERVER_PORT` - Server port (default: 8080)
+            - `WEB_PORT` - Web port (default: 5173)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

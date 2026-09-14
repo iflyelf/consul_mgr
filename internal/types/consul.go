@@ -17,15 +17,23 @@ type ConsulServiceInfo struct {
 
 // ConsulInstanceInfo Consul 实例信息
 type ConsulInstanceInfo struct {
-	ID              string                 `json:"id"`
-	Service         string                 `json:"service"`
-	Tags            []string               `json:"tags"`
-	Meta            map[string]string      `json:"meta"`
-	Address         string                 `json:"address"`
-	Port            int                    `json:"port"`
-	Datacenter      string                 `json:"datacenter"`
-	HealthStatus    string                 `json:"health_status"`
-	Checks          []ConsulHealthCheck    `json:"checks"`
+	ID              string                   `json:"id"`
+	Service         string                   `json:"service"`
+	Tags            []string                 `json:"tags"`
+	Meta            map[string]string        `json:"meta"`
+	Address         string                   `json:"address"`
+	Port            int                      `json:"port"`
+	Node            string                   `json:"node"`
+	NodeAddress     string                   `json:"node_address"`
+	Datacenter      string                   `json:"datacenter"`
+	HealthStatus    string                   `json:"health_status"`
+	Checks          []map[string]interface{} `json:"checks"`
+}
+
+// ServiceDetail 服务详情
+type ServiceDetail struct {
+	ServiceName string                `json:"service_name"`
+	Instances   []ConsulInstanceInfo  `json:"instances"`
 }
 
 // ConsulHealthCheck 健康检查信息
@@ -53,9 +61,11 @@ type RegisterInstanceRequest struct {
 
 // UpdateInstanceRequest 更新实例请求
 type UpdateInstanceRequest struct {
-	Tags  []string          `json:"tags,omitempty"`
-	Meta  map[string]string `json:"meta,omitempty"`
-	Check *HealthCheckConfig `json:"check,omitempty"`
+	Tags    []string           `json:"tags,omitempty"`
+	Meta    map[string]string  `json:"meta,omitempty"`
+	Address string             `json:"address,omitempty"`
+	Port    int                `json:"port,omitempty" validate:"omitempty,min=1,max=65535"`
+	Check   *HealthCheckConfig `json:"check,omitempty"`
 }
 
 // HealthCheckConfig 健康检查配置

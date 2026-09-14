@@ -10,10 +10,11 @@ export default defineConfig({
     }
   },
   server: {
-    port: 5173,
+    port: parseInt(process.env.WEB_PORT || '5173'),
+    host: process.env.WEB_HOST || '0.0.0.0',
     proxy: {
       '/api': {
-        target: 'http://localhost:8080',
+        target: process.env.API_URL || 'http://localhost:8080',
         changeOrigin: true
       }
     }

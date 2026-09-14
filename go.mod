@@ -4,9 +4,11 @@ go 1.26.7
 
 require (
 	github.com/golang-jwt/jwt/v5 v5.3.1
+	github.com/hashicorp/consul/api v1.34.5
 	github.com/lib/pq v1.12.3
 	github.com/zeromicro/go-zero v1.10.3
 	golang.org/x/crypto v0.57.0
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
@@ -25,7 +27,6 @@ require (
 	github.com/grafana/pyroscope-go v1.3.0 // indirect
 	github.com/grafana/pyroscope-go/godeltaprof v0.1.10 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.27.7 // indirect
-	github.com/hashicorp/consul/api v1.34.5 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
 	github.com/hashicorp/go-hclog v1.6.3 // indirect

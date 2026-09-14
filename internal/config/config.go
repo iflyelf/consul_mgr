@@ -32,24 +32,26 @@ type Config struct {
 	}
 	
 	Consul struct {
-		DefaultAddress    string `json:",optional"`
-		DefaultToken      string `json:",optional"`
-		DefaultDatacenter string `json:",default=dc1"`
+		DefaultAddress    string `json:",optional,env=CONSUL_ADDRESS"`
+		DefaultToken      string `json:",optional,env=CONSUL_TOKEN"`
+		DefaultDatacenter string `json:",default=dc1,env=CONSUL_DATACENTER"`
 		Timeout           int    `json:",default=10"` // seconds
 	}
 	
 	Web struct {
 		Embedded  bool   `json:",default=true"`
 		StaticDir string `json:",default=./web/dist"`
+		Port      int    `json:",default=5173,env=WEB_PORT"`
+		Host      string `json:",default=0.0.0.0,env=WEB_HOST"`
 	}
 	
 	LogConfig struct {
-		Level  string `json:",default=info"`
-		Format string `json:",default=json"`
+		Level  string `json:",default=info,env=LOG_LEVEL"`
+		Format string `json:",default=json,env=LOG_FORMAT"`
 	}
 	
 	Audit struct {
-		Enabled       bool `json:",default=true"`
-		RetentionDays int  `json:",default=90"`
+		Enabled       bool `json:",default=true,env=AUDIT_ENABLED"`
+		RetentionDays int  `json:",default=90,env=AUDIT_RETENTION_DAYS"`
 	}
 }

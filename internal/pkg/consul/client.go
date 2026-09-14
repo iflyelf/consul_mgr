@@ -54,6 +54,11 @@ func NewClient(cfg *Config) (*Client, error) {
 	}, nil
 }
 
+// GetAPIClient 获取原生 API Client
+func (c *Client) GetAPIClient() *api.Client {
+	return c.client
+}
+
 // TestConnection 测试连接
 func (c *Client) TestConnection() error {
 	_, err := c.client.Agent().Self()

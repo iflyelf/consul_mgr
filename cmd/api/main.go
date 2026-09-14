@@ -12,6 +12,8 @@ import (
 	"github.com/iflyelf/consul_mgr/internal/config"
 	"github.com/iflyelf/consul_mgr/internal/handler/auth"
 	"github.com/iflyelf/consul_mgr/internal/handler/group"
+	"github.com/iflyelf/consul_mgr/internal/handler/instance"
+	"github.com/iflyelf/consul_mgr/internal/handler/service"
 	"github.com/iflyelf/consul_mgr/internal/middleware"
 	"github.com/iflyelf/consul_mgr/internal/pkg/response"
 	"github.com/iflyelf/consul_mgr/internal/svc"
@@ -119,16 +121,66 @@ func registerHandlers(server *rest.Server, ctx *svc.ServiceContext) {
 				Path:    "/api/groups/:id/test",
 				Handler: group.TestConnectionHandler(ctx),
 			},
+			// Consul 服务管理
+			{
+				Method:  http.MethodGet,
+				Path:    "/api/services",
+				Handler: service.ListServicesHandler(ctx),
+			},
+			{
+				Method:  http.MethodGet,
+				Path:    "/api/services/detail",
+				Handler: service.GetServiceDetailHandler(ctx),
+			},
+			{
+				Method:  http.MethodDelete,
+				Path:    "/api/services",
+				Handler: service.DeleteServiceHandler(ctx),
+			},
+			{
+				Method:  http.MethodPost,
+				Path:    "/api/services/batch-delete",
+				Handler: service.BatchDeleteServicesHandler(ctx),
+			},
+			// Consul 实例管理
+			{
+				Method:  http.MethodGet,
+				Path:    "/api/instances",
+				Handler: instance.ListInstancesHandler(ctx),
+			},
+			{
+				Method:  http.MethodPost,
+				Path:    "/api/instances",
+				Handler: instance.RegisterInstanceHandler(ctx),
+			},
+			{
+				Method:  http.MethodPut,
+				Path:    "/api/instances",
+				Handler: instance.UpdateInstanceHandler(ctx),
+			},
+			{
+				Method:  http.MethodDelete,
+				Path:    "/api/instances",
+				Handler: instance.DeleteInstanceHandler(ctx),
+			},
+			{
+				Method:  http.MethodPost,
+				Path:    "/api/instances/batch-delete",
+				Handler: instance.BatchDeleteInstancesHandler(ctx),
+			},
+			{
+				Method:  http.MethodGet,
+				Path:    "/api/instances/export",
+				Handler: instance.ExportInstancesHandler(ctx),
+			},
+			{
+				Method:  http.MethodPost,
+				Path:    "/api/instances/import",
+				Handler: instance.ImportInstancesHandler(ctx),
+			},
 		},
 		rest.WithJwt(ctx.Config.JWT.Secret),
 	)
-	
-	// TODO: 添加更多路由
-	// - 用户管理
-	// - 角色管理
-	// - 服务组管理
-	// - Consul 管理
-	// - 审计日志
 	
 	log.Println("路由注册完成")
 }

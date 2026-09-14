@@ -1,14 +1,13 @@
 Name: consul_mgr
-Host: 0.0.0.0
-Port: 8080
-Mode: dev
+Host: ${SERVER_HOST:0.0.0.0}
+Port: ${SERVER_PORT:8080}
+Mode: ${SERVER_MODE:dev}
 
 Database:
   DSN: ${DATABASE_URL}
-  # 或者分开配置
-  Host: ${DB_HOST:10.0.51.88}
-  Port: 6000
-  User: ${DB_USER:iflyelf}
+  Host: ${DB_HOST:localhost}
+  Port: ${DB_PORT:5432}
+  User: ${DB_USER:postgres}
   Password: ${DB_PASSWORD}
   DBName: ${DB_NAME:consul_mgr}
   SSLMode: ${DB_SSLMODE:disable}
@@ -23,24 +22,25 @@ JWT:
   Issuer: consul_mgr
 
 Admin:
-  Username: ${ADMIN_USERNAME:iflyelf}
+  Username: ${ADMIN_USERNAME:admin}
   Password: ${ADMIN_PASSWORD}
-  Email: ${ADMIN_EMAIL:iflyelf@gmail.com}
+  Email: ${ADMIN_EMAIL}
 
 Consul:
-  DefaultAddress: http://10.0.56.118:8510
-  DefaultToken: a597a2fa-fbcb-9aba-e743-5043ea6cd673
-  DefaultDatacenter: dc1
+  DefaultAddress: ${CONSUL_ADDRESS}
+  DefaultToken: ${CONSUL_TOKEN}
+  DefaultDatacenter: ${CONSUL_DATACENTER:dc1}
   Timeout: 10
 
 Web:
   Embedded: true
   StaticDir: ./web/dist
+  Port: ${WEB_PORT:5173}
 
 LogConfig:
-  Level: info
-  Format: json
+  Level: ${LOG_LEVEL:info}
+  Format: ${LOG_FORMAT:json}
 
 Audit:
-  Enabled: true
-  RetentionDays: 90
+  Enabled: ${AUDIT_ENABLED:true}
+  RetentionDays: ${AUDIT_RETENTION_DAYS:90}
