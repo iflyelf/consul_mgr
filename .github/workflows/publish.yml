@@ -1,0 +1,207 @@
+#=================================================
+# https://github.com/iflyelf/consul_mgr
+# License: MIT
+# Author: iflyelf
+#=================================================
+
+name: 构建并发布(latest)
+
+# 推送到 main 或手动触发即构建, 二进制与镜像统一发布到 latest
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'Dockerfile'
+      - 'go.mod'
+      - 'go.sum'
+      - 'cmd/**'
+      - 'internal/**'
+      - 'web/**'
+      - '.github/workflows/publish.yml'
+  workflow_dispatch:
+    inputs:
+      build:
+        description: 'build consul-mgr'
+        required: true
+        default: 'build consul-mgr'
+  watch:
+    types: [started]
+
+jobs:
+  # 编译多架构二进制并更新 latest Release
+  二进制文件:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 安装 Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: 计算版本号
+        id: ver
+        run: echo "version=latest-$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: 交叉编译
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          mkdir -p dist
+          
+          # Linux amd64
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+            go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" \
+            -o dist/consul_mgr-linux-amd64 ./cmd/api
+          
+          # Linux arm64
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 \
+            go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" \
+            -o dist/consul_mgr-linux-arm64 ./cmd/api
+          
+          # macOS amd64
+          CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 \
+            go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" \
+            -o dist/consul_mgr-darwin-amd64 ./cmd/api
+          
+          # macOS arm64
+          CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 \
+            go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" \
+            -o dist/consul_mgr-darwin-arm64 ./cmd/api
+          
+          # Windows amd64
+          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 \
+            go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" \
+            -o dist/consul_mgr-windows-amd64.exe ./cmd/api
+          
+          # 打包和校验
+          cd dist
+          for f in consul_mgr-linux-* consul_mgr-darwin-*; do
+            tar -czf "${f}.tar.gz" "$f"
+            sha256sum "${f}.tar.gz" >> checksums.txt
+          done
+          zip consul_mgr-windows-amd64.zip consul_mgr-windows-amd64.exe
+          sha256sum consul_mgr-windows-amd64.zip >> checksums.txt
+
+      - name: 发布到 latest Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: Latest Release
+          prerelease: false
+          body: |
+            ## Consul Manager - Latest Version
+            
+            **版本**: ${{ steps.ver.outputs.version }}  
+            **提交**: ${{ github.sha }}  
+            **构建时间**: ${{ github.event.head_commit.timestamp }}
+            
+            ### 📥 下载
+            
+            - **Linux (amd64)**: `consul_mgr-linux-amd64.tar.gz`
+            - **Linux (arm64)**: `consul_mgr-linux-arm64.tar.gz`
+            - **macOS (amd64)**: `consul_mgr-darwin-amd64.tar.gz`
+            - **macOS (arm64)**: `consul_mgr-darwin-arm64.tar.gz`
+            - **Windows (amd64)**: `consul_mgr-windows-amd64.zip`
+            
+            ### 🐳 Docker 镜像
+            
+            ```bash
+            docker pull iflyelf/consul-mgr:latest
+            ```
+            
+            ### 🚀 快速开始
+            
+            ```bash
+            # 下载并解压
+            tar xzf consul_mgr-linux-amd64.tar.gz
+            chmod +x consul_mgr-linux-amd64
+            
+            # 设置环境变量
+            export DATABASE_URL="postgresql://user:pass@host:5432/consul_mgr"
+            export ADMIN_PASSWORD="your_password"
+            
+            # 运行
+            ./consul_mgr-linux-amd64 -c etc/config.yaml
+            ```
+            
+            ### ✨ 主要功能
+            
+            - ✅ 零硬编码 - 所有配置通过环境变量
+            - ✅ Consul Services 管理 - 增删改查、批量操作
+            - ✅ Consul Instances 管理 - 完整生命周期管理
+            - ✅ 批量操作 - 批量删除、导入、导出 (JSON/YAML/CSV)
+            - ✅ 健康检查 - HTTP/TCP/TTL/GRPC
+            
+            ### 📝 环境变量
+            
+            必填:
+            - `DATABASE_URL` - PostgreSQL 连接字符串
+            - `ADMIN_PASSWORD` - 管理员密码
+            
+            可选:
+            - `SERVER_PORT` - 服务端口 (默认: 8080)
+            - `WEB_PORT` - 前端端口 (默认: 5173)
+            - `JWT_SECRET` - JWT 密钥
+          files: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/checksums.txt
+
+  # 构建并推送镜像到 latest
+  Docker镜像:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 计算版本号
+        id: ver
+        run: echo "version=latest-$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: 安装 QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: all
+
+      - name: 安装 docker buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          version: latest
+
+      - name: 登录 DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: 构建并推送镜像(仅 latest)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          build-args: |
+            VERSION=${{ steps.ver.outputs.version }}
+          tags: ${{ secrets.DOCKER_USERNAME }}/consul-mgr:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: 清理旧的 workflow 运行记录
+        uses: Mattraks/delete-workflow-runs@main
+        with:
+          repository: ${{ github.repository }}
+          retain_days: 1
+          keep_minimum_runs: 3
