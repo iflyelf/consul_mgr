@@ -414,6 +414,27 @@ func createServiceGroupTables(db *sql.DB) error {
 		UNIQUE(group_id, role_name)
 	);
 
+	-- Consul 实例持久化表
+	CREATE TABLE IF NOT EXISTS consul_instances (
+		id BIGSERIAL PRIMARY KEY,
+		instance_id VARCHAR(255) NOT NULL,
+		service_name VARCHAR(100) NOT NULL,
+		group_id BIGINT NOT NULL,
+		address VARCHAR(100) NOT NULL,
+		port INT NOT NULL,
+		tags TEXT[] DEFAULT '{}',
+		meta JSONB,
+		health_check JSONB,
+		status VARCHAR(20) DEFAULT 'passing',
+		datacenter VARCHAR(50) DEFAULT 'dc1',
+		node_name VARCHAR(100),
+		created_by VARCHAR(100),
+		created_at TIMESTAMP DEFAULT NOW(),
+		updated_at TIMESTAMP DEFAULT NOW(),
+		FOREIGN KEY (group_id) REFERENCES service_groups(id) ON DELETE CASCADE,
+		UNIQUE(group_id, instance_id)
+	);
+
 	-- 审计日志表
 	CREATE TABLE IF NOT EXISTS audit_logs (
 		id BIGSERIAL PRIMARY KEY,
@@ -436,6 +457,12 @@ func createServiceGroupTables(db *sql.DB) error {
 	CREATE INDEX IF NOT EXISTS idx_service_group_users_group ON service_group_users(group_id);
 	CREATE INDEX IF NOT EXISTS idx_service_group_users_user ON service_group_users(user_id);
 	CREATE INDEX IF NOT EXISTS idx_service_group_roles_group ON service_group_roles(group_id);
+	CREATE INDEX IF NOT EXISTS idx_consul_instances_group ON consul_instances(group_id);
+	CREATE INDEX IF NOT EXISTS idx_consul_instances_service ON consul_instances(service_name);
+	CREATE INDEX IF NOT EXISTS idx_consul_instances_status ON consul_instances(status);
+	CREATE INDEX IF NOT EXISTS idx_consul_instances_created ON consul_instances(created_at DESC);
+	CREATE INDEX IF NOT EXISTS idx_consul_instances_datacenter ON consul_instances(datacenter);
+	CREATE INDEX IF NOT EXISTS idx_consul_instances_meta ON consul_instances USING GIN (meta);
 	CREATE INDEX IF NOT EXISTS idx_audit_logs_user ON audit_logs(user_id);
 	CREATE INDEX IF NOT EXISTS idx_audit_logs_created ON audit_logs(created_at DESC);
 	CREATE INDEX IF NOT EXISTS idx_audit_logs_group ON audit_logs(group_id);
@@ -446,6 +473,6 @@ func createServiceGroupTables(db *sql.DB) error {
 		return fmt.Errorf("创建表失败: %w", err)
 	}
 	
-	log.Println("服务组相关表创建成功")
+	log.Println("服务组和实例相关表创建成功")
 	return nil
 }
