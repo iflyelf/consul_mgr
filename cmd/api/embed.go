@@ -1,6 +1,7 @@
 package main
 
 import (
+	"io"
 	"io/fs"
 	"net/http"
 	"strings"
@@ -31,11 +32,17 @@ func getSPAHandler() http.Handler {
 		}
 		
 		// 尝试读取文件
-		_, err := distFS.Open(path)
+		file, err := distFS.Open(path)
 		if err != nil {
 			// 文件不存在，返回 index.html（SPA 路由处理）
 			path = "index.html"
+			file, err = distFS.Open(path)
+			if err != nil {
+				http.NotFound(w, r)
+				return
+			}
 		}
+		defer file.Close()
 		
 		// 设置正确的 Content-Type
 		if strings.HasSuffix(path, ".js") {
@@ -50,13 +57,19 @@ func getSPAHandler() http.Handler {
 			w.Header().Set("Content-Type", "image/svg+xml")
 		} else if strings.HasSuffix(path, ".ico") {
 			w.Header().Set("Content-Type", "image/x-icon")
+		} else if strings.HasSuffix(path, ".png") {
+			w.Header().Set("Content-Type", "image/png")
 		}
 		
 		// 设置缓存头
 		if strings.HasPrefix(path, "assets/") {
-			w.Header().Set("Cache-Control", "public, max-age=31536000")
+			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+		} else {
+			w.Header().Set("Cache-Control", "no-cache")
 		}
 		
-		http.FileServer(http.FS(distFS)).ServeHTTP(w, r)
+		// 使用 http.ServeContent 来处理文件服务
+		stat, _ := file.Stat()
+		http.ServeContent(w, r, path, stat.ModTime(), file.(io.ReadSeeker))
 	})
 }

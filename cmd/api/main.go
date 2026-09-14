@@ -213,9 +213,24 @@ func registerHandlers(server *rest.Server, ctx *svc.ServiceContext) {
 	)
 	
 	// 静态文件服务（嵌入的前端）- 必须在最后注册
+	// 根路径
 	server.AddRoute(rest.Route{
 		Method:  http.MethodGet,
 		Path:    "/",
+		Handler: getSPAHandler().ServeHTTP,
+	})
+	
+	// assets 静态资源
+	server.AddRoute(rest.Route{
+		Method:  http.MethodGet,
+		Path:    "/assets/:file",
+		Handler: getSPAHandler().ServeHTTP,
+	})
+	
+	// 其他所有路径（SPA 路由）
+	server.AddRoute(rest.Route{
+		Method:  http.MethodGet,
+		Path:    "/:path",
 		Handler: getSPAHandler().ServeHTTP,
 	})
 	

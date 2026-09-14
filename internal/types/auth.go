@@ -27,11 +27,14 @@ type RefreshTokenResponse struct {
 
 // UserInfo 用户信息
 type UserInfo struct {
-	ID       int64    `json:"id"`
-	Username string   `json:"username"`
-	Email    string   `json:"email,omitempty"`
-	RealName string   `json:"real_name,omitempty"`
-	Roles    []string `json:"roles"`
+	ID        int64    `json:"id"`
+	Username  string   `json:"username"`
+	Email     string   `json:"email,omitempty"`
+	RealName  string   `json:"real_name,omitempty"`
+	Status    int      `json:"status"`
+	Roles     []string `json:"roles"`
+	CreatedAt string   `json:"created_at,omitempty"`
+	UpdatedAt string   `json:"updated_at,omitempty"`
 }
 
 // CreateUserRequest 创建用户请求

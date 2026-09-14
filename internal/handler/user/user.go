@@ -17,14 +17,14 @@ func ListUsersHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req types.ListUsersRequest
 		if err := httpx.Parse(r, &req); err != nil {
-			response.Error(w, err)
+			response.BadRequest(w, err.Error())
 			return
 		}
 
 		l := user.NewListUsersLogic(r.Context(), svcCtx)
 		resp, err := l.ListUsers(&req)
 		if err != nil {
-			response.Error(w, err)
+			response.InternalError(w, err.Error())
 		} else {
 			response.Success(w, resp)
 		}
@@ -36,20 +36,20 @@ func GetUserHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		idStr := r.URL.Query().Get("id")
 		if idStr == "" {
-			response.ParamError(w, "id 参数不能为空")
+			response.BadRequest(w, "id 参数不能为空")
 			return
 		}
 
 		id, err := strconv.ParseInt(idStr, 10, 64)
 		if err != nil {
-			response.ParamError(w, "id 参数格式错误")
+			response.BadRequest(w, "id 参数格式错误")
 			return
 		}
 
 		l := user.NewGetUserLogic(r.Context(), svcCtx)
 		resp, err := l.GetUser(id)
 		if err != nil {
-			response.Error(w, err)
+			response.InternalError(w, err.Error())
 		} else {
 			response.Success(w, resp)
 		}
@@ -61,14 +61,14 @@ func CreateUserHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req types.CreateUserRequest
 		if err := httpx.ParseJsonBody(r, &req); err != nil {
-			response.Error(w, err)
+			response.BadRequest(w, err.Error())
 			return
 		}
 
 		l := user.NewCreateUserLogic(r.Context(), svcCtx)
 		resp, err := l.CreateUser(&req)
 		if err != nil {
-			response.Error(w, err)
+			response.InternalError(w, err.Error())
 		} else {
 			response.Success(w, resp)
 		}
@@ -80,26 +80,26 @@ func UpdateUserHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		idStr := r.URL.Query().Get("id")
 		if idStr == "" {
-			response.ParamError(w, "id 参数不能为空")
+			response.BadRequest(w, "id 参数不能为空")
 			return
 		}
 
 		id, err := strconv.ParseInt(idStr, 10, 64)
 		if err != nil {
-			response.ParamError(w, "id 参数格式错误")
+			response.BadRequest(w, "id 参数格式错误")
 			return
 		}
 
 		var req types.UpdateUserRequest
 		if err := httpx.ParseJsonBody(r, &req); err != nil {
-			response.Error(w, err)
+			response.BadRequest(w, err.Error())
 			return
 		}
 
 		l := user.NewUpdateUserLogic(r.Context(), svcCtx)
 		err = l.UpdateUser(id, &req)
 		if err != nil {
-			response.Error(w, err)
+			response.InternalError(w, err.Error())
 		} else {
 			response.Success(w, nil)
 		}
@@ -111,20 +111,20 @@ func DeleteUserHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		idStr := r.URL.Query().Get("id")
 		if idStr == "" {
-			response.ParamError(w, "id 参数不能为空")
+			response.BadRequest(w, "id 参数不能为空")
 			return
 		}
 
 		id, err := strconv.ParseInt(idStr, 10, 64)
 		if err != nil {
-			response.ParamError(w, "id 参数格式错误")
+			response.BadRequest(w, "id 参数格式错误")
 			return
 		}
 
 		l := user.NewDeleteUserLogic(r.Context(), svcCtx)
 		err = l.DeleteUser(id)
 		if err != nil {
-			response.Error(w, err)
+			response.InternalError(w, err.Error())
 		} else {
 			response.Success(w, nil)
 		}
@@ -136,26 +136,26 @@ func ChangePasswordHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		idStr := r.URL.Query().Get("id")
 		if idStr == "" {
-			response.ParamError(w, "id 参数不能为空")
+			response.BadRequest(w, "id 参数不能为空")
 			return
 		}
 
 		id, err := strconv.ParseInt(idStr, 10, 64)
 		if err != nil {
-			response.ParamError(w, "id 参数格式错误")
+			response.BadRequest(w, "id 参数格式错误")
 			return
 		}
 
 		var req types.ChangePasswordRequest
 		if err := httpx.ParseJsonBody(r, &req); err != nil {
-			response.Error(w, err)
+			response.BadRequest(w, err.Error())
 			return
 		}
 
 		l := user.NewChangePasswordLogic(r.Context(), svcCtx)
 		err = l.ChangePassword(id, &req)
 		if err != nil {
-			response.Error(w, err)
+			response.InternalError(w, err.Error())
 		} else {
 			response.Success(w, nil)
 		}
@@ -167,26 +167,26 @@ func AssignRolesHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		idStr := r.URL.Query().Get("id")
 		if idStr == "" {
-			response.ParamError(w, "id 参数不能为空")
+			response.BadRequest(w, "id 参数不能为空")
 			return
 		}
 
 		id, err := strconv.ParseInt(idStr, 10, 64)
 		if err != nil {
-			response.ParamError(w, "id 参数格式错误")
+			response.BadRequest(w, "id 参数格式错误")
 			return
 		}
 
 		var req types.AssignRolesRequest
 		if err := httpx.ParseJsonBody(r, &req); err != nil {
-			response.Error(w, err)
+			response.BadRequest(w, err.Error())
 			return
 		}
 
 		l := user.NewAssignRolesLogic(r.Context(), svcCtx)
 		err = l.AssignRoles(id, &req)
 		if err != nil {
-			response.Error(w, err)
+			response.InternalError(w, err.Error())
 		} else {
 			response.Success(w, nil)
 		}

@@ -2,9 +2,10 @@ package user
 
 import (
 	"context"
+	"database/sql"
 	"errors"
+	"fmt"
 
-	"github.com/iflyelf/consul_mgr/internal/model"
 	"github.com/iflyelf/consul_mgr/internal/svc"
 	"github.com/iflyelf/consul_mgr/internal/types"
 	"golang.org/x/crypto/bcrypt"
@@ -25,51 +26,59 @@ func NewListUsersLogic(ctx context.Context, svcCtx *svc.ServiceContext) *ListUse
 func (l *ListUsersLogic) ListUsers(req *types.ListUsersRequest) (*types.ListResponse, error) {
 	offset := (req.Page - 1) * req.PageSize
 	
-	query := l.svcCtx.DB.Model(&model.User{}).Preload("Roles")
+	// 构建查询条件
+	whereClause := "WHERE 1=1"
+	args := []interface{}{}
 	
-	// 关键词搜索
 	if req.Keyword != "" {
-		query = query.Where("username LIKE ? OR email LIKE ? OR nickname LIKE ?",
-			"%"+req.Keyword+"%", "%"+req.Keyword+"%", "%"+req.Keyword+"%")
+		whereClause += " AND (username LIKE '%' || $1 || '%' OR email LIKE '%' || $1 || '%')"
+		args = append(args, req.Keyword)
 	}
 	
-	// 状态筛选
 	if req.Status != nil {
-		query = query.Where("status = ?", *req.Status)
+		whereClause += fmt.Sprintf(" AND status = $%d", len(args)+1)
+		args = append(args, *req.Status)
 	}
 	
+	// 查询总数
 	var total int64
-	if err := query.Count(&total).Error; err != nil {
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM users %s", whereClause)
+	err := l.svcCtx.DB.QueryRowPartialCtx(l.ctx, &total, countQuery, args...)
+	if err != nil {
 		return nil, err
 	}
 	
-	var users []model.User
-	if err := query.Offset(offset).Limit(req.PageSize).Find(&users).Error; err != nil {
+	// 查询用户列表
+	query := fmt.Sprintf(`
+		SELECT id, username, email, status, created_at, updated_at
+		FROM users %s 
+		ORDER BY created_at DESC 
+		LIMIT $%d OFFSET $%d
+	`, whereClause, len(args)+1, len(args)+2)
+	args = append(args, req.PageSize, offset)
+	
+	var users []struct {
+		ID        int64  `db:"id"`
+		Username  string `db:"username"`
+		Email     string `db:"email"`
+		Status    int    `db:"status"`
+		CreatedAt string `db:"created_at"`
+		UpdatedAt string `db:"updated_at"`
+	}
+	
+	err = l.svcCtx.DB.QueryRowsPartialCtx(l.ctx, &users, query, args...)
+	if err != nil && err != sql.ErrNoRows {
 		return nil, err
 	}
 	
-	// 转换为响应格式
+	// 转换为 UserInfo 并查询角色
 	list := make([]types.UserInfo, 0, len(users))
 	for _, u := range users {
-		roles := make([]types.RoleInfo, 0, len(u.Roles))
-		for _, r := range u.Roles {
-			roles = append(roles, types.RoleInfo{
-				ID:          r.ID,
-				Name:        r.Name,
-				Code:        r.Code,
-				Description: r.Description,
-				Status:      r.Status,
-				CreatedAt:   r.CreatedAt,
-				UpdatedAt:   r.UpdatedAt,
-			})
-		}
-		
+		roles, _ := l.getUserRoles(u.ID)
 		list = append(list, types.UserInfo{
 			ID:        u.ID,
 			Username:  u.Username,
 			Email:     u.Email,
-			Nickname:  u.Nickname,
-			Avatar:    u.Avatar,
 			Status:    u.Status,
 			Roles:     roles,
 			CreatedAt: u.CreatedAt,
@@ -87,6 +96,31 @@ func (l *ListUsersLogic) ListUsers(req *types.ListUsersRequest) (*types.ListResp
 	}, nil
 }
 
+func (l *ListUsersLogic) getUserRoles(userID int64) ([]string, error) {
+	query := `
+		SELECT r.name 
+		FROM roles r
+		INNER JOIN user_roles ur ON r.id = ur.role_id
+		WHERE ur.user_id = $1
+	`
+	
+	var roles []struct {
+		Name string `db:"name"`
+	}
+	
+	err := l.svcCtx.DB.QueryRowsPartialCtx(l.ctx, &roles, query, userID)
+	if err != nil && err != sql.ErrNoRows {
+		return []string{}, nil
+	}
+	
+	result := make([]string, 0, len(roles))
+	for _, r := range roles {
+		result = append(result, r.Name)
+	}
+	
+	return result, nil
+}
+
 type GetUserLogic struct {
 	ctx    context.Context
 	svcCtx *svc.ServiceContext
@@ -100,30 +134,33 @@ func NewGetUserLogic(ctx context.Context, svcCtx *svc.ServiceContext) *GetUserLo
 }
 
 func (l *GetUserLogic) GetUser(id int64) (*types.UserInfo, error) {
-	var user model.User
-	if err := l.svcCtx.DB.Preload("Roles").First(&user, id).Error; err != nil {
+	query := `
+		SELECT id, username, email, status, created_at, updated_at
+		FROM users 
+		WHERE id = $1
+	`
+	
+	var user struct {
+		ID        int64  `db:"id"`
+		Username  string `db:"username"`
+		Email     string `db:"email"`
+		Status    int    `db:"status"`
+		CreatedAt string `db:"created_at"`
+		UpdatedAt string `db:"updated_at"`
+	}
+	
+	err := l.svcCtx.DB.QueryRowPartialCtx(l.ctx, &user, query, id)
+	if err != nil {
 		return nil, err
 	}
 	
-	roles := make([]types.RoleInfo, 0, len(user.Roles))
-	for _, r := range user.Roles {
-		roles = append(roles, types.RoleInfo{
-			ID:          r.ID,
-			Name:        r.Name,
-			Code:        r.Code,
-			Description: r.Description,
-			Status:      r.Status,
-			CreatedAt:   r.CreatedAt,
-			UpdatedAt:   r.UpdatedAt,
-		})
-	}
+	// 查询用户角色
+	roles, _ := NewListUsersLogic(l.ctx, l.svcCtx).getUserRoles(id)
 	
 	return &types.UserInfo{
 		ID:        user.ID,
 		Username:  user.Username,
 		Email:     user.Email,
-		Nickname:  user.Nickname,
-		Avatar:    user.Avatar,
 		Status:    user.Status,
 		Roles:     roles,
 		CreatedAt: user.CreatedAt,
@@ -146,19 +183,25 @@ func NewCreateUserLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Create
 func (l *CreateUserLogic) CreateUser(req *types.CreateUserRequest) (*types.UserInfo, error) {
 	// 检查用户名是否存在
 	var count int64
-	if err := l.svcCtx.DB.Model(&model.User{}).Where("username = ?", req.Username).Count(&count).Error; err != nil {
+	err := l.svcCtx.DB.QueryRowPartialCtx(l.ctx, &count,
+		"SELECT COUNT(*) FROM users WHERE username = $1", req.Username)
+	if err != nil {
 		return nil, err
 	}
 	if count > 0 {
 		return nil, errors.New("用户名已存在")
 	}
 	
-	// 检查邮箱是否存在
-	if err := l.svcCtx.DB.Model(&model.User{}).Where("email = ?", req.Email).Count(&count).Error; err != nil {
-		return nil, err
-	}
-	if count > 0 {
-		return nil, errors.New("邮箱已存在")
+	// 检查邮箱是否存在（如果提供了）
+	if req.Email != "" {
+		err = l.svcCtx.DB.QueryRowPartialCtx(l.ctx, &count,
+			"SELECT COUNT(*) FROM users WHERE email = $1", req.Email)
+		if err != nil {
+			return nil, err
+		}
+		if count > 0 {
+			return nil, errors.New("邮箱已存在")
+		}
 	}
 	
 	// 加密密码
@@ -167,29 +210,38 @@ func (l *CreateUserLogic) CreateUser(req *types.CreateUserRequest) (*types.UserI
 		return nil, err
 	}
 	
-	user := &model.User{
-		Username: req.Username,
-		Password: string(hashedPassword),
-		Email:    req.Email,
-		Nickname: req.Nickname,
-		Avatar:   req.Avatar,
-		Status:   req.Status,
+	// 插入用户
+	query := `
+		INSERT INTO users (username, password, email, status, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, NOW(), NOW())
+		RETURNING id, created_at, updated_at
+	`
+	
+	var result struct {
+		ID        int64  `db:"id"`
+		CreatedAt string `db:"created_at"`
+		UpdatedAt string `db:"updated_at"`
 	}
 	
-	if err := l.svcCtx.DB.Create(user).Error; err != nil {
+	email := req.Email
+	if email == "" {
+		email = req.Username + "@example.com" // 默认邮箱
+	}
+	
+	err = l.svcCtx.DB.QueryRowPartialCtx(l.ctx, &result, query,
+		req.Username, string(hashedPassword), email, 1)
+	if err != nil {
 		return nil, err
 	}
 	
 	return &types.UserInfo{
-		ID:        user.ID,
-		Username:  user.Username,
-		Email:     user.Email,
-		Nickname:  user.Nickname,
-		Avatar:    user.Avatar,
-		Status:    user.Status,
-		Roles:     []types.RoleInfo{},
-		CreatedAt: user.CreatedAt,
-		UpdatedAt: user.UpdatedAt,
+		ID:        result.ID,
+		Username:  req.Username,
+		Email:     email,
+		Status:    1,
+		Roles:     []string{},
+		CreatedAt: result.CreatedAt,
+		UpdatedAt: result.UpdatedAt,
 	}, nil
 }
 
@@ -206,39 +258,43 @@ func NewUpdateUserLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Update
 }
 
 func (l *UpdateUserLogic) UpdateUser(id int64, req *types.UpdateUserRequest) error {
-	updates := make(map[string]interface{})
+	if req.Email == "" && req.Status == nil {
+		return nil
+	}
 	
 	if req.Email != "" {
 		// 检查邮箱是否被其他用户使用
 		var count int64
-		if err := l.svcCtx.DB.Model(&model.User{}).
-			Where("email = ? AND id != ?", req.Email, id).
-			Count(&count).Error; err != nil {
+		err := l.svcCtx.DB.QueryRowPartialCtx(l.ctx, &count,
+			"SELECT COUNT(*) FROM users WHERE email = $1 AND id != $2",
+			req.Email, id)
+		if err != nil {
 			return err
 		}
 		if count > 0 {
 			return errors.New("邮箱已被使用")
 		}
-		updates["email"] = req.Email
 	}
 	
-	if req.Nickname != "" {
-		updates["nickname"] = req.Nickname
-	}
+	// 构建更新语句
+	query := "UPDATE users SET updated_at = NOW()"
+	args := []interface{}{}
 	
-	if req.Avatar != "" {
-		updates["avatar"] = req.Avatar
+	if req.Email != "" {
+		query += fmt.Sprintf(", email = $%d", len(args)+1)
+		args = append(args, req.Email)
 	}
 	
 	if req.Status != nil {
-		updates["status"] = *req.Status
+		query += fmt.Sprintf(", status = $%d", len(args)+1)
+		args = append(args, *req.Status)
 	}
 	
-	if len(updates) == 0 {
-		return nil
-	}
+	query += fmt.Sprintf(" WHERE id = $%d", len(args)+1)
+	args = append(args, id)
 	
-	return l.svcCtx.DB.Model(&model.User{}).Where("id = ?", id).Updates(updates).Error
+	_, err := l.svcCtx.DB.ExecCtx(l.ctx, query, args...)
+	return err
 }
 
 type DeleteUserLogic struct {
@@ -254,8 +310,15 @@ func NewDeleteUserLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Delete
 }
 
 func (l *DeleteUserLogic) DeleteUser(id int64) error {
-	// 软删除
-	return l.svcCtx.DB.Delete(&model.User{}, id).Error
+	// 先删除用户角色关联
+	_, err := l.svcCtx.DB.ExecCtx(l.ctx, "DELETE FROM user_roles WHERE user_id = $1", id)
+	if err != nil {
+		return err
+	}
+	
+	// 删除用户
+	_, err = l.svcCtx.DB.ExecCtx(l.ctx, "DELETE FROM users WHERE id = $1", id)
+	return err
 }
 
 type ChangePasswordLogic struct {
@@ -271,13 +334,16 @@ func NewChangePasswordLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Ch
 }
 
 func (l *ChangePasswordLogic) ChangePassword(id int64, req *types.ChangePasswordRequest) error {
-	var user model.User
-	if err := l.svcCtx.DB.First(&user, id).Error; err != nil {
+	// 获取当前密码
+	var currentPassword string
+	err := l.svcCtx.DB.QueryRowPartialCtx(l.ctx, &currentPassword,
+		"SELECT password FROM users WHERE id = $1", id)
+	if err != nil {
 		return err
 	}
 	
 	// 验证旧密码
-	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.OldPassword)); err != nil {
+	if err := bcrypt.CompareHashAndPassword([]byte(currentPassword), []byte(req.OldPassword)); err != nil {
 		return errors.New("旧密码错误")
 	}
 	
@@ -287,7 +353,10 @@ func (l *ChangePasswordLogic) ChangePassword(id int64, req *types.ChangePassword
 		return err
 	}
 	
-	return l.svcCtx.DB.Model(&user).Update("password", string(hashedPassword)).Error
+	// 更新密码
+	query := "UPDATE users SET password = $1, updated_at = NOW() WHERE id = $2"
+	_, err = l.svcCtx.DB.ExecCtx(l.ctx, query, string(hashedPassword), id)
+	return err
 }
 
 type AssignRolesLogic struct {
@@ -303,17 +372,20 @@ func NewAssignRolesLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Assig
 }
 
 func (l *AssignRolesLogic) AssignRoles(id int64, req *types.AssignRolesRequest) error {
-	var user model.User
-	if err := l.svcCtx.DB.First(&user, id).Error; err != nil {
+	// 删除现有角色
+	_, err := l.svcCtx.DB.ExecCtx(l.ctx, "DELETE FROM user_roles WHERE user_id = $1", id)
+	if err != nil {
 		return err
 	}
 	
-	// 获取角色
-	var roles []model.Role
-	if err := l.svcCtx.DB.Where("id IN ?", req.RoleIds).Find(&roles).Error; err != nil {
-		return err
+	// 添加新角色
+	for _, roleID := range req.RoleIDs {
+		query := "INSERT INTO user_roles (user_id, role_id, created_at) VALUES ($1, $2, NOW())"
+		_, err := l.svcCtx.DB.ExecCtx(l.ctx, query, id, roleID)
+		if err != nil {
+			return err
+		}
 	}
 	
-	// 替换用户角色
-	return l.svcCtx.DB.Model(&user).Association("Roles").Replace(roles)
+	return nil
 }
