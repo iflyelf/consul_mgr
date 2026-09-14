@@ -9,6 +9,9 @@ export const getGroupList = (params) => {
   })
 }
 
+// 别名：getGroups
+export const getGroups = getGroupList
+
 // 获取服务组详情
 export const getGroupDetail = (id) => {
   return request({

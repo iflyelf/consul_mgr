@@ -14,6 +14,7 @@ import (
 	"github.com/iflyelf/consul_mgr/internal/handler/group"
 	"github.com/iflyelf/consul_mgr/internal/handler/instance"
 	"github.com/iflyelf/consul_mgr/internal/handler/service"
+	"github.com/iflyelf/consul_mgr/internal/handler/user"
 	"github.com/iflyelf/consul_mgr/internal/middleware"
 	"github.com/iflyelf/consul_mgr/internal/pkg/response"
 	"github.com/iflyelf/consul_mgr/internal/svc"
@@ -59,13 +60,6 @@ func registerHandlers(server *rest.Server, ctx *svc.ServiceContext) {
 		Handler: healthHandler(),
 	})
 	
-	// 根路径（无需认证）
-	server.AddRoute(rest.Route{
-		Method:  http.MethodGet,
-		Path:    "/",
-		Handler: indexHandler(),
-	})
-	
 	// 认证路由（无需认证）
 	server.AddRoutes(
 		[]rest.Route{
@@ -89,6 +83,42 @@ func registerHandlers(server *rest.Server, ctx *svc.ServiceContext) {
 				Method:  http.MethodGet,
 				Path:    "/api/auth/info",
 				Handler: auth.GetUserInfoHandler(ctx),
+			},
+			// 用户管理
+			{
+				Method:  http.MethodGet,
+				Path:    "/api/users",
+				Handler: user.ListUsersHandler(ctx),
+			},
+			{
+				Method:  http.MethodGet,
+				Path:    "/api/users/:id",
+				Handler: user.GetUserHandler(ctx),
+			},
+			{
+				Method:  http.MethodPost,
+				Path:    "/api/users",
+				Handler: user.CreateUserHandler(ctx),
+			},
+			{
+				Method:  http.MethodPut,
+				Path:    "/api/users/:id",
+				Handler: user.UpdateUserHandler(ctx),
+			},
+			{
+				Method:  http.MethodDelete,
+				Path:    "/api/users/:id",
+				Handler: user.DeleteUserHandler(ctx),
+			},
+			{
+				Method:  http.MethodPut,
+				Path:    "/api/users/:id/password",
+				Handler: user.ChangePasswordHandler(ctx),
+			},
+			{
+				Method:  http.MethodPost,
+				Path:    "/api/users/:id/roles",
+				Handler: user.AssignRolesHandler(ctx),
 			},
 			// 服务组管理
 			{
@@ -181,6 +211,13 @@ func registerHandlers(server *rest.Server, ctx *svc.ServiceContext) {
 		},
 		rest.WithJwt(ctx.Config.JWT.Secret),
 	)
+	
+	// 静态文件服务（嵌入的前端）- 必须在最后注册
+	server.AddRoute(rest.Route{
+		Method:  http.MethodGet,
+		Path:    "/",
+		Handler: getSPAHandler().ServeHTTP,
+	})
 	
 	log.Println("路由注册完成")
 }
