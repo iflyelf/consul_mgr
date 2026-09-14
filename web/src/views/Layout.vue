@@ -19,12 +19,19 @@
         
         <el-dropdown @command="handleCommand">
           <span class="user-info">
-            <el-avatar :icon="UserFilled" />
-            <span class="username">{{ userStore.userInfo.username || '用户' }}</span>
+            <el-avatar :src="userStore.avatar" :icon="UserFilled" />
+            <span class="username">{{ userStore.displayName }}</span>
+            <el-icon><ArrowDown /></el-icon>
           </span>
           <template #dropdown>
             <el-dropdown-menu>
-              <el-dropdown-item command="logout" :icon="SwitchButton">退出登录</el-dropdown-item>
+              <el-dropdown-item disabled>
+                <div class="user-info-dropdown">
+                  <div>{{ userStore.displayName }}</div>
+                  <div class="user-email">{{ userStore.email }}</div>
+                </div>
+              </el-dropdown-item>
+              <el-dropdown-item divided command="logout" :icon="SwitchButton">退出登录</el-dropdown-item>
             </el-dropdown-menu>
           </template>
         </el-dropdown>
@@ -61,11 +68,10 @@
 
 <script setup>
 import { useRouter } from 'vue-router'
-import { ElMessageBox } from 'element-plus'
-import { UserFilled, SwitchButton, Sunny, Grid, Connection, Monitor } from '@element-plus/icons-vue'
+import { ElMessageBox, ElMessage } from 'element-plus'
+import { UserFilled, SwitchButton, Sunny, Grid, Connection, Monitor, ArrowDown } from '@element-plus/icons-vue'
 import { useUserStore } from '@/store/user'
 import { useThemeStore } from '@/store/theme'
-import { logout } from '@/api/auth'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -80,11 +86,16 @@ const handleCommand = async (command) => {
         type: 'warning'
       })
       
-      await logout()
-      userStore.clearAuth()
+      // 调用 Store 的 logout 方法
+      await userStore.logout()
+      
+      ElMessage.success('已退出登录')
       router.push('/login')
     } catch (error) {
       // 取消或错误
+      if (error !== 'cancel') {
+        console.error('登出失败:', error)
+      }
     }
   }
 }
@@ -134,6 +145,16 @@ const handleThemeChange = (theme) => {
 
 .username {
   font-size: 14px;
+}
+
+.user-info-dropdown {
+  padding: 5px 0;
+}
+
+.user-email {
+  font-size: 12px;
+  color: #909399;
+  margin-top: 4px;
 }
 
 @media (max-width: 768px) {

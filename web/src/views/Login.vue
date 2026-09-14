@@ -1,145 +1,149 @@
 <template>
   <div class="login-container">
-    <div class="login-box">
-      <div class="login-header">
-        <h1>Consul Manager</h1>
-        <p>Consul 服务管理平台</p>
-      </div>
+    <el-card class="login-card">
+      <template #header>
+        <div class="card-header">
+          <h2>Consul Manager</h2>
+          <p>统一服务注册与配置管理平台</p>
+        </div>
+      </template>
       
-      <el-form
-        ref="formRef"
-        :model="loginForm"
-        :rules="rules"
-        class="login-form"
-        @keyup.enter="handleLogin"
-      >
-        <el-form-item prop="username">
-          <el-input
-            v-model="loginForm.username"
-            placeholder="用户名"
-            size="large"
-            :prefix-icon="User"
-          />
-        </el-form-item>
+      <div class="login-content">
+        <el-button
+          type="primary"
+          size="large"
+          :loading="loading"
+          @click="handleCasdoorLogin"
+          class="login-button"
+        >
+          <el-icon class="el-icon--left"><User /></el-icon>
+          使用 Casdoor 登录
+        </el-button>
         
-        <el-form-item prop="password">
-          <el-input
-            v-model="loginForm.password"
-            type="password"
-            placeholder="密码"
-            size="large"
-            :prefix-icon="Lock"
-            show-password
+        <div class="login-tips">
+          <el-alert
+            title="首次登录请联系管理员开通账号"
+            type="info"
+            :closable="false"
+            show-icon
           />
-        </el-form-item>
+        </div>
         
-        <el-form-item>
-          <el-button
-            type="primary"
-            size="large"
-            :loading="loading"
-            class="login-button"
-            @click="handleLogin"
-          >
-            登 录
-          </el-button>
-        </el-form-item>
-      </el-form>
-    </div>
+        <div class="login-info">
+          <el-divider />
+          <p class="info-text">
+            <el-icon><InfoFilled /></el-icon>
+            使用 Casdoor 统一认证平台登录
+          </p>
+          <p class="info-text">
+            <el-icon><Lock /></el-icon>
+            支持 SSO 单点登录
+          </p>
+        </div>
+      </div>
+    </el-card>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue'
-import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
-import { User, Lock } from '@element-plus/icons-vue'
-import { login } from '@/api/auth'
-import { useUserStore } from '@/store/user'
+import { ref } from 'vue'
+import { User, InfoFilled, Lock } from '@element-plus/icons-vue'
+import { getSigninUrl } from '@/config/casdoor'
 
-const router = useRouter()
-const userStore = useUserStore()
-const formRef = ref(null)
 const loading = ref(false)
 
-const loginForm = reactive({
-  username: '',
-  password: ''
-})
-
-const rules = {
-  username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
-  password: [{ required: true, message: '请输入密码', trigger: 'blur' }]
-}
-
-const handleLogin = async () => {
-  if (!formRef.value) return
+/**
+ * 跳转到 Casdoor 登录
+ */
+const handleCasdoorLogin = () => {
+  loading.value = true
   
-  await formRef.value.validate(async (valid) => {
-    if (!valid) return
-    
-    loading.value = true
-    try {
-      const data = await login(loginForm)
-      userStore.setToken(data.access_token)
-      userStore.setUserInfo(data.user_info)
-      ElMessage.success('登录成功')
-      router.push('/')
-    } catch (error) {
-      console.error('登录失败:', error)
-    } finally {
-      loading.value = false
-    }
-  })
+  try {
+    // 获取登录 URL 并跳转
+    const loginUrl = getSigninUrl()
+    window.location.href = loginUrl
+  } catch (error) {
+    console.error('获取登录 URL 失败:', error)
+    loading.value = false
+  }
 }
 </script>
 
 <style scoped>
 .login-container {
-  width: 100%;
-  min-height: 100vh;
   display: flex;
-  align-items: center;
   justify-content: center;
+  align-items: center;
+  min-height: 100vh;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 20px;
 }
 
-.login-box {
-  width: 400px;
-  padding: 40px;
-  background: var(--card-bg);
+.login-card {
+  width: 450px;
+  max-width: 100%;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
   border-radius: 8px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
 }
 
-@media (max-width: 768px) {
-  .login-box {
-    width: 90%;
-    padding: 30px 20px;
-  }
-}
-
-.login-header {
+.card-header {
   text-align: center;
-  margin-bottom: 30px;
+  padding: 10px 0;
 }
 
-.login-header h1 {
+.card-header h2 {
+  margin: 0 0 10px 0;
+  color: #303133;
   font-size: 28px;
-  color: var(--text-color);
-  margin-bottom: 10px;
+  font-weight: 600;
 }
 
-.login-header p {
+.card-header p {
+  margin: 0;
+  color: #909399;
   font-size: 14px;
-  color: var(--text-secondary);
 }
 
-.login-form {
-  margin-top: 20px;
+.login-content {
+  padding: 20px 0;
 }
 
 .login-button {
   width: 100%;
+  height: 48px;
+  font-size: 16px;
+  font-weight: 500;
+  border-radius: 6px;
+}
+
+.login-tips {
+  margin-top: 20px;
+}
+
+.login-info {
+  margin-top: 20px;
+}
+
+.info-text {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #606266;
+  font-size: 14px;
+  margin: 8px 0;
+}
+
+.info-text .el-icon {
+  color: #409eff;
+}
+
+@media (max-width: 768px) {
+  .login-card {
+    width: 100%;
+  }
+  
+  .card-header h2 {
+    font-size: 24px;
+  }
 }
 </style>
