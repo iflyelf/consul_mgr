@@ -54,7 +54,7 @@ export CASDOOR_APPLICATION="consul_manager"
 ```bash
 export DATABASE_URL="postgresql://user:pass@host:5432/consul_mgr?sslmode=disable"
 export CASDOOR_APPLICATION="app-built-in"   # 你的应用名
-go run tools/add_redirect_uri.go http://10.0.88.88:8080 https://consul.example.com
+go run ./tools/add-redirect-uri http://10.0.88.88:8080 https://consul.example.com
 ```
 
 参数可以是「源」（工具自动补 `/callback`），也可以是完整回调地址。

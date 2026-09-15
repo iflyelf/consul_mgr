@@ -6,7 +6,7 @@
 // 用法：
 //   export DATABASE_URL="postgresql://user:pass@host:5432/consul_mgr?sslmode=disable"
 //   export CASDOOR_APPLICATION="app-built-in"      # 可选，默认 app-built-in
-//   go run tools/add_redirect_uri.go http://10.0.88.88:8080 https://consul.example.com
+//   go run ./tools/add-redirect-uri http://10.0.88.88:8080 https://consul.example.com
 //
 // 说明：
 //   参数可以是「源」(如 http://host:port)，工具会自动补 /callback；
@@ -39,7 +39,7 @@ func main() {
 
 	args := os.Args[1:]
 	if len(args) == 0 {
-		fmt.Fprintln(os.Stderr, "用法: go run tools/add_redirect_uri.go <源或回调地址> [...]")
+		fmt.Fprintln(os.Stderr, "用法: go run ./tools/add-redirect-uri <源或回调地址> [...]")
 		os.Exit(1)
 	}
 
