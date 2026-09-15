@@ -6,6 +6,7 @@ import (
 	"github.com/hashicorp/consul/api"
 	"github.com/zeromicro/go-zero/core/logx"
 
+	"github.com/iflyelf/consul_mgr/internal/pkg/consul"
 	"github.com/iflyelf/consul_mgr/internal/types"
 )
 
@@ -80,11 +81,8 @@ func dedupClusterRegistrations(client *api.Client, targets []types.RegisterInsta
 			if localNode != "" && e.Node == localNode {
 				continue
 			}
-			// 远端重复：注销
-			if _, derr := client.Catalog().Deregister(&api.CatalogDeregistration{
-				Node:      e.Node,
-				ServiceID: e.ServiceID,
-			}, nil); derr != nil {
+			// 远端重复：按节点注销
+			if derr := consul.DeregisterRemote(client, e.Node, e.ServiceID); derr != nil {
 				logx.Errorf("[dedup] 清理远端重复失败 %s@%s: %v", e.ServiceID, e.Node, derr)
 				continue
 			}

@@ -334,7 +334,7 @@ func (l *DeleteInstanceLogic) DeleteInstance(groupID int64, instanceID string) e
 		return err
 	}
 
-	if err := client.Agent().ServiceDeregister(instanceID); err != nil {
+	if err := consul.DeregisterService(client, instanceID); err != nil {
 		return fmt.Errorf("删除实例失败: %w", consul.FriendlyError(addr, err))
 	}
 
@@ -374,7 +374,7 @@ func (l *BatchDeleteInstancesLogic) BatchDeleteInstances(groupID int64, instance
 	success := 0
 	var failed []string
 	for _, instanceID := range instanceIDs {
-		if err := client.Agent().ServiceDeregister(instanceID); err != nil {
+		if err := consul.DeregisterService(client, instanceID); err != nil {
 			failed = append(failed, instanceID)
 			continue
 		}

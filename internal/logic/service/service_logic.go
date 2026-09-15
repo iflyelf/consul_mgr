@@ -144,9 +144,9 @@ func (l *DeleteServiceLogic) DeleteService(groupID int64, serviceName string) er
 		return fmt.Errorf("查询服务实例失败: %w", err)
 	}
 
-	// 删除所有实例
+	// 删除所有实例（支持集群跨节点注销）
 	for _, entry := range entries {
-		if err := client.Agent().ServiceDeregister(entry.Service.ID); err != nil {
+		if err := consul.DeregisterService(client, entry.Service.ID); err != nil {
 			return fmt.Errorf("删除实例 %s 失败: %w", entry.Service.ID, err)
 		}
 	}
@@ -183,7 +183,7 @@ func (l *BatchDeleteServicesLogic) BatchDeleteServices(groupID int64, serviceNam
 		}
 
 		for _, entry := range entries {
-			if err := client.Agent().ServiceDeregister(entry.Service.ID); err != nil {
+			if err := consul.DeregisterService(client, entry.Service.ID); err != nil {
 				errs = append(errs, fmt.Sprintf("%s/%s: %v", serviceName, entry.Service.ID, err))
 			}
 		}

@@ -145,11 +145,96 @@ func (c *Client) RegisterService(registration *api.AgentServiceRegistration) err
 	return nil
 }
 
-// DeregisterService 注销服务实例
+// DeregisterService 注销服务实例（支持集群）
+//
+// 说明:
+//   Consul 的 Agent.ServiceDeregister 只能注销「本 Agent 注册」的服务。
+//   集群中若服务注册在其他节点，本节点 Agent 会返回 404 Unknown service ID。
+//   此时回退到 Catalog.Deregister（可按节点注销集群中任意实例）。
 func (c *Client) DeregisterService(serviceID string) error {
-	err := c.client.Agent().ServiceDeregister(serviceID)
-	if err != nil {
+	return DeregisterService(c.client, serviceID)
+}
+
+// DeregisterService 注销服务实例（包级函数，支持集群回退）
+func DeregisterService(client *api.Client, serviceID string) error {
+	err := client.Agent().ServiceDeregister(serviceID)
+	if err == nil {
+		return nil
+	}
+
+	// 仅当「本 Agent 不认识该服务」时才走 Catalog 回退
+	if !isUnknownServiceErr(err) {
 		return fmt.Errorf("注销服务失败: %w", err)
+	}
+
+	if cerr := DeregisterFromCatalog(client, serviceID); cerr != nil {
+		return fmt.Errorf("注销服务失败: %w", cerr)
+	}
+	return nil
+}
+
+// isUnknownServiceErr 判断是否为「未知服务ID」错误
+func isUnknownServiceErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "Unknown service ID") ||
+		strings.Contains(msg, "Unexpected response code: 404")
+}
+
+// DeregisterFromCatalog 通过 Catalog 在集群范围内注销实例
+//
+// 扫描所有节点，删除匹配 ServiceID 的条目。
+func DeregisterFromCatalog(client *api.Client, serviceID string) error {
+	// 先按服务名定位（ServiceID 可能与服务名不同，需回退全量扫描）
+	entries, _, err := client.Catalog().Service(serviceID, "", nil)
+	if err != nil || len(entries) == 0 {
+		all, _, aerr := client.Catalog().Services(nil)
+		if aerr != nil {
+			if err != nil {
+				return err
+			}
+			return aerr
+		}
+		entries = nil
+		for name := range all {
+			es, _, eerr := client.Catalog().Service(name, "", nil)
+			if eerr != nil {
+				continue
+			}
+			for _, e := range es {
+				if e.ServiceID == serviceID {
+					entries = append(entries, e)
+				}
+			}
+		}
+	}
+
+	if len(entries) == 0 {
+		return fmt.Errorf("集群中未找到实例: %s", serviceID)
+	}
+
+	var lastErr error
+	for _, e := range entries {
+		if _, derr := client.Catalog().Deregister(&api.CatalogDeregistration{
+			Node:      e.Node,
+			ServiceID: e.ServiceID,
+		}, nil); derr != nil {
+			lastErr = derr
+		}
+	}
+	return lastErr
+}
+
+// DeregisterRemote 按节点注销实例（供集群去重等场景使用）
+func DeregisterRemote(client *api.Client, node, serviceID string) error {
+	_, err := client.Catalog().Deregister(&api.CatalogDeregistration{
+		Node:      node,
+		ServiceID: serviceID,
+	}, nil)
+	if err != nil {
+		return fmt.Errorf("按节点注销失败 %s@%s: %w", serviceID, node, err)
 	}
 	return nil
 }
