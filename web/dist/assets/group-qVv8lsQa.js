@@ -1,1 +1,0 @@
-import{r}from"./request-NAdTOtBL.js";const o=t=>r({url:"/groups",method:"get",params:t}),u=o,p=t=>r({url:"/groups",method:"post",data:t}),n=(t,e)=>r({url:`/groups/${t}`,method:"put",data:e}),a=t=>r({url:`/groups/${t}`,method:"delete"}),c=t=>r({url:`/groups/${t}/test`,method:"post"});export{u as a,p as c,a as d,o as g,c as t,n as u};

@@ -56,14 +56,13 @@ onMounted(async () => {
     statusText.value = '正在获取用户信息...'
     progress.value = 60
     
-    // 3. 保存 Token
+    // 3. 保存 Token（同时更新 Pinia Store 与 localStorage）
     const token = data.access_token
-    localStorage.setItem('token', token)
-    
+    userStore.setToken(token)
+
     // 4. 保存用户信息到 Store
     if (data.user_info) {
       userStore.setUser(data.user_info)
-      localStorage.setItem('userInfo', JSON.stringify(data.user_info))
     }
     
     statusText.value = '登录成功，正在跳转...'

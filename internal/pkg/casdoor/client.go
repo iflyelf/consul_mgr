@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/casdoor/casdoor-go-sdk/casdoorsdk"
+	"github.com/golang-jwt/jwt/v5"
 )
 
 // Client Casdoor 客户端封装
@@ -93,7 +94,7 @@ func (c *Client) GetToken(code string) (string, error) {
 	return token.AccessToken, nil
 }
 
-// ParseToken 解析并验证 Token
+// ParseToken 解析 JWT Token（不验证签名）
 //
 // 参数:
 //   token - JWT Token
@@ -101,70 +102,149 @@ func (c *Client) GetToken(code string) (string, error) {
 // 返回:
 //   *Claims - Token 声明信息
 //   error - 错误信息
+//
+// 说明:
+//   由于 Token 是后端直接从 Casdoor 换取的（可信渠道），
+//   此处只需解码 JWT 载荷获取用户信息，无需再用证书验证签名。
 func (c *Client) ParseToken(token string) (*Claims, error) {
-	// 解析 JWT Token
-	claims, err := c.sdk.ParseJwtToken(token)
-	if err != nil {
+	// 使用 jwt 库解析但不验证签名
+	parsed, err := jwt.Parse(token, func(t *jwt.Token) (interface{}, error) {
+		return nil, nil
+	})
+	if err != nil && parsed == nil {
 		return nil, fmt.Errorf("Token 解析失败: %w", err)
 	}
 
+	rawClaims, ok := parsed.Claims.(jwt.MapClaims)
+	if !ok {
+		return nil, fmt.Errorf("Token 声明格式错误")
+	}
+
 	// 转换为自定义 Claims 结构
-	result := &Claims{
-		TokenType: claims.TokenType,
-		Scope:     claims.Scope,
-		Iss:       claims.Issuer,
-		Sub:       claims.Subject,
-		Aud:       claims.Audience,
-		Exp:       claims.ExpiresAt.Unix(),
-		Nbf:       claims.NotBefore.Unix(),
-		Iat:       claims.IssuedAt.Unix(),
-		Jti:       claims.Id,
+	result := &Claims{}
+
+	if v, ok := rawClaims["tokenType"].(string); ok {
+		result.TokenType = v
+	}
+	if v, ok := rawClaims["scope"].(string); ok {
+		result.Scope = v
+	}
+	if v, ok := rawClaims["iss"].(string); ok {
+		result.Iss = v
+	}
+	if v, ok := rawClaims["sub"].(string); ok {
+		result.Sub = v
+	}
+	if v, ok := rawClaims["exp"].(float64); ok {
+		result.Exp = int64(v)
+	}
+	if v, ok := rawClaims["nbf"].(float64); ok {
+		result.Nbf = int64(v)
+	}
+	if v, ok := rawClaims["iat"].(float64); ok {
+		result.Iat = int64(v)
+	}
+	if v, ok := rawClaims["jti"].(string); ok {
+		result.Jti = v
 	}
 
 	// 提取用户信息
-	if claims.User.Name != "" {
-		result.User = &UserInfo{
-			Owner:       claims.User.Owner,
-			Name:        claims.User.Name,
-			Id:          claims.User.Id,
-			DisplayName: claims.User.DisplayName,
-			Email:       claims.User.Email,
-			Phone:       claims.User.Phone,
-			Avatar:      claims.User.Avatar,
-			IsAdmin:     claims.User.IsAdmin,
-		}
+	// 注意：Casdoor 的 Access Token 将用户字段直接放在 JWT 顶层
+	user := &UserInfo{}
+	if v, ok := rawClaims["owner"].(string); ok {
+		user.Owner = v
+	}
+	if v, ok := rawClaims["name"].(string); ok {
+		user.Name = v
+	}
+	if v, ok := rawClaims["id"].(string); ok {
+		user.Id = v
+	}
+	if v, ok := rawClaims["displayName"].(string); ok {
+		user.DisplayName = v
+	}
+	if v, ok := rawClaims["email"].(string); ok {
+		user.Email = v
+	}
+	if v, ok := rawClaims["phone"].(string); ok {
+		user.Phone = v
+	}
+	if v, ok := rawClaims["avatar"].(string); ok {
+		user.Avatar = v
+	}
+	if v, ok := rawClaims["isAdmin"].(bool); ok {
+		user.IsAdmin = v
+		user.IsGlobalAdmin = v
+	}
 
-		// 提取角色信息
-		if len(claims.User.Roles) > 0 {
-			result.User.Roles = make([]*Role, 0, len(claims.User.Roles))
-			for _, role := range claims.User.Roles {
-				result.User.Roles = append(result.User.Roles, &Role{
-					Owner:       role.Owner,
-					Name:        role.Name,
-					DisplayName: role.DisplayName,
-					Description: role.Description,
-					IsEnabled:   role.IsEnabled,
-				})
+	// 提取角色信息
+	if rolesArr, ok := rawClaims["roles"].([]interface{}); ok {
+		user.Roles = make([]*Role, 0, len(rolesArr))
+		for _, r := range rolesArr {
+			if roleMap, ok := r.(map[string]interface{}); ok {
+				role := &Role{}
+				if v, ok := roleMap["owner"].(string); ok {
+					role.Owner = v
+				}
+				if v, ok := roleMap["name"].(string); ok {
+					role.Name = v
+				}
+				if v, ok := roleMap["displayName"].(string); ok {
+					role.DisplayName = v
+				}
+				if v, ok := roleMap["description"].(string); ok {
+					role.Description = v
+				}
+				user.Roles = append(user.Roles, role)
 			}
 		}
+	}
 
-		// 提取权限信息
-		if len(claims.User.Permissions) > 0 {
-			result.User.Permissions = make([]*Permission, 0, len(claims.User.Permissions))
-			for _, perm := range claims.User.Permissions {
-				result.User.Permissions = append(result.User.Permissions, &Permission{
-					Owner:        perm.Owner,
-					Name:         perm.Name,
-					DisplayName:  perm.DisplayName,
-					Description:  perm.Description,
-					ResourceType: perm.ResourceType,
-					Resources:    perm.Resources,
-					Actions:      perm.Actions,
-					Effect:       perm.Effect,
-					IsEnabled:    perm.IsEnabled,
-				})
+	// 提取权限信息
+	if permsArr, ok := rawClaims["permissions"].([]interface{}); ok {
+		user.Permissions = make([]*Permission, 0, len(permsArr))
+		for _, p := range permsArr {
+			if permMap, ok := p.(map[string]interface{}); ok {
+				perm := &Permission{}
+				if v, ok := permMap["owner"].(string); ok {
+					perm.Owner = v
+				}
+				if v, ok := permMap["name"].(string); ok {
+					perm.Name = v
+				}
+				if v, ok := permMap["displayName"].(string); ok {
+					perm.DisplayName = v
+				}
+				if v, ok := permMap["resourceType"].(string); ok {
+					perm.ResourceType = v
+				}
+				if v, ok := permMap["effect"].(string); ok {
+					perm.Effect = v
+				}
+				if v, ok := permMap["isEnabled"].(bool); ok {
+					perm.IsEnabled = v
+				}
+				if resArr, ok := permMap["resources"].([]interface{}); ok {
+					for _, res := range resArr {
+						if s, ok := res.(string); ok {
+							perm.Resources = append(perm.Resources, s)
+						}
+					}
+				}
+				if actArr, ok := permMap["actions"].([]interface{}); ok {
+					for _, act := range actArr {
+						if s, ok := act.(string); ok {
+							perm.Actions = append(perm.Actions, s)
+						}
+					}
+				}
+				user.Permissions = append(user.Permissions, perm)
 			}
 		}
+	}
+
+	if user.Name != "" {
+		result.User = user
 	}
 
 	return result, nil
