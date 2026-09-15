@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"time"
 
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/core/stores/sqlx"
@@ -247,4 +248,47 @@ func (l *GroupLogic) TestConnection(id int64, manager *consul.Manager) error {
 
 	l.logger.Infof("Consul 连接测试成功: %s", group.ConsulAddress)
 	return nil
+}
+
+// DetectDatacenter 探测指定 Consul 地址的数据中心与节点名称
+//
+// 参数:
+//   address - Consul 地址
+//   token   - Consul Token（可选）
+//
+// 返回:
+//   string - 数据中心
+//   string - 节点名称
+//   error  - 错误信息
+func (l *GroupLogic) DetectDatacenter(address, token string) (string, string, error) {
+	if address == "" {
+		return "", "", fmt.Errorf("Consul 地址不能为空")
+	}
+
+	client, err := consul.NewClient(&consul.Config{
+		Address: address,
+		Token:   token,
+		Timeout: 15 * time.Second,
+	})
+	if err != nil {
+		return "", "", fmt.Errorf("创建 Consul 客户端失败: %w", err)
+	}
+
+	// 内网偶发抖动时重试
+	var dc, nodeName string
+	var lastErr error
+	for i := 0; i < 3; i++ {
+		dc, nodeName, lastErr = client.DetectDatacenter()
+		if lastErr == nil {
+			break
+		}
+		time.Sleep(300 * time.Millisecond)
+	}
+	if lastErr != nil {
+		l.logger.Errorf("探测数据中心失败: %v", lastErr)
+		return "", "", fmt.Errorf("探测数据中心失败: %w", lastErr)
+	}
+
+	l.logger.Infof("数据中心探测成功: %s (节点: %s)", dc, nodeName)
+	return dc, nodeName, nil
 }

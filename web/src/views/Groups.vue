@@ -88,7 +88,20 @@
         </el-form-item>
         
         <el-form-item label="数据中心">
-          <el-input v-model="formData.consul_datacenter" placeholder="默认 dc1" />
+          <div class="datacenter-detect">
+            <el-tag v-if="detectedDatacenter" type="success" size="large">
+              {{ detectedDatacenter }}
+            </el-tag>
+            <span v-else class="text-muted">保存时自动获取</span>
+            <el-button
+              size="small"
+              :loading="detecting"
+              :disabled="!formData.consul_address"
+              @click="handleDetectDatacenter"
+            >
+              重新检测
+            </el-button>
+          </div>
         </el-form-item>
         
         <el-form-item label="状态" v-if="isEdit">
@@ -112,7 +125,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
-import { getGroupList, createGroup, updateGroup, deleteGroup, testConnection } from '@/api/group'
+import { getGroupList, createGroup, updateGroup, deleteGroup, testConnection, detectDatacenter } from '@/api/group'
 
 const loading = ref(false)
 const tableData = ref([])
@@ -124,6 +137,8 @@ const dialogVisible = ref(false)
 const dialogTitle = ref('添加服务组')
 const isEdit = ref(false)
 const submitLoading = ref(false)
+const detecting = ref(false)
+const detectedDatacenter = ref('')
 const formRef = ref(null)
 
 const formData = reactive({
@@ -133,7 +148,6 @@ const formData = reactive({
   description: '',
   consul_address: '',
   consul_token: '',
-  consul_datacenter: '',
   status: 1
 })
 
@@ -170,9 +184,9 @@ const resetForm = () => {
     description: '',
     consul_address: '',
     consul_token: '',
-    consul_datacenter: '',
     status: 1
   })
+  detectedDatacenter.value = ''
   formRef.value?.clearValidate()
 }
 
@@ -192,12 +206,36 @@ const handleEdit = (row) => {
     description: row.description,
     consul_address: row.consul_address,
     consul_token: row.consul_token || '',
-    consul_datacenter: row.consul_datacenter || '',
     status: row.status
   })
+  detectedDatacenter.value = row.consul_datacenter || ''
   isEdit.value = true
   dialogTitle.value = '编辑服务组'
   dialogVisible.value = true
+}
+
+// 自动探测数据中心
+const handleDetectDatacenter = async () => {
+  if (!formData.consul_address) {
+    ElMessage.warning('请先填写 Consul 地址')
+    return
+  }
+  detecting.value = true
+  try {
+    const res = await detectDatacenter({
+      consul_address: formData.consul_address,
+      consul_token: formData.consul_token || undefined
+    })
+    detectedDatacenter.value = res.datacenter
+    if (res.datacenter) {
+      ElMessage.success(`数据中心: ${res.datacenter}`)
+    }
+  } catch (error) {
+    detectedDatacenter.value = ''
+    ElMessage.error('数据中心探测失败，请检查 Consul 地址和 Token')
+  } finally {
+    detecting.value = false
+  }
 }
 
 const handleSubmit = async () => {
@@ -208,30 +246,26 @@ const handleSubmit = async () => {
     
     submitLoading.value = true
     try {
-      const data = {
-        name: formData.name,
-        code: formData.code,
-        description: formData.description,
-        consul_address: formData.consul_address,
-        consul_token: formData.consul_token || undefined,
-        consul_datacenter: formData.consul_datacenter || undefined
-      }
-      
       if (isEdit.value) {
-        // 编辑时只发送修改的字段
+        // 编辑时只发送修改的字段（数据中心由后端自动探测）
         const updateData = {
           description: formData.description
         }
         if (formData.name !== '') updateData.name = formData.name
         if (formData.consul_address !== '') updateData.consul_address = formData.consul_address
         if (formData.consul_token !== '') updateData.consul_token = formData.consul_token
-        if (formData.consul_datacenter !== '') updateData.consul_datacenter = formData.consul_datacenter
         updateData.status = formData.status
         
         await updateGroup(formData.id, updateData)
         ElMessage.success('更新成功')
       } else {
-        await createGroup(data)
+        await createGroup({
+          name: formData.name,
+          code: formData.code,
+          description: formData.description,
+          consul_address: formData.consul_address,
+          consul_token: formData.consul_token || undefined
+        })
         ElMessage.success('创建成功')
       }
       
@@ -286,6 +320,17 @@ onMounted(() => {
   margin-top: 20px;
   display: flex;
   justify-content: flex-end;
+}
+
+.datacenter-detect {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.text-muted {
+  color: #909399;
+  font-size: 13px;
 }
 
 @media (max-width: 768px) {

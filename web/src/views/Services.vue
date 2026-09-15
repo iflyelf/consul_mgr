@@ -11,11 +11,28 @@
         </div>
       </template>
 
+      <!-- 健康状态总览 -->
+      <div class="health-overview" v-if="services.length > 0">
+        <el-statistic title="服务总数" :value="services.length" />
+        <el-statistic title="实例总数" :value="stats.total" />
+        <el-statistic title="健康实例" :value="stats.healthy" value-style="color:#67C23A" />
+        <el-statistic title="异常实例" :value="stats.unhealthy" value-style="color:#F56C6C" />
+        <div class="health-progress">
+          <span class="health-label">整体健康度</span>
+          <el-progress
+            :percentage="stats.percentage"
+            :color="stats.percentage >= 90 ? '#67C23A' : (stats.percentage >= 60 ? '#E6A23C' : '#F56C6C')"
+            :stroke-width="18"
+            text-inside
+          />
+        </div>
+      </div>
+
       <!-- 搜索栏 -->
       <div class="search-bar">
         <el-form :inline="true" :model="searchForm" @submit.prevent="handleSearch">
           <el-form-item label="服务组">
-            <el-select v-model="searchForm.group_id" placeholder="请选择服务组" clearable @change="handleGroupChange">
+            <el-select v-model="searchForm.group_id" placeholder="请选择服务组" clearable style="width: 220px" @change="handleGroupChange">
               <el-option
                 v-for="group in groups"
                 :key="group.id"
@@ -106,7 +123,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
@@ -120,6 +137,23 @@ const batchLoading = ref(false)
 const groups = ref([])
 const services = ref([])
 const selectedServices = ref([])
+
+// 整体健康状态统计
+const stats = computed(() => {
+  let total = 0
+  let healthy = 0
+  services.value.forEach(s => {
+    total += s.instance_count || 0
+    healthy += s.healthy_count || 0
+  })
+  const unhealthy = total - healthy
+  return {
+    total,
+    healthy,
+    unhealthy,
+    percentage: total === 0 ? 0 : Math.round((healthy / total) * 100)
+  }
+})
 
 const searchForm = reactive({
   group_id: '',
@@ -274,6 +308,29 @@ onMounted(() => {
 
 .search-bar {
   margin-bottom: 20px;
+}
+
+.health-overview {
+  display: flex;
+  align-items: center;
+  gap: 48px;
+  padding: 16px 24px;
+  margin-bottom: 20px;
+  background: #f5f7fa;
+  border-radius: 8px;
+  flex-wrap: wrap;
+}
+
+.health-progress {
+  flex: 1;
+  min-width: 240px;
+}
+
+.health-label {
+  display: block;
+  margin-bottom: 6px;
+  color: #606266;
+  font-size: 13px;
 }
 
 .batch-actions {

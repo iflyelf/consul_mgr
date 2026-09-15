@@ -49,39 +49,39 @@ type ConsulHealthCheck struct {
 
 // RegisterInstanceRequest 注册实例请求
 type RegisterInstanceRequest struct {
-	GroupID         int64              `json:"group_id" validate:"required"`
-	Service         string             `json:"service" validate:"required"`
-	ID              string             `json:"id,omitempty"`
-	Tags            []string           `json:"tags,omitempty"`
-	Meta            map[string]string  `json:"meta,omitempty"`
-	Address         string             `json:"address" validate:"required"`
-	Port            int                `json:"port" validate:"required,min=1,max=65535"`
-	Check           *HealthCheckConfig `json:"check,omitempty"`
+	GroupID int64              `json:"group_id" validate:"required"`
+	Service string             `json:"service" validate:"required"`
+	ID      string             `json:"id,optional"`
+	Tags    []string           `json:"tags,optional"`
+	Meta    map[string]string  `json:"meta,optional"`
+	Address string             `json:"address" validate:"required"`
+	Port    int                `json:"port" validate:"required,min=1,max=65535"`
+	Check   *HealthCheckConfig `json:"check,optional"`
 }
 
 // UpdateInstanceRequest 更新实例请求
 type UpdateInstanceRequest struct {
-	Tags    []string           `json:"tags,omitempty"`
-	Meta    map[string]string  `json:"meta,omitempty"`
-	Address string             `json:"address,omitempty"`
-	Port    int                `json:"port,omitempty" validate:"omitempty,min=1,max=65535"`
-	Check   *HealthCheckConfig `json:"check,omitempty"`
+	Tags    []string           `json:"tags,optional"`
+	Meta    map[string]string  `json:"meta,optional"`
+	Address string             `json:"address,optional"`
+	Port    int                `json:"port,optional" validate:"omitempty,min=1,max=65535"`
+	Check   *HealthCheckConfig `json:"check,optional"`
 }
 
 // HealthCheckConfig 健康检查配置
 type HealthCheckConfig struct {
-	Type     string `json:"type" validate:"required,oneof=http tcp ttl script grpc"` // http, tcp, ttl, script, grpc
-	HTTP     string `json:"http,omitempty"`
-	TCP      string `json:"tcp,omitempty"`
-	Interval string `json:"interval,omitempty" validate:"omitempty"`
-	Timeout  string `json:"timeout,omitempty" validate:"omitempty"`
-	TTL      string `json:"ttl,omitempty"`
-	Script   string `json:"script,omitempty"`
-	GRPC     string `json:"grpc,omitempty"`
-	GRPCUseTLS bool `json:"grpc_use_tls,omitempty"`
-	Method   string `json:"method,omitempty"`
-	Header   map[string][]string `json:"header,omitempty"`
-	Body     string `json:"body,omitempty"`
+	Type       string              `json:"type" validate:"required,oneof=http tcp ttl script grpc"` // http, tcp, ttl, script, grpc
+	HTTP       string              `json:"http,optional"`
+	TCP        string              `json:"tcp,optional"`
+	Interval   string              `json:"interval,optional"`
+	Timeout    string              `json:"timeout,optional"`
+	TTL        string              `json:"ttl,optional"`
+	Script     string              `json:"script,optional"`
+	GRPC       string              `json:"grpc,optional"`
+	GRPCUseTLS bool                `json:"grpc_use_tls,optional"`
+	Method     string              `json:"method,optional"`
+	Header     map[string][]string `json:"header,optional"`
+	Body       string              `json:"body,optional"`
 }
 
 // BatchDeleteRequest 批量删除请求

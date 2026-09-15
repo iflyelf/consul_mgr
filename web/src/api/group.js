@@ -53,3 +53,12 @@ export const testConnection = (id) => {
     method: 'post'
   })
 }
+
+// 探测数据中心
+export const detectDatacenter = (data) => {
+  return request({
+    url: '/groups/detect-datacenter',
+    method: 'post',
+    data
+  })
+}

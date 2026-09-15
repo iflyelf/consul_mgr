@@ -48,24 +48,18 @@
 <script setup>
 import { ref } from 'vue'
 import { User, InfoFilled, Lock } from '@element-plus/icons-vue'
-import { getSigninUrl } from '@/config/casdoor'
 
 const loading = ref(false)
 
 /**
  * 跳转到 Casdoor 登录
+ *
+ * 说明：后端 /api/auth/login 会按当前访问的域名动态生成 Casdoor 登录地址并 302 跳转，
+ * 前端无需知道 Casdoor 地址，跨域名/IP 部署自动适配。
  */
 const handleCasdoorLogin = () => {
   loading.value = true
-  
-  try {
-    // 获取登录 URL 并跳转
-    const loginUrl = getSigninUrl()
-    window.location.href = loginUrl
-  } catch (error) {
-    console.error('获取登录 URL 失败:', error)
-    loading.value = false
-  }
+  window.location.href = '/api/auth/login'
 }
 </script>
 

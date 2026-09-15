@@ -57,6 +57,7 @@ type Config struct {
 	
 	Casdoor struct {
 		Endpoint         string `json:",env=CASDOOR_ENDPOINT"`
+		PublicEndpoint   string `json:",optional,env=CASDOOR_PUBLIC_ENDPOINT"`
 		ClientId         string `json:",env=CASDOOR_CLIENT_ID"`
 		ClientSecret     string `json:",env=CASDOOR_CLIENT_SECRET"`
 		Certificate      string `json:",optional,env=CASDOOR_CERTIFICATE"`

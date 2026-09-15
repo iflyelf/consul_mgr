@@ -12,7 +12,8 @@ package casdoor
 
 // Config Casdoor 配置结构
 type Config struct {
-	Endpoint         string `json:"endpoint"`          // Casdoor 服务地址
+	Endpoint         string `json:"endpoint"`          // Casdoor 服务端地址（后端访问用）
+	PublicEndpoint   string `json:"public_endpoint"`   // 浏览器可达的 Casdoor 地址（生成登录跳转用）
 	ClientId         string `json:"client_id"`         // 客户端 ID
 	ClientSecret     string `json:"client_secret"`     // 客户端密钥
 	Certificate      string `json:"certificate"`       // 证书（可选）

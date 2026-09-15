@@ -93,8 +93,13 @@ func registerHandlers(server *rest.Server, ctx *svc.ServiceContext) {
 	server.AddRoutes([]rest.Route{
 		{
 			Method:  http.MethodGet,
+			Path:    "/api/auth/config",
+			Handler: authHandler.ConfigHandler(ctx.Config),
+		},
+		{
+			Method:  http.MethodGet,
 			Path:    "/api/auth/login",
-			Handler: authHandler.LoginHandler(ctx.CasdoorClient),
+			Handler: authHandler.LoginHandler(ctx.CasdoorClient, ctx.Config),
 		},
 		{
 			Method:  http.MethodGet,
@@ -185,6 +190,14 @@ func registerHandlers(server *rest.Server, ctx *svc.ServiceContext) {
 		Path:   "/api/groups/:id/test",
 		Handler: casdoorAuth.Handle(
 			group.TestConnectionHandler(ctx),
+		),
+	})
+
+	server.AddRoute(rest.Route{
+		Method: http.MethodPost,
+		Path:   "/api/groups/detect-datacenter",
+		Handler: casdoorAuth.Handle(
+			group.DetectDatacenterHandler(ctx),
 		),
 	})
 	

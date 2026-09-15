@@ -29,7 +29,7 @@
       <div class="search-bar">
         <el-form :inline="true" :model="searchForm">
           <el-form-item label="服务组">
-            <el-select v-model="searchForm.group_id" placeholder="请选择服务组" clearable @change="handleGroupChange">
+            <el-select v-model="searchForm.group_id" placeholder="请选择服务组" clearable style="width: 200px" @change="handleGroupChange">
               <el-option
                 v-for="group in groups"
                 :key="group.id"
@@ -39,21 +39,30 @@
             </el-select>
           </el-form-item>
           <el-form-item label="服务名称">
-            <el-select v-model="searchForm.service" placeholder="请选择服务" clearable @change="handleServiceChange">
+            <el-select v-model="searchForm.service" placeholder="请选择服务" clearable style="width: 200px" @change="handleServiceChange">
               <el-option
                 v-for="service in services"
-                :key="service.name"
-                :label="service.name"
-                :value="service.name"
+                :key="service.service || service.name"
+                :label="service.service || service.name"
+                :value="service.service || service.name"
               />
             </el-select>
           </el-form-item>
           <el-form-item label="状态">
-            <el-select v-model="searchForm.status" placeholder="全部" clearable>
+            <el-select v-model="searchForm.status" placeholder="全部" clearable style="width: 120px">
               <el-option label="健康" value="passing" />
               <el-option label="警告" value="warning" />
               <el-option label="异常" value="critical" />
             </el-select>
+          </el-form-item>
+          <el-form-item label="关键字">
+            <el-input
+              v-model="searchForm.keyword"
+              placeholder="实例ID / 地址 / 节点"
+              clearable
+              style="width: 200px"
+              @keyup.enter="handleSearch"
+            />
           </el-form-item>
           <el-form-item>
             <el-button type="primary" @click="handleSearch" :loading="loading">搜索</el-button>
@@ -83,8 +92,12 @@
         border
       >
         <el-table-column type="selection" width="55" />
-        <el-table-column prop="instance_id" label="实例ID" min-width="200" show-overflow-tooltip />
-        <el-table-column prop="service_name" label="服务名称" min-width="150" />
+        <el-table-column prop="id" label="实例ID" min-width="200" show-overflow-tooltip />
+        <el-table-column prop="service" label="服务名称" min-width="150">
+          <template #default="{ row }">
+            <el-link type="primary" @click="handleViewService(row)">{{ row.service }}</el-link>
+          </template>
+        </el-table-column>
         <el-table-column label="地址" min-width="150">
           <template #default="{ row }">
             {{ row.address }}:{{ row.port }}
@@ -92,11 +105,12 @@
         </el-table-column>
         <el-table-column label="状态" width="100" align="center">
           <template #default="{ row }">
-            <el-tag :type="getStatusType(row.status)" size="small">
-              {{ getStatusText(row.status) }}
+            <el-tag :type="getStatusType(row.health_status)" size="small">
+              {{ getStatusText(row.health_status) }}
             </el-tag>
           </template>
         </el-table-column>
+        <el-table-column prop="node" label="节点" min-width="150" show-overflow-tooltip />
         <el-table-column label="Tags" min-width="200">
           <template #default="{ row }">
             <el-tag v-for="tag in row.tags" :key="tag" size="small" style="margin-right: 5px">
@@ -327,6 +341,7 @@
 
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Download, Upload, Refresh, CircleCheck, Delete, UploadFilled } from '@element-plus/icons-vue'
 import { getGroups } from '@/api/group'
@@ -340,6 +355,8 @@ import {
   exportInstances,
   importInstances 
 } from '@/api/instance'
+
+const router = useRouter()
 
 const loading = ref(false)
 const submitLoading = ref(false)
@@ -359,7 +376,8 @@ const total = ref(0)
 const searchForm = reactive({
   group_id: '',
   service: '',
-  status: ''
+  status: '',
+  keyword: ''
 })
 
 const dialogVisible = ref(false)
@@ -438,7 +456,14 @@ const fetchInstances = async () => {
   
   loading.value = true
   try {
-    const res = await getInstances(searchForm)
+    const res = await getInstances({
+      group_id: searchForm.group_id,
+      service_name: searchForm.service,
+      status: searchForm.status,
+      keyword: searchForm.keyword,
+      page: currentPage.value,
+      page_size: pageSize.value
+    })
     instances.value = res.list || []
     total.value = res.total || 0
   } catch (error) {
@@ -470,6 +495,7 @@ const handleSearch = () => {
 const handleReset = () => {
   searchForm.service = ''
   searchForm.status = ''
+  searchForm.keyword = ''
   currentPage.value = 1
   fetchInstances()
 }
@@ -499,13 +525,21 @@ const handleEdit = (row) => {
   isEdit.value = true
   instanceForm.group_id = searchForm.group_id
   instanceForm.id = row.id
-  instanceForm.service = row.service_name
+  instanceForm.service = row.service
   instanceForm.address = row.address
   instanceForm.port = row.port
   instanceForm.tags = row.tags || []
   instanceForm.metaList = Object.entries(row.meta || {}).map(([key, value]) => ({ key, value }))
   instanceForm.enableHealthCheck = row.checks && row.checks.length > 0
   dialogVisible.value = true
+}
+
+// 查看服务详情
+const handleViewService = (row) => {
+  router.push({
+    name: 'ServiceDetail',
+    query: { group_id: searchForm.group_id, service: row.service }
+  })
 }
 
 // 重置表单
@@ -562,6 +596,7 @@ const handleSubmit = async () => {
       data.id = instanceForm.id
       if (instanceForm.enableHealthCheck) {
         const check = {
+          type: instanceForm.checkType,
           interval: instanceForm.interval,
           timeout: instanceForm.timeout
         }
@@ -586,8 +621,16 @@ const handleSubmit = async () => {
       await registerInstance(data)
       ElMessage.success('注册成功')
     } else {
-      data.instance_id = instanceForm.id
-      await updateInstance(data)
+      const updateData = {
+        address: instanceForm.address,
+        port: instanceForm.port,
+        tags: instanceForm.tags,
+        meta
+      }
+      await updateInstance(
+        { group_id: instanceForm.group_id, instance_id: instanceForm.id },
+        updateData
+      )
       ElMessage.success('更新成功')
     }
     
@@ -636,7 +679,7 @@ const handleBatchDelete = async () => {
     const instanceIds = selectedInstances.value.map(i => i.id)
     await batchDeleteInstances({
       group_id: searchForm.group_id,
-      instance_ids: instanceIds
+      ids: instanceIds
     })
     
     ElMessage.success('批量删除成功')

@@ -2,26 +2,85 @@
 package auth
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/zeromicro/go-zero/rest/httpx"
 
+	"github.com/iflyelf/consul_mgr/internal/config"
 	"github.com/iflyelf/consul_mgr/internal/logic/auth"
 	"github.com/iflyelf/consul_mgr/internal/middleware"
 	"github.com/iflyelf/consul_mgr/internal/pkg/casdoor"
 	"github.com/iflyelf/consul_mgr/internal/types"
 )
 
+// requestBaseURL 根据请求推导外部可访问的基础地址
+//
+// 优先使用反向代理透传的 X-Forwarded-Proto / X-Forwarded-Host，
+// 否则回退到 Host 头，保证前端在不同域名/IP 下都能拿到正确的回调地址。
+func requestBaseURL(r *http.Request) string {
+	scheme := r.Header.Get("X-Forwarded-Proto")
+	if scheme == "" {
+		if r.TLS != nil {
+			scheme = "https"
+		} else {
+			scheme = "http"
+		}
+	}
+	host := r.Header.Get("X-Forwarded-Host")
+	if host == "" {
+		host = r.Host
+	}
+	return fmt.Sprintf("%s://%s", scheme, host)
+}
+
+// publicEndpoint 返回浏览器可达的 Casdoor 地址
+//
+// 未显式配置 PublicEndpoint 时，回退到服务端 Endpoint。
+func publicEndpoint(c config.Config) string {
+	if c.Casdoor.PublicEndpoint != "" {
+		return c.Casdoor.PublicEndpoint
+	}
+	return c.Casdoor.Endpoint
+}
+
+// ConfigHandler 下发前端所需的 Casdoor 运行时配置
+//
+// 功能：前端启动时调用，避免把 Casdoor 地址在构建期写死
+//
+// 请求方式：GET
+// 路径：/api/auth/config
+func ConfigHandler(c config.Config) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		redirectUri := requestBaseURL(r) + "/callback"
+		httpx.WriteJson(w, http.StatusOK, map[string]interface{}{
+			"code":    200,
+			"message": "success",
+			"data": map[string]interface{}{
+				"endpoint":      publicEndpoint(c),
+				"client_id":     c.Casdoor.ClientId,
+				"organization":  c.Casdoor.OrganizationName,
+				"application":   c.Casdoor.ApplicationName,
+				"redirect_path": "/callback",
+				"redirect_uri":  redirectUri,
+			},
+		})
+	}
+}
+
 // LoginHandler 登录处理器
 //
-// 功能：返回 Casdoor 登录 URL
+// 功能：生成 Casdoor 登录 URL 并跳转（浏览器访问时默认 302 跳转）
 //
 // 请求方式：GET
 // 路径：/api/auth/login
-func LoginHandler(casdoorClient *casdoor.Client) http.HandlerFunc {
+//
+// 参数:
+//   format=json  返回 JSON（不跳转），便于接口调试
+func LoginHandler(casdoorClient *casdoor.Client, c config.Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// 获取回调地址（从配置或环境变量）
-		redirectUri := "http://localhost:8080/api/auth/callback"
+		// 回调地址基于当前请求动态推导，避免写死
+		redirectUri := requestBaseURL(r) + "/callback"
 
 		// 调用 Logic 层
 		logic := auth.NewOAuthLogic(r.Context(), casdoorClient)
@@ -32,6 +91,12 @@ func LoginHandler(casdoorClient *casdoor.Client) http.HandlerFunc {
 				"message": "生成登录 URL 失败",
 				"error":   err.Error(),
 			})
+			return
+		}
+
+		// 浏览器直接跳转；format=json 时返回 JSON
+		if r.URL.Query().Get("format") != "json" {
+			http.Redirect(w, r, resp.LoginUrl, http.StatusFound)
 			return
 		}
 

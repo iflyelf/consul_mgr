@@ -145,190 +145,17 @@ func initDB(c config.Config) *sql.DB {
 	return db
 }
 
-// initSchema 初始化数据库表结构和数据
+// initSchema 初始化数据库表结构
+//
+// 说明:
+//   - 使用 CREATE TABLE IF NOT EXISTS，可重复执行且幂等
+//   - 每次启动都执行，确保新增的表/索引能自动创建
 func initSchema(db *sql.DB, c config.Config) error {
-	// 检查 service_groups 表是否存在
-	schemaSQL := `
-		SELECT EXISTS (
-			SELECT FROM information_schema.tables 
-			WHERE table_schema = 'public' 
-			AND table_name = 'service_groups'
-		);
-	`
-	
-	var exists bool
-	if err := db.QueryRow(schemaSQL).Scan(&exists); err != nil {
-		return fmt.Errorf("检查表失败: %w", err)
+	log.Println("初始化数据库表结构...")
+	if err := createServiceGroupTables(db); err != nil {
+		return err
 	}
-	
-	if !exists {
-		log.Println("首次启动，初始化数据库表结构...")
-		// 创建服务组相关表
-		if err := createServiceGroupTables(db); err != nil {
-			return err
-		}
-		log.Println("数据库初始化完成")
-	} else {
-		log.Println("数据库表已存在，跳过初始化")
-	}
-	
-	return nil
-}
-
-// executeSchemaSQL 执行表结构创建
-func executeSchemaSQL(db *sql.DB) error {
-	// 读取并执行 schema.sql
-	schemas := []string{
-		// 1. users 表
-		`CREATE TABLE IF NOT EXISTS users (
-			id SERIAL PRIMARY KEY,
-			username VARCHAR(50) UNIQUE NOT NULL,
-			password VARCHAR(255) NOT NULL,
-			email VARCHAR(100),
-			real_name VARCHAR(50),
-			status SMALLINT DEFAULT 1,
-			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			last_login_at TIMESTAMP,
-			last_login_ip VARCHAR(50)
-		)`,
-		`CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)`,
-		`CREATE INDEX IF NOT EXISTS idx_users_status ON users(status)`,
-		
-		// 2. roles 表
-		`CREATE TABLE IF NOT EXISTS roles (
-			id SERIAL PRIMARY KEY,
-			name VARCHAR(50) UNIQUE NOT NULL,
-			code VARCHAR(50) UNIQUE NOT NULL,
-			description TEXT,
-			status SMALLINT DEFAULT 1,
-			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-		)`,
-		`CREATE INDEX IF NOT EXISTS idx_roles_code ON roles(code)`,
-		
-		// 3. permissions 表
-		`CREATE TABLE IF NOT EXISTS permissions (
-			id SERIAL PRIMARY KEY,
-			name VARCHAR(100) NOT NULL,
-			code VARCHAR(100) UNIQUE NOT NULL,
-			resource VARCHAR(255),
-			action VARCHAR(20),
-			description TEXT,
-			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-		)`,
-		`CREATE INDEX IF NOT EXISTS idx_permissions_code ON permissions(code)`,
-		`CREATE INDEX IF NOT EXISTS idx_permissions_resource ON permissions(resource)`,
-		
-		// 4. user_roles 表
-		`CREATE TABLE IF NOT EXISTS user_roles (
-			id SERIAL PRIMARY KEY,
-			user_id INT NOT NULL,
-			role_id INT NOT NULL,
-			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			UNIQUE(user_id, role_id)
-		)`,
-		`CREATE INDEX IF NOT EXISTS idx_user_roles_user ON user_roles(user_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_user_roles_role ON user_roles(role_id)`,
-		
-		// 5. role_permissions 表
-		`CREATE TABLE IF NOT EXISTS role_permissions (
-			id SERIAL PRIMARY KEY,
-			role_id INT NOT NULL,
-			permission_id INT NOT NULL,
-			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			UNIQUE(role_id, permission_id)
-		)`,
-		`CREATE INDEX IF NOT EXISTS idx_role_permissions_role ON role_permissions(role_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_role_permissions_perm ON role_permissions(permission_id)`,
-		
-		// 6. service_groups 表
-		`CREATE TABLE IF NOT EXISTS service_groups (
-			id SERIAL PRIMARY KEY,
-			name VARCHAR(100) UNIQUE NOT NULL,
-			code VARCHAR(100) UNIQUE NOT NULL,
-			description TEXT,
-			consul_address VARCHAR(255) NOT NULL,
-			consul_token VARCHAR(255),
-			consul_datacenter VARCHAR(50) DEFAULT 'dc1',
-			status SMALLINT DEFAULT 1,
-			created_by INT,
-			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-		)`,
-		`CREATE INDEX IF NOT EXISTS idx_service_groups_code ON service_groups(code)`,
-		`CREATE INDEX IF NOT EXISTS idx_service_groups_status ON service_groups(status)`,
-		
-		// 7. role_group_permissions 表
-		`CREATE TABLE IF NOT EXISTS role_group_permissions (
-			id SERIAL PRIMARY KEY,
-			role_id INT NOT NULL,
-			group_id INT NOT NULL,
-			permissions JSONB NOT NULL,
-			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			UNIQUE(role_id, group_id)
-		)`,
-		`CREATE INDEX IF NOT EXISTS idx_role_group_role ON role_group_permissions(role_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_role_group_group ON role_group_permissions(group_id)`,
-		
-		// 8. audit_logs 表
-		`CREATE TABLE IF NOT EXISTS audit_logs (
-			id BIGSERIAL PRIMARY KEY,
-			user_id INT,
-			username VARCHAR(50),
-			action VARCHAR(100) NOT NULL,
-			resource_type VARCHAR(50),
-			resource_id VARCHAR(255),
-			resource_name VARCHAR(255),
-			group_id INT,
-			details JSONB,
-			ip_address VARCHAR(50),
-			user_agent TEXT,
-			status VARCHAR(20),
-			error_message TEXT,
-			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-		)`,
-		`CREATE INDEX IF NOT EXISTS idx_audit_logs_user ON audit_logs(user_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_audit_logs_action ON audit_logs(action)`,
-		`CREATE INDEX IF NOT EXISTS idx_audit_logs_created ON audit_logs(created_at DESC)`,
-	}
-	
-	for i, schema := range schemas {
-		if _, err := db.Exec(schema); err != nil {
-			return fmt.Errorf("执行建表语句 %d 失败: %w", i+1, err)
-		}
-	}
-	
-	log.Println("数据库表结构创建成功")
-	return nil
-}
-
-// executeInitDataSQL 执行初始数据插入
-func executeInitDataSQL(db *sql.DB) error {
-	// 插入默认角色
-	roles := []struct {
-		name        string
-		code        string
-		description string
-	}{
-		{"超级管理员", "admin", "拥有所有权限的超级管理员"},
-		{"运维人员", "operator", "可以管理Consul服务和实例"},
-		{"只读用户", "viewer", "只能查看信息"},
-	}
-	
-	for _, role := range roles {
-		_, err := db.Exec(`
-			INSERT INTO roles (name, code, description, status, created_at, updated_at)
-			VALUES ($1, $2, $3, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-			ON CONFLICT (code) DO NOTHING
-		`, role.name, role.code, role.description)
-		if err != nil {
-			return fmt.Errorf("插入角色失败: %w", err)
-		}
-	}
-	
-	log.Println("初始角色数据创建成功")
+	log.Println("数据库初始化完成")
 	return nil
 }
 
@@ -337,6 +164,7 @@ func initCasdoorClient(c config.Config) (*casdoor.Client, error) {
 	// 构造 Casdoor 配置
 	casdoorConfig := &casdoor.Config{
 		Endpoint:         c.Casdoor.Endpoint,
+		PublicEndpoint:   c.Casdoor.PublicEndpoint,
 		ClientId:         c.Casdoor.ClientId,
 		ClientSecret:     c.Casdoor.ClientSecret,
 		Certificate:      c.Casdoor.Certificate,
@@ -361,13 +189,23 @@ func createServiceGroupTables(db *sql.DB) error {
 	CREATE TABLE IF NOT EXISTS service_groups (
 		id BIGSERIAL PRIMARY KEY,
 		name VARCHAR(100) NOT NULL UNIQUE,
+		code VARCHAR(100) NOT NULL DEFAULT '',
 		consul_address VARCHAR(255) NOT NULL,
 		consul_token VARCHAR(255),
-		datacenter VARCHAR(50) DEFAULT 'dc1',
+		consul_datacenter VARCHAR(50) DEFAULT 'dc1',
 		description TEXT,
+		status SMALLINT DEFAULT 1,
+		created_by VARCHAR(100),
 		created_at TIMESTAMP DEFAULT NOW(),
 		updated_at TIMESTAMP DEFAULT NOW()
 	);
+
+	-- 兼容旧库：补齐可能缺失的列
+	ALTER TABLE service_groups ADD COLUMN IF NOT EXISTS code VARCHAR(100) NOT NULL DEFAULT '';
+	ALTER TABLE service_groups ADD COLUMN IF NOT EXISTS consul_datacenter VARCHAR(50) DEFAULT 'dc1';
+	ALTER TABLE service_groups ADD COLUMN IF NOT EXISTS status SMALLINT DEFAULT 1;
+	ALTER TABLE service_groups ADD COLUMN IF NOT EXISTS created_by VARCHAR(100);
+	ALTER TABLE service_groups ADD COLUMN IF NOT EXISTS datacenter VARCHAR(50);
 
 	-- 服务组用户权限表
 	CREATE TABLE IF NOT EXISTS service_group_users (
@@ -431,6 +269,7 @@ func createServiceGroupTables(db *sql.DB) error {
 	);
 
 	-- 创建索引
+	CREATE INDEX IF NOT EXISTS idx_service_groups_code ON service_groups(code);
 	CREATE INDEX IF NOT EXISTS idx_service_group_users_group ON service_group_users(group_id);
 	CREATE INDEX IF NOT EXISTS idx_service_group_users_user ON service_group_users(user_id);
 	CREATE INDEX IF NOT EXISTS idx_service_group_roles_group ON service_group_roles(group_id);

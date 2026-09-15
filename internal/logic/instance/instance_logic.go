@@ -38,38 +38,110 @@ func (l *ListInstancesLogic) ListInstances(groupID int64, serviceName, status st
 		return nil, err
 	}
 
-	entries, _, err := client.Health().Service(serviceName, "", false, nil)
-	if err != nil {
-		return nil, fmt.Errorf("查询实例失败: %w", err)
+	// 确定要查询的服务列表：指定服务则只查该服务，否则查全部
+	serviceNames := []string{serviceName}
+	if serviceName == "" {
+		catalogServices, _, cerr := client.Catalog().Services(nil)
+		if cerr != nil {
+			return nil, fmt.Errorf("查询服务列表失败: %w", cerr)
+		}
+		serviceNames = make([]string, 0, len(catalogServices))
+		for name := range catalogServices {
+			serviceNames = append(serviceNames, name)
+		}
 	}
 
-	var instances []types.ConsulInstanceInfo
-	for _, entry := range entries {
-		service := entry.Service
-		node := entry.Node
-		checks := entry.Checks
-		healthStatus := aggregateStatus(checks)
-
-		// 状态过滤
-		if status != "" && healthStatus != status {
-			continue
+	instances := make([]types.ConsulInstanceInfo, 0)
+	for _, name := range serviceNames {
+		entries, _, herr := client.Health().Service(name, "", false, nil)
+		if herr != nil {
+			return nil, fmt.Errorf("查询实例失败: %w", herr)
 		}
+		for _, entry := range entries {
+			service := entry.Service
+			node := entry.Node
+			checks := entry.Checks
+			healthStatus := aggregateStatus(checks)
 
-		instances = append(instances, types.ConsulInstanceInfo{
-			ID:           service.ID,
-			Service:      service.Service,
-			Tags:         service.Tags,
-			Meta:         service.Meta,
-			Address:      service.Address,
-			Port:         service.Port,
-			Node:         node.Node,
-			NodeAddress:  node.Address,
-			HealthStatus: healthStatus,
-			Checks:       convertChecks(checks),
-		})
+			// 状态过滤
+			if status != "" && healthStatus != status {
+				continue
+			}
+
+			instances = append(instances, types.ConsulInstanceInfo{
+				ID:           service.ID,
+				Service:      service.Service,
+				Tags:         service.Tags,
+				Meta:         service.Meta,
+				Address:      service.Address,
+				Port:         service.Port,
+				Node:         node.Node,
+				NodeAddress:  node.Address,
+				HealthStatus: healthStatus,
+				Checks:       convertChecks(checks),
+			})
+		}
 	}
 
 	return instances, nil
+}
+
+// GetDatacenters 获取该服务组 Consul 的数据中心列表
+func (l *ListInstancesLogic) GetDatacenters(groupID int64) ([]string, error) {
+	client, err := getConsulClient(l.ctx, l.svcCtx, groupID)
+	if err != nil {
+		return nil, err
+	}
+
+	dcs, err := client.Catalog().Datacenters()
+	if err != nil {
+		return nil, fmt.Errorf("查询数据中心失败: %w", err)
+	}
+	return dcs, nil
+}
+
+// GetServiceNames 获取服务名列表
+func (l *ListInstancesLogic) GetServiceNames(groupID int64, datacenter string) ([]string, error) {
+	client, err := getConsulClient(l.ctx, l.svcCtx, groupID)
+	if err != nil {
+		return nil, err
+	}
+
+	services, _, err := client.Catalog().Services(&api.QueryOptions{Datacenter: datacenter})
+	if err != nil {
+		return nil, fmt.Errorf("查询服务列表失败: %w", err)
+	}
+
+	names := make([]string, 0, len(services))
+	for name := range services {
+		names = append(names, name)
+	}
+	return names, nil
+}
+
+// GetInstance 获取单个实例详情
+func (l *ListInstancesLogic) GetInstance(groupID int64, instanceID string) (*types.ConsulInstanceInfo, error) {
+	client, err := getConsulClient(l.ctx, l.svcCtx, groupID)
+	if err != nil {
+		return nil, err
+	}
+
+	svc, _, err := client.Agent().Service(instanceID, nil)
+	if err != nil {
+		return nil, fmt.Errorf("获取实例失败: %w", err)
+	}
+	if svc == nil {
+		return nil, fmt.Errorf("实例不存在: %s", instanceID)
+	}
+
+	return &types.ConsulInstanceInfo{
+		ID:      svc.ID,
+		Service: svc.Service,
+		Tags:    svc.Tags,
+		Meta:    svc.Meta,
+		Address: svc.Address,
+		Port:    svc.Port,
+	}, nil
 }
 
 // RegisterInstanceLogic 注册实例逻辑
@@ -265,23 +337,37 @@ func (l *ExportInstancesLogic) ExportInstances(groupID int64, serviceName, forma
 		return nil, err
 	}
 
-	entries, _, err := client.Health().Service(serviceName, "", false, nil)
-	if err != nil {
-		return nil, fmt.Errorf("查询实例失败: %w", err)
+	// 与列表一致：未指定服务时导出全部服务实例
+	serviceNames := []string{serviceName}
+	if serviceName == "" {
+		catalogServices, _, cerr := client.Catalog().Services(nil)
+		if cerr != nil {
+			return nil, fmt.Errorf("查询服务列表失败: %w", cerr)
+		}
+		serviceNames = make([]string, 0, len(catalogServices))
+		for name := range catalogServices {
+			serviceNames = append(serviceNames, name)
+		}
 	}
 
 	var instances []types.RegisterInstanceRequest
-	for _, entry := range entries {
-		service := entry.Service
-		instances = append(instances, types.RegisterInstanceRequest{
-			GroupID: groupID,
-			ID:      service.ID,
-			Service: service.Service,
-			Tags:    service.Tags,
-			Meta:    service.Meta,
-			Address: service.Address,
-			Port:    service.Port,
-		})
+	for _, name := range serviceNames {
+		entries, _, herr := client.Health().Service(name, "", false, nil)
+		if herr != nil {
+			return nil, fmt.Errorf("查询实例失败: %w", herr)
+		}
+		for _, entry := range entries {
+			service := entry.Service
+			instances = append(instances, types.RegisterInstanceRequest{
+				GroupID: groupID,
+				ID:      service.ID,
+				Service: service.Service,
+				Tags:    service.Tags,
+				Meta:    service.Meta,
+				Address: service.Address,
+				Port:    service.Port,
+			})
+		}
 	}
 
 	switch format {

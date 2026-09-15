@@ -27,6 +27,8 @@ Consul:
 
 Casdoor:
   Endpoint: ${CASDOOR_ENDPOINT}
+  # 浏览器可达的 Casdoor 地址（跨域名/IP 部署必配，留空则用 Endpoint）
+  PublicEndpoint: ${CASDOOR_PUBLIC_ENDPOINT}
   ClientId: ${CASDOOR_CLIENT_ID}
   ClientSecret: ${CASDOOR_CLIENT_SECRET}
   Certificate: ${CASDOOR_CERTIFICATE}

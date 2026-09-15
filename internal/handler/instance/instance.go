@@ -1,97 +1,109 @@
 // Package instance 提供实例管理的 HTTP 处理器
+//
+// 说明：实例数据实时来自 Consul Catalog，不做本地持久化，
+// 保证与 Consul 状态完全一致。
 package instance
 
 import (
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/zeromicro/go-zero/rest/httpx"
 	"github.com/zeromicro/go-zero/rest/pathvar"
 
 	"github.com/iflyelf/consul_mgr/internal/logic/instance"
-	"github.com/iflyelf/consul_mgr/internal/middleware"
 	"github.com/iflyelf/consul_mgr/internal/svc"
+	"github.com/iflyelf/consul_mgr/internal/types"
 )
 
-// instanceIDFromRequest 从路径或查询参数中提取实例 ID
-func instanceIDFromRequest(r *http.Request) (int64, error) {
-	idStr := pathvar.Vars(r)["id"]
-	if idStr == "" {
-		idStr = r.URL.Query().Get("instance_id")
+// instanceID 从路径或查询参数中提取实例 ID
+func instanceID(r *http.Request) string {
+	if v := pathvar.Vars(r)["id"]; v != "" {
+		return v
 	}
-	if idStr == "" {
-		idStr = r.URL.Query().Get("id")
+	if v := r.URL.Query().Get("instance_id"); v != "" {
+		return v
 	}
-	return strconv.ParseInt(idStr, 10, 64)
+	return r.URL.Query().Get("id")
 }
 
-// RegisterInstanceRequest 注册实例请求
-type RegisterInstanceRequest struct {
-	InstanceID  string                 `json:"instance_id" validate:"required"`
-	ServiceName string                 `json:"service_name" validate:"required"`
-	GroupID     int64                  `json:"group_id" validate:"required"`
-	Address     string                 `json:"address" validate:"required"`
-	Port        int                    `json:"port" validate:"required"`
-	Tags        []string               `json:"tags,optional"`
-	Meta        map[string]interface{} `json:"meta,optional"`
-	HealthCheck map[string]interface{} `json:"health_check,optional"`
-	Datacenter  string                 `json:"datacenter,optional"`
-	NodeName    string                 `json:"node_name,optional"`
-}
-
-// UpdateInstanceRequest 更新实例请求
-type UpdateInstanceRequest struct {
-	Address     string                 `json:"address,optional"`
-	Port        int                    `json:"port,optional"`
-	Tags        []string               `json:"tags,optional"`
-	Meta        map[string]interface{} `json:"meta,optional"`
-	HealthCheck map[string]interface{} `json:"health_check,optional"`
-	Status      string                 `json:"status,optional"`
-	Datacenter  string                 `json:"datacenter,optional"`
-	NodeName    string                 `json:"node_name,optional"`
-}
-
-// BatchDeleteRequest 批量删除请求
-type BatchDeleteRequest struct {
-	IDs []int64 `json:"ids" validate:"required"`
+// groupIDFrom 解析 group_id
+func groupIDFrom(r *http.Request) int64 {
+	if v := r.URL.Query().Get("group_id"); v != "" {
+		id, _ := strconv.ParseInt(v, 10, 64)
+		return id
+	}
+	return 0
 }
 
 // ListInstancesHandler 查询实例列表
+//
+// 支持条件：group_id、service_name、status、keyword、分页
 func ListInstancesHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		groupID, _ := strconv.ParseInt(r.URL.Query().Get("group_id"), 10, 64)
+		groupID := groupIDFrom(r)
+		if groupID == 0 {
+			httpx.WriteJson(w, http.StatusOK, map[string]interface{}{
+				"code": 400, "message": "group_id 不能为空",
+			})
+			return
+		}
 		serviceName := r.URL.Query().Get("service_name")
+		if serviceName == "" {
+			serviceName = r.URL.Query().Get("service")
+		}
 		status := r.URL.Query().Get("status")
-		datacenter := r.URL.Query().Get("datacenter")
 		keyword := r.URL.Query().Get("keyword")
 		page, _ := strconv.Atoi(r.URL.Query().Get("page"))
 		pageSize, _ := strconv.Atoi(r.URL.Query().Get("page_size"))
-		
 		if page <= 0 {
 			page = 1
 		}
 		if pageSize <= 0 {
 			pageSize = 20
 		}
-		
-		logic := instance.NewInstanceLogic(r.Context(), ctx.DB)
-		instances, total, err := logic.ListInstances(
-			groupID, serviceName, status, datacenter, keyword, page, pageSize)
-		
+
+		l := instance.NewListInstancesLogic(r.Context(), ctx)
+		list, err := l.ListInstances(groupID, serviceName, status)
 		if err != nil {
-			httpx.WriteJson(w, http.StatusInternalServerError, map[string]interface{}{
-				"code":    500,
-				"message": err.Error(),
+			httpx.WriteJson(w, http.StatusOK, map[string]interface{}{
+				"code": 500, "message": err.Error(),
 			})
 			return
 		}
-		
+
+		// 关键字过滤（实例ID/服务名/地址/节点）
+		if keyword != "" {
+			kw := strings.ToLower(keyword)
+			filtered := make([]types.ConsulInstanceInfo, 0, len(list))
+			for _, it := range list {
+				if strings.Contains(strings.ToLower(it.ID), kw) ||
+					strings.Contains(strings.ToLower(it.Service), kw) ||
+					strings.Contains(strings.ToLower(it.Address), kw) ||
+					strings.Contains(strings.ToLower(it.Node), kw) {
+					filtered = append(filtered, it)
+				}
+			}
+			list = filtered
+		}
+
+		total := len(list)
+		start := (page - 1) * pageSize
+		if start > total {
+			start = total
+		}
+		end := start + pageSize
+		if end > total {
+			end = total
+		}
+
 		httpx.WriteJson(w, http.StatusOK, map[string]interface{}{
 			"code":    200,
 			"message": "success",
 			"data": map[string]interface{}{
-				"list":      instances,
+				"list":      list[start:end],
 				"total":     total,
 				"page":      page,
 				"page_size": pageSize,
@@ -100,48 +112,54 @@ func ListInstancesHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 	}
 }
 
+// GetInstanceHandler 获取实例详情
+func GetInstanceHandler(ctx *svc.ServiceContext) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id := instanceID(r)
+		if id == "" {
+			httpx.WriteJson(w, http.StatusOK, map[string]interface{}{
+				"code": 400, "message": "实例ID不能为空",
+			})
+			return
+		}
+
+		groupID := groupIDFrom(r)
+		l := instance.NewListInstancesLogic(r.Context(), ctx)
+		detail, err := l.GetInstance(groupID, id)
+		if err != nil {
+			httpx.WriteJson(w, http.StatusOK, map[string]interface{}{
+				"code": 500, "message": err.Error(),
+			})
+			return
+		}
+
+		httpx.WriteJson(w, http.StatusOK, map[string]interface{}{
+			"code": 200, "message": "success", "data": detail,
+		})
+	}
+}
+
 // RegisterInstanceHandler 注册实例
 func RegisterInstanceHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var req RegisterInstanceRequest
+		var req types.RegisterInstanceRequest
 		if err := httpx.Parse(r, &req); err != nil {
-			httpx.WriteJson(w, http.StatusBadRequest, map[string]interface{}{
-				"code":    400,
-				"message": "参数错误: " + err.Error(),
+			httpx.WriteJson(w, http.StatusOK, map[string]interface{}{
+				"code": 400, "message": "参数错误: " + err.Error(),
 			})
 			return
 		}
-		
-		// 获取当前用户
-		username, _ := middleware.GetUsernameFromContext(r.Context())
-		
-		logic := instance.NewInstanceLogic(r.Context(), ctx.DB)
-		result, err := logic.RegisterInstance(
-			req.InstanceID,
-			req.ServiceName,
-			req.GroupID,
-			req.Address,
-			req.Port,
-			req.Tags,
-			req.Meta,
-			req.HealthCheck,
-			req.Datacenter,
-			req.NodeName,
-			username,
-		)
-		
-		if err != nil {
-			httpx.WriteJson(w, http.StatusInternalServerError, map[string]interface{}{
-				"code":    500,
-				"message": "注册失败: " + err.Error(),
+
+		l := instance.NewRegisterInstanceLogic(r.Context(), ctx)
+		if err := l.RegisterInstance(req.GroupID, &req); err != nil {
+			httpx.WriteJson(w, http.StatusOK, map[string]interface{}{
+				"code": 500, "message": "注册失败: " + err.Error(),
 			})
 			return
 		}
-		
+
 		httpx.WriteJson(w, http.StatusOK, map[string]interface{}{
-			"code":    200,
-			"message": "注册成功",
-			"data":    result,
+			"code": 200, "message": "注册成功", "data": req,
 		})
 	}
 }
@@ -149,76 +167,37 @@ func RegisterInstanceHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 // UpdateInstanceHandler 更新实例
 func UpdateInstanceHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		id, err := instanceIDFromRequest(r)
-		if err != nil {
-			httpx.WriteJson(w, http.StatusBadRequest, map[string]interface{}{
-				"code":    400,
-				"message": "无效的 ID",
+		id := instanceID(r)
+		if id == "" {
+			httpx.WriteJson(w, http.StatusOK, map[string]interface{}{
+				"code": 400, "message": "实例ID不能为空",
 			})
 			return
 		}
-		
-		var req UpdateInstanceRequest
+
+		var req types.UpdateInstanceRequest
 		if err := httpx.Parse(r, &req); err != nil {
-			httpx.WriteJson(w, http.StatusBadRequest, map[string]interface{}{
-				"code":    400,
-				"message": "参数错误: " + err.Error(),
+			httpx.WriteJson(w, http.StatusOK, map[string]interface{}{
+				"code": 400, "message": "参数错误: " + err.Error(),
 			})
 			return
 		}
-		
-		logic := instance.NewInstanceLogic(r.Context(), ctx.DB)
-		
-		// 获取原数据
-		original, err := logic.GetInstance(id)
-		if err != nil {
-			httpx.WriteJson(w, http.StatusNotFound, map[string]interface{}{
-				"code":    404,
-				"message": err.Error(),
+
+		groupID := groupIDFrom(r)
+		if groupID == 0 {
+			groupID, _ = strconv.ParseInt(r.Header.Get("X-Group-Id"), 10, 64)
+		}
+
+		l := instance.NewUpdateInstanceLogic(r.Context(), ctx)
+		if err := l.UpdateInstance(groupID, id, &req); err != nil {
+			httpx.WriteJson(w, http.StatusOK, map[string]interface{}{
+				"code": 500, "message": "更新失败: " + err.Error(),
 			})
 			return
 		}
-		
-		// 合并更新
-		if req.Address == "" {
-			req.Address = original.Address
-		}
-		if req.Port == 0 {
-			req.Port = original.Port
-		}
-		if req.Tags == nil {
-			req.Tags = original.Tags
-		}
-		if req.Meta == nil {
-			req.Meta = original.Meta
-		}
-		if req.Status == "" {
-			req.Status = original.Status
-		}
-		if req.Datacenter == "" {
-			req.Datacenter = original.Datacenter
-		}
-		if req.NodeName == "" {
-			req.NodeName = original.NodeName
-		}
-		
-		result, err := logic.UpdateInstance(
-			id, req.Address, req.Port, req.Tags, req.Meta,
-			req.HealthCheck, req.Status, req.Datacenter, req.NodeName,
-		)
-		
-		if err != nil {
-			httpx.WriteJson(w, http.StatusInternalServerError, map[string]interface{}{
-				"code":    500,
-				"message": "更新失败: " + err.Error(),
-			})
-			return
-		}
-		
+
 		httpx.WriteJson(w, http.StatusOK, map[string]interface{}{
-			"code":    200,
-			"message": "更新成功",
-			"data":    result,
+			"code": 200, "message": "更新成功",
 		})
 	}
 }
@@ -226,58 +205,25 @@ func UpdateInstanceHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 // DeregisterInstanceHandler 注销实例
 func DeregisterInstanceHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		id, err := instanceIDFromRequest(r)
-		if err != nil {
-			httpx.WriteJson(w, http.StatusBadRequest, map[string]interface{}{
-				"code":    400,
-				"message": "无效的 ID",
+		id := instanceID(r)
+		if id == "" {
+			httpx.WriteJson(w, http.StatusOK, map[string]interface{}{
+				"code": 400, "message": "实例ID不能为空",
 			})
 			return
 		}
-		
-		logic := instance.NewInstanceLogic(r.Context(), ctx.DB)
-		err = logic.DeregisterInstance(id)
-		if err != nil {
-			httpx.WriteJson(w, http.StatusInternalServerError, map[string]interface{}{
-				"code":    500,
-				"message": "注销失败: " + err.Error(),
-			})
-			return
-		}
-		
-		httpx.WriteJson(w, http.StatusOK, map[string]interface{}{
-			"code":    200,
-			"message": "注销成功",
-		})
-	}
-}
 
-// GetInstanceHandler 获取实例详情
-func GetInstanceHandler(ctx *svc.ServiceContext) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		id, err := instanceIDFromRequest(r)
-		if err != nil {
-			httpx.WriteJson(w, http.StatusBadRequest, map[string]interface{}{
-				"code":    400,
-				"message": "无效的 ID",
+		groupID := groupIDFrom(r)
+		l := instance.NewDeleteInstanceLogic(r.Context(), ctx)
+		if err := l.DeleteInstance(groupID, id); err != nil {
+			httpx.WriteJson(w, http.StatusOK, map[string]interface{}{
+				"code": 500, "message": "删除失败: " + err.Error(),
 			})
 			return
 		}
-		
-		logic := instance.NewInstanceLogic(r.Context(), ctx.DB)
-		result, err := logic.GetInstance(id)
-		if err != nil {
-			httpx.WriteJson(w, http.StatusNotFound, map[string]interface{}{
-				"code":    404,
-				"message": err.Error(),
-			})
-			return
-		}
-		
+
 		httpx.WriteJson(w, http.StatusOK, map[string]interface{}{
-			"code":    200,
-			"message": "success",
-			"data":    result,
+			"code": 200, "message": "删除成功",
 		})
 	}
 }
@@ -285,31 +231,24 @@ func GetInstanceHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 // BatchDeleteHandler 批量删除实例
 func BatchDeleteHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var req BatchDeleteRequest
+		var req types.BatchDeleteRequest
 		if err := httpx.Parse(r, &req); err != nil {
-			httpx.WriteJson(w, http.StatusBadRequest, map[string]interface{}{
-				"code":    400,
-				"message": "参数错误: " + err.Error(),
+			httpx.WriteJson(w, http.StatusOK, map[string]interface{}{
+				"code": 400, "message": "参数错误: " + err.Error(),
 			})
 			return
 		}
-		
-		logic := instance.NewInstanceLogic(r.Context(), ctx.DB)
-		deleted, err := logic.BatchDelete(req.IDs)
-		if err != nil {
-			httpx.WriteJson(w, http.StatusInternalServerError, map[string]interface{}{
-				"code":    500,
-				"message": "批量删除失败: " + err.Error(),
+
+		l := instance.NewBatchDeleteInstancesLogic(r.Context(), ctx)
+		if err := l.BatchDeleteInstances(req.GroupID, req.IDs); err != nil {
+			httpx.WriteJson(w, http.StatusOK, map[string]interface{}{
+				"code": 500, "message": err.Error(),
 			})
 			return
 		}
-		
+
 		httpx.WriteJson(w, http.StatusOK, map[string]interface{}{
-			"code":    200,
-			"message": "批量删除成功",
-			"data": map[string]interface{}{
-				"deleted": deleted,
-			},
+			"code": 200, "message": "批量删除成功",
 		})
 	}
 }
@@ -317,46 +256,35 @@ func BatchDeleteHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 // GetDatacentersHandler 获取数据中心列表
 func GetDatacentersHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		groupID, _ := strconv.ParseInt(r.URL.Query().Get("group_id"), 10, 64)
-		
-		logic := instance.NewInstanceLogic(r.Context(), ctx.DB)
-		datacenters, err := logic.GetDatacenters(groupID)
+		groupID := groupIDFrom(r)
+		l := instance.NewListInstancesLogic(r.Context(), ctx)
+		dcs, err := l.GetDatacenters(groupID)
 		if err != nil {
-			httpx.WriteJson(w, http.StatusInternalServerError, map[string]interface{}{
-				"code":    500,
-				"message": err.Error(),
+			httpx.WriteJson(w, http.StatusOK, map[string]interface{}{
+				"code": 500, "message": err.Error(),
 			})
 			return
 		}
-		
 		httpx.WriteJson(w, http.StatusOK, map[string]interface{}{
-			"code":    200,
-			"message": "success",
-			"data":    datacenters,
+			"code": 200, "message": "success", "data": dcs,
 		})
 	}
 }
 
-// GetServicesHandler 获取服务列表
+// GetServicesHandler 获取服务名列表
 func GetServicesHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		groupID, _ := strconv.ParseInt(r.URL.Query().Get("group_id"), 10, 64)
-		datacenter := r.URL.Query().Get("datacenter")
-		
-		logic := instance.NewInstanceLogic(r.Context(), ctx.DB)
-		services, err := logic.GetServices(groupID, datacenter)
+		groupID := groupIDFrom(r)
+		l := instance.NewListInstancesLogic(r.Context(), ctx)
+		svcs, err := l.GetServiceNames(groupID, r.URL.Query().Get("datacenter"))
 		if err != nil {
-			httpx.WriteJson(w, http.StatusInternalServerError, map[string]interface{}{
-				"code":    500,
-				"message": err.Error(),
+			httpx.WriteJson(w, http.StatusOK, map[string]interface{}{
+				"code": 500, "message": err.Error(),
 			})
 			return
 		}
-		
 		httpx.WriteJson(w, http.StatusOK, map[string]interface{}{
-			"code":    200,
-			"message": "success",
-			"data":    services,
+			"code": 200, "message": "success", "data": svcs,
 		})
 	}
 }
@@ -364,7 +292,7 @@ func GetServicesHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 // ExportInstancesHandler 导出实例
 func ExportInstancesHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		groupID, _ := strconv.ParseInt(r.URL.Query().Get("group_id"), 10, 64)
+		groupID := groupIDFrom(r)
 		serviceName := r.URL.Query().Get("service")
 		format := r.URL.Query().Get("format")
 		if format == "" {
@@ -374,9 +302,8 @@ func ExportInstancesHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 		l := instance.NewExportInstancesLogic(r.Context(), ctx)
 		data, err := l.ExportInstances(groupID, serviceName, format)
 		if err != nil {
-			httpx.WriteJson(w, http.StatusInternalServerError, map[string]interface{}{
-				"code":    500,
-				"message": err.Error(),
+			httpx.WriteJson(w, http.StatusOK, map[string]interface{}{
+				"code": 500, "message": err.Error(),
 			})
 			return
 		}
@@ -398,33 +325,29 @@ func ImportInstancesHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 
 		data := []byte(r.FormValue("data"))
 		if len(data) == 0 {
-			file, _, err := r.FormFile("file")
-			if err == nil {
+			if file, _, err := r.FormFile("file"); err == nil {
 				defer file.Close()
 				data, _ = io.ReadAll(file)
 			}
 		}
 
 		if len(data) == 0 {
-			httpx.WriteJson(w, http.StatusBadRequest, map[string]interface{}{
-				"code":    400,
-				"message": "导入数据不能为空",
+			httpx.WriteJson(w, http.StatusOK, map[string]interface{}{
+				"code": 400, "message": "导入数据不能为空",
 			})
 			return
 		}
 
 		l := instance.NewImportInstancesLogic(r.Context(), ctx)
 		if err := l.ImportInstances(groupID, format, data); err != nil {
-			httpx.WriteJson(w, http.StatusInternalServerError, map[string]interface{}{
-				"code":    500,
-				"message": err.Error(),
+			httpx.WriteJson(w, http.StatusOK, map[string]interface{}{
+				"code": 500, "message": err.Error(),
 			})
 			return
 		}
 
 		httpx.WriteJson(w, http.StatusOK, map[string]interface{}{
-			"code":    200,
-			"message": "导入成功",
+			"code": 200, "message": "导入成功",
 		})
 	}
 }

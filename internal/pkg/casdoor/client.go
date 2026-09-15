@@ -2,7 +2,12 @@
 package casdoor
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
+	"net/url"
+	"strings"
+	"time"
 
 	"github.com/casdoor/casdoor-go-sdk/casdoorsdk"
 	"github.com/golang-jwt/jwt/v5"
@@ -56,7 +61,26 @@ func NewClient(config *Config) (*Client, error) {
 	}, nil
 }
 
+// browserEndpoint 返回浏览器可达的 Casdoor 地址
+func (c *Client) browserEndpoint() string {
+	if c.config.PublicEndpoint != "" {
+		return c.config.PublicEndpoint
+	}
+	return c.config.Endpoint
+}
+
+// genState 生成随机 state 参数
+func genState() string {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		return fmt.Sprintf("%d", time.Now().UnixNano())
+	}
+	return hex.EncodeToString(b)
+}
+
 // GetSigninUrl 获取登录 URL
+//
+// 说明：使用 PublicEndpoint（浏览器可达地址）构造，保证跨域名/IP 部署可用
 //
 // 参数:
 //   redirectUri - 回调地址
@@ -64,7 +88,14 @@ func NewClient(config *Config) (*Client, error) {
 // 返回:
 //   string - 登录 URL
 func (c *Client) GetSigninUrl(redirectUri string) string {
-	return c.sdk.GetSigninUrl(redirectUri)
+	base := strings.TrimRight(c.browserEndpoint(), "/")
+	return fmt.Sprintf(
+		"%s/login/oauth/authorize?client_id=%s&response_type=code&redirect_uri=%s&scope=profile&state=%s",
+		base,
+		url.QueryEscape(c.config.ClientId),
+		url.QueryEscape(redirectUri),
+		genState(),
+	)
 }
 
 // GetSignupUrl 获取注册 URL
@@ -75,7 +106,14 @@ func (c *Client) GetSigninUrl(redirectUri string) string {
 // 返回:
 //   string - 注册 URL
 func (c *Client) GetSignupUrl(redirectUri string) string {
-	return c.sdk.GetSignupUrl(true, redirectUri)
+	base := strings.TrimRight(c.browserEndpoint(), "/")
+	return fmt.Sprintf(
+		"%s/signup/oauth/authorize?client_id=%s&response_type=code&redirect_uri=%s&scope=profile&state=%s",
+		base,
+		url.QueryEscape(c.config.ClientId),
+		url.QueryEscape(redirectUri),
+		genState(),
+	)
 }
 
 // GetToken 通过授权码获取 Token

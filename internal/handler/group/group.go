@@ -35,12 +35,52 @@ type UpdateGroupRequest struct {
 	Status           *int   `json:"status,optional"`
 }
 
-// resolveDatacenter 兼容 datacenter / consul_datacenter 两种字段名
-func resolveDatacenter(dc, consulDC string) string {
-	if consulDC != "" {
-		return consulDC
+// DetectDatacenterHandler 探测 Consul 数据中心
+//
+// 请求方式：POST
+// 路径：/api/groups/detect-datacenter
+// 说明：根据 Consul 地址与 Token 自动探测数据中心，供前端预览
+func DetectDatacenterHandler(ctx *svc.ServiceContext) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			ConsulAddress string `json:"consul_address"`
+			ConsulToken   string `json:"consul_token,optional"`
+		}
+		if err := httpx.Parse(r, &req); err != nil {
+			httpx.WriteJson(w, http.StatusBadRequest, map[string]interface{}{
+				"code":    400,
+				"message": "参数错误: " + err.Error(),
+			})
+			return
+		}
+
+		if req.ConsulAddress == "" {
+			httpx.WriteJson(w, http.StatusBadRequest, map[string]interface{}{
+				"code":    400,
+				"message": "Consul 地址不能为空",
+			})
+			return
+		}
+
+		logic := group.NewGroupLogic(r.Context(), ctx.DB)
+		dc, nodeName, err := logic.DetectDatacenter(req.ConsulAddress, req.ConsulToken)
+		if err != nil {
+			httpx.WriteJson(w, http.StatusOK, map[string]interface{}{
+				"code":    500,
+				"message": err.Error(),
+			})
+			return
+		}
+
+		httpx.WriteJson(w, http.StatusOK, map[string]interface{}{
+			"code":    200,
+			"message": "success",
+			"data": map[string]interface{}{
+				"datacenter": dc,
+				"node_name":  nodeName,
+			},
+		})
 	}
-	return dc
 }
 
 // ListGroupsHandler 查询服务组列表
@@ -91,20 +131,34 @@ func CreateGroupHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 			})
 			return
 		}
-		
+
 		// 获取当前用户（用于审计）
 		username, _ := middleware.GetUsernameFromContext(r.Context())
-		
+
 		logic := group.NewGroupLogic(r.Context(), ctx.DB)
+
+		// 数据中心必须自动探测，不接受前端手填
+		dc := ""
+		if detected, _, derr := logic.DetectDatacenter(req.ConsulAddress, req.ConsulToken); derr == nil {
+			dc = detected
+		}
+		if dc == "" {
+			httpx.WriteJson(w, http.StatusBadRequest, map[string]interface{}{
+				"code":    400,
+				"message": "无法自动获取数据中心，请检查 Consul 地址和 Token 是否正确",
+			})
+			return
+		}
+
 		result, err := logic.CreateGroup(
 			req.Name,
 			req.Code,
 			req.ConsulAddress,
 			req.ConsulToken,
-			resolveDatacenter(req.Datacenter, req.ConsulDatacenter),
+			dc,
 			req.Description,
 		)
-		
+
 		if err != nil {
 			httpx.WriteJson(w, http.StatusInternalServerError, map[string]interface{}{
 				"code":    500,
@@ -112,10 +166,10 @@ func CreateGroupHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 			})
 			return
 		}
-		
+
 		// 记录操作日志
 		_ = username
-		
+
 		httpx.WriteJson(w, http.StatusOK, map[string]interface{}{
 			"code":    200,
 			"message": "创建成功",
@@ -167,12 +221,19 @@ func UpdateGroupHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 		if req.ConsulAddress == "" {
 			req.ConsulAddress = original.ConsulAddress
 		}
-		reqDatacenter := resolveDatacenter(req.Datacenter, req.ConsulDatacenter)
-		if reqDatacenter == "" {
-			reqDatacenter = original.ConsulDatacenter
+		if req.ConsulToken == "" {
+			req.ConsulToken = original.ConsulToken
 		}
 		if req.Description == "" {
 			req.Description = original.Description
+		}
+
+		// 数据中心必须自动探测，地址或 Token 变化时重新探测
+		reqDatacenter := original.ConsulDatacenter
+		if req.ConsulAddress != original.ConsulAddress || req.ConsulToken != original.ConsulToken {
+			if detected, _, derr := logic.DetectDatacenter(req.ConsulAddress, req.ConsulToken); derr == nil {
+				reqDatacenter = detected
+			}
 		}
 		
 		result, err := logic.UpdateGroup(
