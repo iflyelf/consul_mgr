@@ -9,6 +9,10 @@
               <el-icon><Plus /></el-icon>
               注册实例
             </el-button>
+            <el-button type="primary" plain @click="handleBatchRegister">
+              <el-icon><Plus /></el-icon>
+              批量注册
+            </el-button>
             <el-button type="success" @click="handleExport">
               <el-icon><Download /></el-icon>
               导出
@@ -331,9 +335,59 @@
           </div>
         </template>
       </el-upload>
+      <el-checkbox v-model="importOverwrite" style="margin-top: 12px">
+        强制覆盖已存在的实例（不勾选则跳过同名实例）
+      </el-checkbox>
       <template #footer>
         <el-button @click="importDialogVisible = false">取消</el-button>
         <el-button type="primary" @click="handleConfirmImport" :loading="importLoading">导入</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 批量注册对话框 -->
+    <el-dialog v-model="batchRegVisible" title="批量注册实例" width="640px">
+      <el-form label-width="110px">
+        <el-form-item label="服务名称" required>
+          <el-input v-model="batchRegForm.service" placeholder="服务名称" />
+        </el-form-item>
+        <el-form-item label="IP 表达式" required>
+          <el-input
+            v-model="batchRegForm.instances"
+            type="textarea"
+            :rows="3"
+            placeholder="支持单个IP/短范围/完整范围/CIDR，可带端口：&#10;10.1.255.24-26:80,10.1.255.38:443,10.1.255.0/24:8080,10.1.26.5-10.1.26.7"
+          />
+          <div class="form-tip">
+            示例：<code>10.1.255.24-26</code>、<code>10.1.255.0/24:8080</code>、<code>10.1.255.38:443</code>、<code>10.1.26.5-10.1.26.7</code>
+          </div>
+        </el-form-item>
+        <el-form-item label="ID 前缀">
+          <el-input v-model="batchRegForm.id_prefix" placeholder="默认使用服务名" />
+        </el-form-item>
+        <el-form-item label="默认端口">
+          <el-input-number v-model="batchRegForm.default_port" :min="0" :max="65535" />
+        </el-form-item>
+        <el-form-item label="Tags">
+          <el-select v-model="batchRegForm.tags" multiple filterable allow-create default-first-option placeholder="添加标签" style="width: 100%">
+            <el-option v-for="tag in commonTags" :key="tag" :label="tag" :value="tag" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="强制覆盖">
+          <el-switch v-model="batchRegForm.overwrite" />
+          <span class="form-tip" style="margin-left: 8px">开启后覆盖已存在的同名实例</span>
+        </el-form-item>
+        <el-form-item label="预览" v-if="batchPreview.length > 0">
+          <el-tag type="info" style="margin-bottom: 6px">共 {{ batchPreview.length }} 个</el-tag>
+          <div class="preview-list">
+            <el-tag v-for="id in batchPreview.slice(0, 50)" :key="id" size="small" style="margin: 2px">{{ id }}</el-tag>
+            <span v-if="batchPreview.length > 50" class="form-tip">…等共 {{ batchPreview.length }} 个</span>
+          </div>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="handlePreviewBatch">预览</el-button>
+        <el-button @click="batchRegVisible = false">取消</el-button>
+        <el-button type="primary" :loading="batchRegLoading" @click="handleSubmitBatchRegister">确定注册</el-button>
       </template>
     </el-dialog>
   </div>
@@ -352,6 +406,8 @@ import {
   updateInstance, 
   deleteInstance,
   batchDeleteInstances,
+  batchRegisterInstances,
+  previewBatchRegister,
   exportInstances,
   importInstances 
 } from '@/api/instance'
@@ -389,6 +445,20 @@ const exportFormat = ref('json')
 
 const importDialogVisible = ref(false)
 const uploadFile = ref(null)
+const importOverwrite = ref(false)
+
+// 批量注册
+const batchRegVisible = ref(false)
+const batchRegLoading = ref(false)
+const batchPreview = ref([])
+const batchRegForm = reactive({
+  service: '',
+  instances: '',
+  id_prefix: '',
+  default_port: null,
+  tags: [],
+  overwrite: false
+})
 
 const commonTags = ref(['production', 'staging', 'development', 'canary', 'v1', 'v2', 'v3'])
 
@@ -769,6 +839,7 @@ const handleImport = () => {
     return
   }
   uploadFile.value = null
+  importOverwrite.value = false
   importDialogVisible.value = true
 }
 
@@ -795,9 +866,12 @@ const handleConfirmImport = async () => {
     formData.append('file', uploadFile.value)
     formData.append('group_id', searchForm.group_id)
     formData.append('format', format)
+    formData.append('overwrite', importOverwrite.value ? 'true' : 'false')
     
     const res = await importInstances(formData)
-    ElMessage.success(res?.success != null ? `成功导入 ${res.success} 个实例` : '导入成功')
+    ElMessage.success(res?.success != null
+      ? `成功导入 ${res.success} 个${res.skipped ? `，跳过 ${res.skipped} 个` : ''}`
+      : '导入成功')
     importDialogVisible.value = false
     uploadRef.value.clearFiles()
     fetchInstances()
@@ -805,6 +879,75 @@ const handleConfirmImport = async () => {
     ElMessage.error(error?.message || '导入失败')
   } finally {
     importLoading.value = false
+  }
+}
+
+// 批量注册
+const handleBatchRegister = () => {
+  if (!searchForm.group_id) {
+    ElMessage.warning('请先选择服务组')
+    return
+  }
+  batchRegForm.service = ''
+  batchRegForm.instances = ''
+  batchRegForm.id_prefix = ''
+  batchRegForm.default_port = null
+  batchRegForm.tags = []
+  batchRegForm.overwrite = false
+  batchPreview.value = []
+  batchRegVisible.value = true
+}
+
+// 预览批量注册
+const handlePreviewBatch = async () => {
+  if (!batchRegForm.instances) {
+    ElMessage.warning('请输入 IP 表达式')
+    return
+  }
+  try {
+    const res = await previewBatchRegister({
+      group_id: searchForm.group_id,
+      service: batchRegForm.service || 'preview',
+      instances: batchRegForm.instances,
+      id_prefix: batchRegForm.id_prefix || undefined,
+      default_port: batchRegForm.default_port || undefined
+    })
+    batchPreview.value = res.ids || []
+    ElMessage.success(`将注册 ${res.total} 个实例`)
+  } catch (error) {
+    batchPreview.value = []
+    ElMessage.error('解析失败，请检查 IP 表达式')
+  }
+}
+
+// 提交批量注册
+const handleSubmitBatchRegister = async () => {
+  if (!batchRegForm.service) {
+    ElMessage.warning('请输入服务名称')
+    return
+  }
+  if (!batchRegForm.instances) {
+    ElMessage.warning('请输入 IP 表达式')
+    return
+  }
+  batchRegLoading.value = true
+  try {
+    const res = await batchRegisterInstances({
+      group_id: searchForm.group_id,
+      service: batchRegForm.service,
+      instances: batchRegForm.instances,
+      id_prefix: batchRegForm.id_prefix || undefined,
+      default_port: batchRegForm.default_port || undefined,
+      tags: batchRegForm.tags,
+      overwrite: batchRegForm.overwrite
+    })
+    ElMessage.success(res?.success != null ? `成功注册 ${res.success} 个（跳过 ${res.skipped || 0}）` : '批量注册成功')
+    batchRegVisible.value = false
+    fetchInstances()
+  } catch (error) {
+    ElMessage.error(error?.message || '批量注册失败')
+  } finally {
+    batchRegLoading.value = false
   }
 }
 
@@ -889,5 +1032,17 @@ onMounted(() => {
   margin-top: 20px;
   display: flex;
   justify-content: flex-end;
+}
+
+.form-tip {
+  color: #909399;
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+.preview-list {
+  max-height: 160px;
+  overflow-y: auto;
+  width: 100%;
 }
 </style>

@@ -252,7 +252,11 @@ func UpdateGroupHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 			})
 			return
 		}
-		
+
+		// 地址/Token 可能变化：清理缓存与 Consul 客户端
+		ctx.InvalidateGroupCaches(r.Context(), id)
+		ctx.ConsulManager.RemoveClient(id)
+
 		httpx.WriteJson(w, http.StatusOK, map[string]interface{}{
 			"code":    200,
 			"message": "更新成功",
@@ -285,7 +289,11 @@ func DeleteGroupHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 			})
 			return
 		}
-		
+
+		// 清理该服务组的缓存
+		ctx.InvalidateGroupCaches(r.Context(), id)
+		ctx.ConsulManager.RemoveClient(id)
+
 		httpx.WriteJson(w, http.StatusOK, map[string]interface{}{
 			"code":    200,
 			"message": "删除成功",

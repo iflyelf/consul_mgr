@@ -50,6 +50,14 @@ LogConfig:
   Level: info
   Format: json
 
+Redis:
+  Enabled: ${REDIS_ENABLED:true}
+  Host: ${REDIS_HOST:localhost}
+  Port: ${REDIS_PORT:6379}
+  Password: ${REDIS_PASSWORD:}
+  DB: ${REDIS_DB:0}
+  TTL: ${REDIS_CACHE_TTL:30}
+
 Audit:
   Enabled: true
   RetentionDays: 90

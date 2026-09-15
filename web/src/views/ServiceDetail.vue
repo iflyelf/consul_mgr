@@ -34,6 +34,10 @@
               <el-icon><Plus /></el-icon>
               注册实例
             </el-button>
+            <el-button type="primary" plain @click="handleBatchRegister">
+              <el-icon><Plus /></el-icon>
+              批量注册
+            </el-button>
             <el-button type="success" @click="handleExport">
               <el-icon><Download /></el-icon>
               导出
@@ -46,13 +50,38 @@
         </div>
       </template>
 
+      <!-- 搜索栏 -->
+      <div class="search-bar">
+        <el-input
+          v-model="keyword"
+          placeholder="搜索实例：实例ID / 地址 / 节点 / Tags / Meta"
+          clearable
+          style="width: 360px"
+          @keyup.enter="handleSearch"
+          @clear="handleSearch"
+        >
+          <template #append>
+            <el-button @click="handleSearch">搜索</el-button>
+          </template>
+        </el-input>
+        <el-button @click="handleResetSearch">重置</el-button>
+      </div>
+
+      <!-- 批量操作 -->
+      <div class="batch-actions" v-if="selectedInstances.length > 0">
+        <el-alert :title="`已选择 ${selectedInstances.length} 个实例`" type="info" :closable="false" />
+        <el-button type="danger" :loading="batchLoading" @click="handleBatchDelete">批量删除</el-button>
+      </div>
+
       <!-- 实例表格 -->
       <el-table
         :data="instances"
         v-loading="loading"
         stripe
         border
+        @selection-change="handleSelectionChange"
       >
+        <el-table-column type="selection" width="55" />
         <el-table-column prop="id" label="实例ID" min-width="200" />
         <el-table-column label="地址" min-width="150">
           <template #default="{ row }">
@@ -204,7 +233,7 @@
     </el-dialog>
 
     <!-- 导入对话框 -->
-    <el-dialog v-model="importDialogVisible" title="导入实例" width="400px">
+    <el-dialog v-model="importDialogVisible" title="导入实例" width="420px">
       <el-upload
         ref="uploadRef"
         :auto-upload="false"
@@ -222,9 +251,67 @@
           </div>
         </template>
       </el-upload>
+      <el-checkbox v-model="importOverwrite" style="margin-top: 12px">
+        强制覆盖已存在的实例（不勾选则跳过同名实例）
+      </el-checkbox>
       <template #footer>
         <el-button @click="importDialogVisible = false">取消</el-button>
         <el-button type="primary" @click="handleConfirmImport" :loading="importLoading">导入</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 批量注册对话框 -->
+    <el-dialog v-model="batchRegVisible" title="批量注册实例" width="640px">
+      <el-form label-width="110px">
+        <el-form-item label="服务名称">
+          <el-input :model-value="serviceName" disabled />
+        </el-form-item>
+        <el-form-item label="IP 表达式" required>
+          <el-input
+            v-model="batchRegForm.instances"
+            type="textarea"
+            :rows="3"
+            placeholder="支持单个IP/短范围/完整范围/CIDR，可带端口：&#10;10.1.255.24-26:80,10.1.255.38:443,10.1.255.0/24:8080,10.1.26.5-10.1.26.7"
+          />
+          <div class="form-tip">
+            示例：<code>10.1.255.24-26</code>、<code>10.1.255.0/24:8080</code>、<code>10.1.255.38:443</code>、<code>10.1.26.5-10.1.26.7</code>
+          </div>
+        </el-form-item>
+        <el-form-item label="ID 前缀">
+          <el-input v-model="batchRegForm.id_prefix" placeholder="默认使用服务名" />
+        </el-form-item>
+        <el-form-item label="默认端口">
+          <el-input-number v-model="batchRegForm.default_port" :min="0" :max="65535" placeholder="表达式未指定端口时使用" />
+        </el-form-item>
+        <el-form-item label="Tags">
+          <el-select v-model="batchRegForm.tags" multiple filterable allow-create default-first-option placeholder="添加标签" style="width: 100%">
+            <el-option v-for="tag in serviceTags" :key="tag" :label="tag" :value="tag" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="Meta">
+          <div v-for="(m, i) in batchRegForm.metaList" :key="i" class="meta-input">
+            <el-input v-model="m.key" placeholder="Key" style="width: 40%" />
+            <el-input v-model="m.value" placeholder="Value" style="width: 40%; margin-left: 8px" />
+            <el-button type="danger" size="small" style="margin-left: 8px" @click="removeBatchMetaItem(i)">删除</el-button>
+          </div>
+          <el-button type="primary" size="small" @click="addBatchMetaItem">添加 Meta</el-button>
+        </el-form-item>
+        <el-form-item label="强制覆盖">
+          <el-switch v-model="batchRegForm.overwrite" />
+          <span class="form-tip" style="margin-left: 8px">开启后覆盖已存在的同名实例</span>
+        </el-form-item>
+        <el-form-item label="预览" v-if="batchPreview.length > 0">
+          <el-tag type="info" style="margin-bottom: 6px">共 {{ batchPreview.length }} 个</el-tag>
+          <div class="preview-list">
+            <el-tag v-for="id in batchPreview.slice(0, 50)" :key="id" size="small" style="margin: 2px">{{ id }}</el-tag>
+            <span v-if="batchPreview.length > 50" class="form-tip">…等共 {{ batchPreview.length }} 个</span>
+          </div>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="handlePreviewBatch">预览</el-button>
+        <el-button @click="batchRegVisible = false">取消</el-button>
+        <el-button type="primary" :loading="batchRegLoading" @click="handleSubmitBatchRegister">确定注册</el-button>
       </template>
     </el-dialog>
   </div>
@@ -233,13 +320,16 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh, Plus, Download, Upload, CircleCheck, UploadFilled } from '@element-plus/icons-vue'
 import { getServiceDetail } from '@/api/service'
 import { 
   registerInstance, 
   updateInstance, 
   deleteInstance,
+  batchDeleteInstances,
+  batchRegisterInstances,
+  previewBatchRegister,
   exportInstances,
   importInstances 
 } from '@/api/instance'
@@ -251,9 +341,14 @@ const loading = ref(false)
 const submitLoading = ref(false)
 const exportLoading = ref(false)
 const importLoading = ref(false)
+const batchLoading = ref(false)
+const batchRegLoading = ref(false)
 
 const groupId = ref(route.query.group_id)
 const serviceName = ref(route.query.service)
+
+const keyword = ref('')
+const selectedInstances = ref([])
 
 const serviceDetail = ref(null)
 const instances = computed(() => serviceDetail.value?.instances || [])
@@ -264,6 +359,18 @@ const serviceTags = computed(() => {
   return Array.from(set)
 })
 
+// 批量注册
+const batchRegVisible = ref(false)
+const batchRegForm = reactive({
+  instances: '',
+  id_prefix: '',
+  default_port: null,
+  tags: [],
+  metaList: [],
+  overwrite: false
+})
+const batchPreview = ref([])
+
 const dialogVisible = ref(false)
 const dialogTitle = ref('注册实例')
 const isEdit = ref(false)
@@ -273,6 +380,7 @@ const exportFormat = ref('json')
 
 const importDialogVisible = ref(false)
 const uploadFile = ref(null)
+const importOverwrite = ref(false)
 
 const commonTags = ref(['production', 'staging', 'development', 'v1', 'v2'])
 
@@ -306,13 +414,128 @@ const fetchServiceDetail = async () => {
   try {
     const res = await getServiceDetail({
       group_id: groupId.value,
-      service: serviceName.value
+      service: serviceName.value,
+      keyword: keyword.value
     })
     serviceDetail.value = res
   } catch (error) {
     ElMessage.error('获取服务详情失败')
   } finally {
     loading.value = false
+  }
+}
+
+// 搜索
+const handleSearch = () => {
+  fetchServiceDetail()
+}
+
+// 重置搜索
+const handleResetSearch = () => {
+  keyword.value = ''
+  fetchServiceDetail()
+}
+
+// 选择变化
+const handleSelectionChange = (selection) => {
+  selectedInstances.value = selection
+}
+
+// 批量删除
+const handleBatchDelete = async () => {
+  try {
+    await ElMessageBox.confirm(
+      `确定要删除选中的 ${selectedInstances.value.length} 个实例吗？`,
+      '批量删除',
+      { confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning' }
+    )
+    batchLoading.value = true
+    const ids = selectedInstances.value.map(i => i.id)
+    const res = await batchDeleteInstances({ group_id: groupId.value, ids })
+    ElMessage.success(res?.success != null ? `成功删除 ${res.success} 个实例` : '批量删除成功')
+    selectedInstances.value = []
+    fetchServiceDetail()
+  } catch (error) {
+    if (error !== 'cancel') console.error('批量删除失败:', error)
+  } finally {
+    batchLoading.value = false
+  }
+}
+
+// 批量注册
+const handleBatchRegister = () => {
+  batchRegForm.instances = ''
+  batchRegForm.id_prefix = ''
+  batchRegForm.default_port = null
+  batchRegForm.tags = []
+  batchRegForm.metaList = []
+  batchRegForm.overwrite = false
+  batchPreview.value = []
+  batchRegVisible.value = true
+}
+
+const addBatchMetaItem = () => {
+  batchRegForm.metaList.push({ key: '', value: '' })
+}
+const removeBatchMetaItem = (index) => {
+  batchRegForm.metaList.splice(index, 1)
+}
+
+const buildBatchMeta = () => {
+  const meta = {}
+  batchRegForm.metaList.forEach(item => {
+    if (item.key) meta[item.key] = item.value
+  })
+  return meta
+}
+
+// 预览批量注册
+const handlePreviewBatch = async () => {
+  if (!batchRegForm.instances) {
+    ElMessage.warning('请输入 IP 表达式')
+    return
+  }
+  try {
+    const res = await previewBatchRegister({
+      group_id: groupId.value,
+      service: serviceName.value,
+      instances: batchRegForm.instances,
+      id_prefix: batchRegForm.id_prefix || undefined,
+      default_port: batchRegForm.default_port || undefined
+    })
+    batchPreview.value = res.ids || []
+    ElMessage.success(`将注册 ${res.total} 个实例`)
+  } catch (error) {
+    batchPreview.value = []
+    ElMessage.error('解析失败，请检查 IP 表达式')
+  }
+}
+
+// 提交批量注册
+const handleSubmitBatchRegister = async () => {
+  if (!batchRegForm.instances) {
+    ElMessage.warning('请输入 IP 表达式')
+    return
+  }
+  batchRegLoading.value = true
+  try {
+    const res = await batchRegisterInstances({
+      group_id: groupId.value,
+      service: serviceName.value,
+      instances: batchRegForm.instances,
+      id_prefix: batchRegForm.id_prefix || undefined,
+      default_port: batchRegForm.default_port || undefined,
+      tags: batchRegForm.tags,
+      meta: buildBatchMeta(),
+      overwrite: batchRegForm.overwrite
+    })
+    ElMessage.success(res?.success != null ? `成功注册 ${res.success} 个（跳过 ${res.skipped || 0}）` : '批量注册成功')
+    batchRegVisible.value = false
+    fetchServiceDetail()
+  } catch (error) {
+    ElMessage.error(error?.message || '批量注册失败')
+  } finally {
+    batchRegLoading.value = false
   }
 }
 
@@ -350,12 +573,13 @@ const handleEdit = (row) => {
   dialogTitle.value = '编辑实例'
   isEdit.value = true
   instanceForm.id = row.id
-  instanceForm.service = row.service_name
+  instanceForm.service = row.service
   instanceForm.address = row.address
   instanceForm.port = row.port
   instanceForm.tags = row.tags || []
   instanceForm.metaList = Object.entries(row.meta || {}).map(([key, value]) => ({ key, value }))
-  instanceForm.enableHealthCheck = row.checks && row.checks.length > 0
+  const custom = (row.checks || []).filter(c => !c.builtin)
+  instanceForm.enableHealthCheck = custom.length > 0
   dialogVisible.value = true
 }
 
@@ -410,6 +634,7 @@ const handleSubmit = async () => {
       data.id = instanceForm.id
       if (instanceForm.enableHealthCheck) {
         data.check = {
+          type: instanceForm.checkType,
           [instanceForm.checkType]: instanceForm.http || `${instanceForm.address}:${instanceForm.port}`,
           interval: instanceForm.interval,
           timeout: instanceForm.timeout
@@ -418,8 +643,10 @@ const handleSubmit = async () => {
       await registerInstance(data)
       ElMessage.success('注册成功')
     } else {
-      data.instance_id = instanceForm.id
-      await updateInstance(data)
+      await updateInstance(
+        { group_id: groupId.value, instance_id: instanceForm.id },
+        { address: instanceForm.address, port: instanceForm.port, tags: instanceForm.tags, meta }
+      )
       ElMessage.success('更新成功')
     }
     
@@ -499,17 +726,26 @@ const handleConfirmImport = async () => {
   
   importLoading.value = true
   try {
+    const name = (uploadFile.value.name || '').toLowerCase()
+    let format = 'json'
+    if (name.endsWith('.csv')) format = 'csv'
+    else if (name.endsWith('.yaml') || name.endsWith('.yml')) format = 'yaml'
+
     const formData = new FormData()
     formData.append('file', uploadFile.value)
     formData.append('group_id', groupId.value)
-    
-    await importInstances(formData)
-    ElMessage.success('导入成功')
+    formData.append('format', format)
+    formData.append('overwrite', importOverwrite.value ? 'true' : 'false')
+
+    const res = await importInstances(formData)
+    ElMessage.success(res?.success != null
+      ? `成功导入 ${res.success} 个${res.skipped ? `，跳过 ${res.skipped} 个` : ''}`
+      : '导入成功')
     importDialogVisible.value = false
     uploadRef.value.clearFiles()
     fetchServiceDetail()
   } catch (error) {
-    ElMessage.error('导入失败')
+    ElMessage.error(error?.message || '导入失败')
   } finally {
     importLoading.value = false
   }
@@ -548,5 +784,31 @@ onMounted(() => {
   display: flex;
   align-items: center;
   margin-bottom: 10px;
+}
+
+.search-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.batch-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.form-tip {
+  color: #909399;
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+.preview-list {
+  max-height: 160px;
+  overflow-y: auto;
+  width: 100%;
 }
 </style>

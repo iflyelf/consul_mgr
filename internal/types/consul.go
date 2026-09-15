@@ -90,6 +90,26 @@ type BatchDeleteRequest struct {
 	IDs     []string `json:"ids" validate:"required,min=1"`
 }
 
+// BatchRegisterRequest 批量注册请求
+//
+// 支持 IP:端口 表达式批量展开注册（IP段/CIDR/范围/IP:端口）
+type BatchRegisterRequest struct {
+	GroupID int64 `json:"group_id" validate:"required"`
+	// 服务名称
+	Service string `json:"service" validate:"required"`
+	// IP:端口 表达式，如 "10.1.255.24-26:80,10.1.255.38:443,10.1.255.0/24:8080"
+	Instances string `json:"instances" validate:"required"`
+	// 服务 ID 前缀（为空时使用服务名）
+	IDPrefix string `json:"id_prefix,optional"`
+	// 实例默认端口（表达式未指定端口时使用）
+	DefaultPort int `json:"default_port,optional"`
+	// 端口覆盖（表达式未指定端口时优先使用）
+	Tags          []string           `json:"tags,optional"`
+	Meta          map[string]string  `json:"meta,optional"`
+	Check         *HealthCheckConfig `json:"check,optional"`
+	Overwrite     bool               `json:"overwrite,optional"`
+}
+
 // ImportInstancesRequest 批量导入请求
 type ImportInstancesRequest struct {
 	GroupID   int64  `json:"group_id" validate:"required"`

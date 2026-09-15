@@ -55,6 +55,16 @@ type Config struct {
 		RetentionDays int  `json:",default=90,env=AUDIT_RETENTION_DAYS"`
 	}
 	
+	Redis struct {
+		Enabled  bool   `json:",default=true,env=REDIS_ENABLED"`
+		Host     string `json:",default=localhost,env=REDIS_HOST"`
+		Port     int    `json:",default=6379,env=REDIS_PORT"`
+		Password string `json:",optional,env=REDIS_PASSWORD"`
+		DB       int    `json:",default=0,env=REDIS_DB"`
+		// 缓存过期时间（秒）
+		TTL int `json:",default=30,env=REDIS_CACHE_TTL"`
+	}
+	
 	Casdoor struct {
 		Endpoint         string `json:",env=CASDOOR_ENDPOINT"`
 		PublicEndpoint   string `json:",optional,env=CASDOOR_PUBLIC_ENDPOINT"`

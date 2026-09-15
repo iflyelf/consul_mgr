@@ -54,7 +54,7 @@ func GetServiceDetailHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
 		}
 
 		l := service.NewGetServiceDetailLogic(r.Context(), svcCtx)
-		detail, err := l.GetServiceDetail(groupID, serviceName)
+		detail, err := l.GetServiceDetail(groupID, serviceName, r.URL.Query().Get("keyword"))
 		if err != nil {
 			response.Error(w, 500, err.Error())
 			return

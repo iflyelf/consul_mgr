@@ -339,6 +339,24 @@ func registerHandlers(server *rest.Server, ctx *svc.ServiceContext) {
 			),
 		),
 	})
+
+	server.AddRoute(rest.Route{
+		Method: http.MethodPost,
+		Path:   "/api/instances/batch-register",
+		Handler: casdoorAuth.Handle(
+			auditMw.Handle(
+				permissionMw.RequireServiceGroupAccess("write")(
+					instance.BatchRegisterHandler(ctx),
+				),
+			),
+		),
+	})
+
+	server.AddRoute(rest.Route{
+		Method:  http.MethodPost,
+		Path:    "/api/instances/batch-register/preview",
+		Handler: casdoorAuth.Handle(instance.PreviewBatchRegisterHandler(ctx)),
+	})
 	
 	server.AddRoute(rest.Route{
 		Method: http.MethodGet,

@@ -257,6 +257,77 @@ func BatchDeleteHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 	}
 }
 
+// BatchRegisterHandler 批量注册实例
+//
+// 请求方式：POST
+// 路径：/api/instances/batch-register
+// 说明：支持 "10.1.255.24-26:80,10.1.255.38:443,10.1.255.0/24:8080" 形式
+func BatchRegisterHandler(ctx *svc.ServiceContext) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req types.BatchRegisterRequest
+		if err := httpx.Parse(r, &req); err != nil {
+			httpx.WriteJson(w, http.StatusOK, map[string]interface{}{
+				"code": 400, "message": "参数错误: " + err.Error(),
+			})
+			return
+		}
+
+		l := instance.NewBatchRegisterInstancesLogic(r.Context(), ctx)
+		success, skipped, failed, ids, err := l.BatchRegisterInstances(&req)
+		if err != nil {
+			httpx.WriteJson(w, http.StatusOK, map[string]interface{}{
+				"code": 500, "message": err.Error(),
+				"data": map[string]interface{}{
+					"success": success, "skipped": skipped, "failed": failed, "ids": ids,
+				},
+			})
+			return
+		}
+
+		httpx.WriteJson(w, http.StatusOK, map[string]interface{}{
+			"code":    200,
+			"message": fmt.Sprintf("成功注册 %d 个实例（跳过 %d）", success, skipped),
+			"data": map[string]interface{}{
+				"success": success, "skipped": skipped, "failed": failed, "ids": ids,
+			},
+		})
+	}
+}
+
+// PreviewBatchRegisterHandler 预览批量注册结果
+//
+// 请求方式：POST
+// 路径：/api/instances/batch-register/preview
+func PreviewBatchRegisterHandler(ctx *svc.ServiceContext) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req types.BatchRegisterRequest
+		if err := httpx.Parse(r, &req); err != nil {
+			httpx.WriteJson(w, http.StatusOK, map[string]interface{}{
+				"code": 400, "message": "参数错误: " + err.Error(),
+			})
+			return
+		}
+
+		l := instance.NewBatchRegisterInstancesLogic(r.Context(), ctx)
+		ids, err := l.PreviewBatchRegister(&req)
+		if err != nil {
+			httpx.WriteJson(w, http.StatusOK, map[string]interface{}{
+				"code": 500, "message": err.Error(),
+			})
+			return
+		}
+
+		httpx.WriteJson(w, http.StatusOK, map[string]interface{}{
+			"code":    200,
+			"message": fmt.Sprintf("将注册 %d 个实例", len(ids)),
+			"data": map[string]interface{}{
+				"total": len(ids),
+				"ids":   ids,
+			},
+		})
+	}
+}
+
 // GetDatacentersHandler 获取数据中心列表
 func GetDatacentersHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -326,6 +397,8 @@ func ImportInstancesHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 		if format == "" {
 			format = "json"
 		}
+		// 是否强制覆盖
+		overwrite := r.FormValue("overwrite") == "true" || r.FormValue("overwrite") == "1"
 
 		data := []byte(r.FormValue("data"))
 		if len(data) == 0 {
@@ -343,18 +416,23 @@ func ImportInstancesHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 		}
 
 		l := instance.NewImportInstancesLogic(r.Context(), ctx)
-		success, failed, err := l.ImportInstances(groupID, format, data)
+		success, skipped, failed, err := l.ImportInstances(groupID, format, data, overwrite)
 		if err != nil {
 			httpx.WriteJson(w, http.StatusOK, map[string]interface{}{
 				"code": 500, "message": err.Error(),
-				"data":   map[string]interface{}{"success": success, "failed": failed},
+				"data":   map[string]interface{}{"success": success, "skipped": skipped, "failed": failed},
 			})
 			return
 		}
 
+		msg := fmt.Sprintf("成功导入 %d 个实例", success)
+		if skipped > 0 {
+			msg += fmt.Sprintf("，跳过 %d 个已存在", skipped)
+		}
 		httpx.WriteJson(w, http.StatusOK, map[string]interface{}{
-			"code": 200, "message": fmt.Sprintf("成功导入 %d 个实例", success),
-			"data": map[string]interface{}{"success": success, "failed": failed},
+			"code":    200,
+			"message": msg,
+			"data":    map[string]interface{}{"success": success, "skipped": skipped, "failed": failed},
 		})
 	}
 }

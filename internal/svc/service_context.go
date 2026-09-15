@@ -11,6 +11,7 @@ import (
 	"github.com/zeromicro/go-zero/core/stores/sqlx"
 
 	"github.com/iflyelf/consul_mgr/internal/config"
+	"github.com/iflyelf/consul_mgr/internal/pkg/cache"
 	"github.com/iflyelf/consul_mgr/internal/pkg/casdoor"
 	"github.com/iflyelf/consul_mgr/internal/pkg/consul"
 	"github.com/iflyelf/consul_mgr/internal/pkg/jwt"
@@ -23,6 +24,46 @@ type ServiceContext struct {
 	JWTManager     *jwt.JWTManager
 	ConsulManager  *consul.Manager
 	CasdoorClient  *casdoor.Client
+	Cache          *cache.Cache
+}
+
+// CacheKeyInstances 实例列表缓存键
+//
+// 说明：service/status 作为维度区分不同查询条件
+func (s *ServiceContext) CacheKeyInstances(groupID int64, serviceName, status string) string {
+	return fmt.Sprintf("consul_mgr:instances:%d:%s:%s", groupID, serviceName, status)
+}
+
+// CacheKeyServices 服务列表缓存键
+func (s *ServiceContext) CacheKeyServices(groupID int64) string {
+	return fmt.Sprintf("consul_mgr:services:%d", groupID)
+}
+
+// CacheKeyServiceDetail 服务详情缓存键
+func (s *ServiceContext) CacheKeyServiceDetail(groupID int64, serviceName string) string {
+	return fmt.Sprintf("consul_mgr:service_detail:%d:%s", groupID, serviceName)
+}
+
+// InvalidateInstances 失效指定服务组的实例缓存
+func (s *ServiceContext) InvalidateInstances(ctx context.Context, groupID int64) {
+	s.Cache.DelPrefix(ctx, fmt.Sprintf("consul_mgr:instances:%d:", groupID))
+}
+
+// InvalidateServices 失效指定服务组的服务列表缓存
+func (s *ServiceContext) InvalidateServices(ctx context.Context, groupID int64) {
+	s.Cache.DelPrefix(ctx, fmt.Sprintf("consul_mgr:services:%d", groupID))
+}
+
+// InvalidateServiceDetails 失效指定服务组的服务详情缓存
+func (s *ServiceContext) InvalidateServiceDetails(ctx context.Context, groupID int64) {
+	s.Cache.DelPrefix(ctx, fmt.Sprintf("consul_mgr:service_detail:%d:", groupID))
+}
+
+// InvalidateGroupCaches 失效指定服务组的全部缓存
+func (s *ServiceContext) InvalidateGroupCaches(ctx context.Context, groupID int64) {
+	s.InvalidateInstances(ctx, groupID)
+	s.InvalidateServices(ctx, groupID)
+	s.InvalidateServiceDetails(ctx, groupID)
 }
 
 // GetConsulClient 获取指定服务组的 Consul 客户端
@@ -102,13 +143,24 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	if err != nil {
 		log.Fatalf("初始化 Casdoor 客户端失败: %v", err)
 	}
-	
+
+	// 初始化 Redis 缓存（连接失败自动降级，不影响启动）
+	cacheClient := cache.New(cache.Config{
+		Enabled:  c.Redis.Enabled,
+		Host:     c.Redis.Host,
+		Port:     c.Redis.Port,
+		Password: c.Redis.Password,
+		DB:       c.Redis.DB,
+		TTL:      c.Redis.TTL,
+	})
+
 	return &ServiceContext{
 		Config:         c,
 		DB:             sqlx.NewSqlConnFromDB(db),
 		JWTManager:     jwtManager,
 		ConsulManager:  consulManager,
 		CasdoorClient:  casdoorClient,
+		Cache:          cacheClient,
 	}
 }
 

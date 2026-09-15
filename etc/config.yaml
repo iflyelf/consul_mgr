@@ -44,6 +44,16 @@ LogConfig:
   Level: info
   Format: json
 
+Redis:
+  # 是否启用缓存（Redis 不可用时自动降级，不影响服务）
+  Enabled: ${REDIS_ENABLED:true}
+  Host: ${REDIS_HOST:localhost}
+  Port: ${REDIS_PORT:6379}
+  Password: ${REDIS_PASSWORD:}
+  DB: ${REDIS_DB:0}
+  # 缓存过期时间（秒）
+  TTL: ${REDIS_CACHE_TTL:30}
+
 Audit:
   Enabled: true
   RetentionDays: 90

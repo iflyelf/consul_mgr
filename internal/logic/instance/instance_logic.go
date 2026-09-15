@@ -44,6 +44,13 @@ func NewListInstancesLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Lis
 }
 
 func (l *ListInstancesLogic) ListInstances(groupID int64, serviceName, status string) ([]types.ConsulInstanceInfo, error) {
+	// 缓存键（超大规模实例列表，避免每次全量拉取 Consul）
+	cacheKey := l.svcCtx.CacheKeyInstances(groupID, serviceName, status)
+	var cached []types.ConsulInstanceInfo
+	if l.svcCtx.Cache.Get(l.ctx, cacheKey, &cached) {
+		return cached, nil
+	}
+
 	client, addr, err := getConsulClientWithAddr(l.ctx, l.svcCtx, groupID)
 	if err != nil {
 		return nil, err
@@ -94,7 +101,15 @@ func (l *ListInstancesLogic) ListInstances(groupID int64, serviceName, status st
 		}
 	}
 
+	// 写入缓存
+	l.svcCtx.Cache.Set(l.ctx, cacheKey, instances)
+
 	return instances, nil
+}
+
+// invalidateInstanceCache 失效指定服务组的实例缓存
+func invalidateInstanceCache(ctx context.Context, svcCtx *svc.ServiceContext, groupID int64) {
+	svcCtx.InvalidateInstances(ctx, groupID)
 }
 
 // GetDatacenters 获取该服务组 Consul 的数据中心列表
@@ -180,6 +195,7 @@ func (l *RegisterInstanceLogic) RegisterInstance(groupID int64, req *types.Regis
 		return fmt.Errorf("注册实例失败: %w", err)
 	}
 
+	invalidateInstanceCache(l.ctx, l.svcCtx, groupID)
 	return nil
 }
 
@@ -254,6 +270,7 @@ func (l *UpdateInstanceLogic) UpdateInstance(groupID int64, instanceID string, r
 		return fmt.Errorf("更新实例失败: %w", err)
 	}
 
+	invalidateInstanceCache(l.ctx, l.svcCtx, groupID)
 	return nil
 }
 
@@ -314,6 +331,7 @@ func (l *DeleteInstanceLogic) DeleteInstance(groupID int64, instanceID string) e
 		return fmt.Errorf("删除实例失败: %w", consul.FriendlyError(addr, err))
 	}
 
+	invalidateInstanceCache(l.ctx, l.svcCtx, groupID)
 	return nil
 }
 
@@ -355,6 +373,8 @@ func (l *BatchDeleteInstancesLogic) BatchDeleteInstances(groupID int64, instance
 		}
 		success++
 	}
+
+	invalidateInstanceCache(l.ctx, l.svcCtx, groupID)
 
 	if len(failed) > 0 {
 		return success, failed, fmt.Errorf("部分删除失败（成功 %d，失败 %d）: %v（地址: %s）",
@@ -496,14 +516,21 @@ func buildRegistration(instance *types.RegisterInstanceRequest) *api.AgentServic
 
 // ImportInstances 批量导入实例
 //
+// 参数:
+//   groupID   - 服务组 ID
+//   format    - 数据格式（json/yaml/csv）
+//   data      - 文件内容
+//   overwrite - 是否强制覆盖已存在的实例（false 时跳过已存在项）
+//
 // 返回:
-//   int - 成功数量
+//   int - 成功数量（含覆盖）
+//   int - 跳过数量（已存在且未开启覆盖）
 //   int - 失败数量
 //   error - 致命错误（解析失败等）
-func (l *ImportInstancesLogic) ImportInstances(groupID int64, format string, data []byte) (int, int, error) {
+func (l *ImportInstancesLogic) ImportInstances(groupID int64, format string, data []byte, overwrite bool) (int, int, int, error) {
 	client, err := getConsulClient(l.ctx, l.svcCtx, groupID)
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, 0, err
 	}
 
 	var instances []types.RegisterInstanceRequest
@@ -514,29 +541,36 @@ func (l *ImportInstancesLogic) ImportInstances(groupID int64, format string, dat
 		if err := json.Unmarshal(data, &instances); err != nil {
 			var wrapper types.InstanceImportData
 			if err2 := json.Unmarshal(data, &wrapper); err2 != nil || len(wrapper.Instances) == 0 {
-				return 0, 0, fmt.Errorf("解析 JSON 失败: %w", err)
+				return 0, 0, 0, fmt.Errorf("解析 JSON 失败: %w", err)
 			}
 			instances = wrapper.Instances
 		}
 	case "yaml":
 		if err := yaml.Unmarshal(data, &instances); err != nil {
-			return 0, 0, fmt.Errorf("解析 YAML 失败: %w", err)
+			return 0, 0, 0, fmt.Errorf("解析 YAML 失败: %w", err)
 		}
 	case "csv":
 		instances, err = importFromCSV(data)
 		if err != nil {
-			return 0, 0, err
+			return 0, 0, 0, err
 		}
 	default:
-		return 0, 0, errors.New("不支持的格式")
+		return 0, 0, 0, errors.New("不支持的格式")
 	}
 
 	if len(instances) == 0 {
-		return 0, 0, errors.New("没有可导入的实例")
+		return 0, 0, 0, errors.New("没有可导入的实例")
 	}
 
-	// 批量注册
-	success, failed := 0, 0
+	// 查询现有实例 ID 集合（用于判断是否存在）
+	existing := map[string]bool{}
+	if all, aerr := client.Agent().Services(); aerr == nil {
+		for id := range all {
+			existing[id] = true
+		}
+	}
+
+	success, skipped, failed := 0, 0, 0
 	var errs []string
 	seen := map[string]bool{}
 	for i := range instances {
@@ -545,11 +579,16 @@ func (l *ImportInstancesLogic) ImportInstances(groupID int64, format string, dat
 
 		// 同一批次内重复 ID 检测
 		if seen[registration.ID] {
-			failed++
-			errs = append(errs, fmt.Sprintf("%s: 批次内重复", registration.ID))
+			skipped++
 			continue
 		}
 		seen[registration.ID] = true
+
+		// 已存在且未开启覆盖：跳过
+		if existing[registration.ID] && !overwrite {
+			skipped++
+			continue
+		}
 
 		if err := client.Agent().ServiceRegister(registration); err != nil {
 			failed++
@@ -559,11 +598,14 @@ func (l *ImportInstancesLogic) ImportInstances(groupID int64, format string, dat
 		success++
 	}
 
+	invalidateInstanceCache(l.ctx, l.svcCtx, groupID)
+
 	if failed > 0 {
-		return success, failed, fmt.Errorf("部分导入失败(成功 %d, 失败 %d): %s", success, failed, strings.Join(errs, "; "))
+		return success, skipped, failed, fmt.Errorf("部分导入失败(成功 %d, 跳过 %d, 失败 %d): %s",
+			success, skipped, failed, strings.Join(errs, "; "))
 	}
 
-	return success, failed, nil
+	return success, skipped, failed, nil
 }
 
 // 辅助函数
@@ -721,7 +763,7 @@ func importFromCSV(data []byte) ([]types.RegisterInstanceRequest, error) {
 	}
 
 	var instances []types.RegisterInstanceRequest
-	for lineNo, row := range rows[1:] {
+	for _, row := range rows[1:] {
 		// 跳过空行
 		joined := strings.TrimSpace(strings.Join(row, ""))
 		if joined == "" {
@@ -730,8 +772,9 @@ func importFromCSV(data []byte) ([]types.RegisterInstanceRequest, error) {
 
 		service := get(row, "service")
 		address := get(row, "address")
+		// 跳过无效行（如缺少服务名或地址），不中断整体导入
 		if service == "" || address == "" {
-			return nil, fmt.Errorf("第 %d 行缺少 service 或 address", lineNo+2)
+			continue
 		}
 
 		port, _ := strconv.Atoi(get(row, "port"))
@@ -805,4 +848,147 @@ func csvEscape(s string) string {
 		return "\"" + strings.ReplaceAll(s, "\"", "\"\"") + "\""
 	}
 	return s
+}
+
+// BatchRegisterInstancesLogic 批量注册实例逻辑
+type BatchRegisterInstancesLogic struct {
+	ctx    context.Context
+	svcCtx *svc.ServiceContext
+}
+
+func NewBatchRegisterInstancesLogic(ctx context.Context, svcCtx *svc.ServiceContext) *BatchRegisterInstancesLogic {
+	return &BatchRegisterInstancesLogic{
+		ctx:    ctx,
+		svcCtx: svcCtx,
+	}
+}
+
+// BatchRegisterInstances 按 IP:端口 表达式批量注册实例
+//
+// 支持 "10.1.255.24-26:80,10.1.255.38:443,10.1.255.0/24:8080" 形式。
+//
+// 返回:
+//   int - 成功数量
+//   int - 跳过数量（已存在且未开启覆盖）
+//   int - 失败数量
+//   []string - 展开后的实例 ID 列表
+//   error - 致命错误
+func (l *BatchRegisterInstancesLogic) BatchRegisterInstances(req *types.BatchRegisterRequest) (int, int, int, []string, error) {
+	client, err := getConsulClient(l.ctx, l.svcCtx, req.GroupID)
+	if err != nil {
+		return 0, 0, 0, nil, err
+	}
+
+	// 解析 IP:端口 表达式
+	items, perr := ParseIPPorts(req.Instances)
+	if perr != nil {
+		return 0, 0, 0, nil, perr
+	}
+
+	// 现有实例集合
+	existing := map[string]bool{}
+	if all, aerr := client.Agent().Services(); aerr == nil {
+		for id := range all {
+			existing[id] = true
+		}
+	}
+
+	prefix := req.IDPrefix
+	if prefix == "" {
+		prefix = req.Service
+	}
+
+	success, skipped, failed := 0, 0, 0
+	var ids []string
+	var errs []string
+
+	for _, item := range items {
+		address := item
+		port := req.DefaultPort
+		if idx := strings.LastIndex(item, ":"); idx >= 0 {
+			address = item[:idx]
+			if p, e := strconv.Atoi(item[idx+1:]); e == nil {
+				port = p
+			}
+		}
+
+		// 生成实例 ID：前缀 + IP + 端口
+		id := prefix + "_" + strings.ReplaceAll(address, ".", "_")
+		if port > 0 {
+			id = id + "_" + strconv.Itoa(port)
+		}
+		ids = append(ids, id)
+
+		if existing[id] && !req.Overwrite {
+			skipped++
+			continue
+		}
+
+		ins := types.RegisterInstanceRequest{
+			GroupID: req.GroupID,
+			ID:      id,
+			Service: req.Service,
+			Address: address,
+			Port:    port,
+			Tags:    req.Tags,
+			Meta:    req.Meta,
+			Check:   req.Check,
+		}
+
+		// 元数据补充实例地址信息（与 Ansible 脚本行为一致）
+		if ins.Meta == nil {
+			ins.Meta = map[string]string{}
+		}
+		if _, ok := ins.Meta["instance"]; !ok {
+			ins.Meta["instance"] = item
+		}
+
+		registration := buildRegistration(&ins)
+		if rerr := client.Agent().ServiceRegister(registration); rerr != nil {
+			failed++
+			errs = append(errs, fmt.Sprintf("%s: %v", id, rerr))
+			continue
+		}
+		success++
+	}
+
+	invalidateInstanceCache(l.ctx, l.svcCtx, req.GroupID)
+
+	if failed > 0 {
+		return success, skipped, failed, ids,
+			fmt.Errorf("部分注册失败(成功 %d, 跳过 %d, 失败 %d): %s", success, skipped, failed, strings.Join(errs, "; "))
+	}
+
+	return success, skipped, failed, ids, nil
+}
+
+// PreviewBatchRegister 预览批量注册将生成的实例列表（不实际注册）
+func (l *BatchRegisterInstancesLogic) PreviewBatchRegister(req *types.BatchRegisterRequest) ([]string, error) {
+	items, err := ParseIPPorts(req.Instances)
+	if err != nil {
+		return nil, err
+	}
+
+	prefix := req.IDPrefix
+	if prefix == "" {
+		prefix = req.Service
+	}
+
+	result := make([]string, 0, len(items))
+	for _, item := range items {
+		address := item
+		port := req.DefaultPort
+		if idx := strings.LastIndex(item, ":"); idx >= 0 {
+			address = item[:idx]
+			if p, e := strconv.Atoi(item[idx+1:]); e == nil {
+				port = p
+			}
+		}
+		id := prefix + "_" + strings.ReplaceAll(address, ".", "_")
+		if port > 0 {
+			id = id + "_" + strconv.Itoa(port)
+		}
+		result = append(result, id)
+	}
+	return result, nil
 }
