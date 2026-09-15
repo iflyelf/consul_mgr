@@ -35,7 +35,14 @@ func main() {
 	ctx := svc.NewServiceContext(c)
 	
 	// 创建 REST 服务器
-	server := rest.MustNewServer(c.RestConf)
+	server := rest.MustNewServer(c.RestConf, rest.WithNotFoundHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// 如果启用了嵌入式 Web，未找到的路由使用 SPA 处理器
+		if c.Web.Embedded {
+			getSPAHandler().ServeHTTP(w, r)
+		} else {
+			http.NotFound(w, r)
+		}
+	})))
 	defer server.Stop()
 
 	// 注册路由
@@ -355,11 +362,6 @@ func registerHandlers(server *rest.Server, ctx *svc.ServiceContext) {
 	
 	if ctx.Config.Web.Embedded {
 		log.Println("启用嵌入式 Web 界面")
-		server.AddRoute(rest.Route{
-			Method:  http.MethodGet,
-			Path:    "/",
-			Handler: getSPAHandler().ServeHTTP,
-		})
 	}
 }
 

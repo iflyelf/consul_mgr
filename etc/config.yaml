@@ -17,6 +17,20 @@ Admin:
   Password: ${ADMIN_PASSWORD}
   Email: ${ADMIN_EMAIL}
 
+Consul:
+  DefaultAddress: ${CONSUL_ADDRESS}
+  DefaultToken: ${CONSUL_TOKEN}
+  DefaultDatacenter: ${CONSUL_DATACENTER}
+  Timeout: 10
+
+Casdoor:
+  Endpoint: ${CASDOOR_ENDPOINT}
+  ClientId: ${CASDOOR_CLIENT_ID}
+  ClientSecret: ${CASDOOR_CLIENT_SECRET}
+  Certificate: ${CASDOOR_CERTIFICATE}
+  OrganizationName: ${CASDOOR_ORGANIZATION}
+  ApplicationName: ${CASDOOR_APPLICATION}
+
 Web:
   Embedded: true
   StaticDir: ./web/dist
