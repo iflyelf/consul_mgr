@@ -344,7 +344,7 @@ const importLoading = ref(false)
 const batchLoading = ref(false)
 const batchRegLoading = ref(false)
 
-const groupId = ref(route.query.group_id)
+const groupId = ref(Number(route.query.group_id) || '')
 const serviceName = ref(route.query.service)
 
 const keyword = ref('')

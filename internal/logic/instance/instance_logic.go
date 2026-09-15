@@ -107,9 +107,13 @@ func (l *ListInstancesLogic) ListInstances(groupID int64, serviceName, status st
 	return instances, nil
 }
 
-// invalidateInstanceCache 失效指定服务组的实例缓存
+// invalidateInstanceCache 失效指定服务组的实例/服务列表/服务详情缓存
+//
+// 实例变更会影响服务列表的实例数与服务详情的实例集，因此一并清理。
 func invalidateInstanceCache(ctx context.Context, svcCtx *svc.ServiceContext, groupID int64) {
 	svcCtx.InvalidateInstances(ctx, groupID)
+	svcCtx.InvalidateServices(ctx, groupID)
+	svcCtx.InvalidateServiceDetails(ctx, groupID)
 }
 
 // GetDatacenters 获取该服务组 Consul 的数据中心列表
