@@ -1,58 +1,131 @@
-:root {
-  --bg-color: #f5f7fa;
-  --card-bg: #ffffff;
-  --text-color: #303133;
-  --text-secondary: #606266;
-  --border-color: #dcdfe6;
-  --primary-color: #409eff;
+/* ============================================================
+   三套主题：warm(暖沙米·默认) / cool(冷蓝) / dark(暗黑)
+   参考 lanproxy-gateway 配色，通过 <html data-theme="..."> 切换
+   ============================================================ */
+
+/* 暖沙米（默认） */
+:root,
+[data-theme="warm"] {
+  --bg-color: #f5efe6;
+  --bg-grad: linear-gradient(160deg, #f7f2ea 0%, #efe6d8 100%);
+  --card-bg: #fffaf3;
+  --panel-bg: #fdf8f0;
+  --text-color: #4a3f35;
+  --text-secondary: #9a8c7c;
+  --border-color: #e6dccd;
+  --primary-color: #c8865a;
+  --primary-soft: #e0a878;
+  --ok-color: #83a76f;
+  --warn-color: #d9a94c;
+  --err-color: #d9776c;
+  --shadow: 0 2px 12px rgba(120, 95, 65, 0.08);
 }
 
+/* 冷蓝 */
+[data-theme="cool"] {
+  --bg-color: #f4f6f8;
+  --bg-grad: linear-gradient(160deg, #f8fafc 0%, #eef2f6 100%);
+  --card-bg: #ffffff;
+  --panel-bg: #fbfcfd;
+  --text-color: #263238;
+  --text-secondary: #7b8794;
+  --border-color: #e2e8ef;
+  --primary-color: #2f6fed;
+  --primary-soft: #5b8ef2;
+  --ok-color: #2e9e63;
+  --warn-color: #d98e2b;
+  --err-color: #d64545;
+  --shadow: 0 2px 12px rgba(38, 50, 56, 0.06);
+}
+
+/* 暗黑 */
 [data-theme="dark"] {
-  --bg-color: #1a1a1a;
-  --card-bg: #2d2d2d;
-  --text-color: #e5e7eb;
-  --text-secondary: #9ca3af;
-  --border-color: #4b5563;
-  --primary-color: #409eff;
-  
-  .el-table {
-    --el-table-bg-color: #2d2d2d;
-    --el-table-tr-bg-color: #2d2d2d;
-    --el-table-header-bg-color: #1f1f1f;
-    --el-table-border-color: #4b5563;
-    --el-table-text-color: #e5e7eb;
-    --el-table-header-text-color: #e5e7eb;
-  }
-  
-  .el-card {
-    --el-card-bg-color: #2d2d2d;
-    --el-card-border-color: #4b5563;
-  }
-  
-  .el-dialog {
-    --el-dialog-bg-color: #2d2d2d;
-  }
-  
-  .el-form-item__label {
-    color: #e5e7eb;
-  }
-  
-  .el-input__wrapper {
-    background-color: #1f1f1f;
-  }
+  --bg-color: #171a1f;
+  --bg-grad: linear-gradient(160deg, #1b1f25 0%, #14171b 100%);
+  --card-bg: #262c35;
+  --panel-bg: #21262e;
+  --text-color: #e4e7eb;
+  --text-secondary: #8d97a5;
+  --border-color: #313842;
+  --primary-color: #e0a878;
+  --primary-soft: #eec498;
+  --ok-color: #6fbf73;
+  --warn-color: #e0b155;
+  --err-color: #e57373;
+  --shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
 }
 
-[data-theme="blue"] {
-  --bg-color: #e3f2fd;
-  --card-bg: #ffffff;
-  --text-color: #1565c0;
-  --text-secondary: #1976d2;
-  --border-color: #90caf9;
-  --primary-color: #2196f3;
-  
-  .el-button--primary {
-    --el-button-bg-color: #2196f3;
-    --el-button-border-color: #2196f3;
+/* Element Plus 主题变量：跟随各主题的主色，衍生色按卡片底色混合 */
+:root,
+[data-theme] {
+  --el-color-primary: var(--primary-color);
+  --el-color-primary-light-3: color-mix(in srgb, var(--primary-color) 70%, var(--card-bg));
+  --el-color-primary-light-5: color-mix(in srgb, var(--primary-color) 50%, var(--card-bg));
+  --el-color-primary-light-7: color-mix(in srgb, var(--primary-color) 30%, var(--card-bg));
+  --el-color-primary-light-8: color-mix(in srgb, var(--primary-color) 20%, var(--card-bg));
+  --el-color-primary-light-9: color-mix(in srgb, var(--primary-color) 10%, var(--card-bg));
+  --el-color-primary-dark-2: color-mix(in srgb, var(--primary-color) 80%, black);
+
+  --el-color-success: var(--ok-color);
+  --el-color-warning: var(--warn-color);
+  --el-color-danger: var(--err-color);
+  --el-color-error: var(--err-color);
+
+  --el-bg-color: var(--card-bg);
+  --el-bg-color-overlay: var(--card-bg);
+  --el-text-color-primary: var(--text-color);
+  --el-text-color-regular: var(--text-color);
+  --el-text-color-secondary: var(--text-secondary);
+  --el-border-color: var(--border-color);
+  --el-border-color-light: var(--border-color);
+  --el-border-color-lighter: var(--border-color);
+  --el-fill-color-blank: var(--card-bg);
+}
+
+/* 暗黑主题下的 Element Plus 组件适配 */
+[data-theme="dark"] {
+  --el-bg-color-page: #171a1f;
+  --el-fill-color-light: #2c333d;
+  --el-fill-color-lighter: #313842;
+  --el-fill-color-dark: #1f252d;
+  --el-mask-color: rgba(0, 0, 0, 0.6);
+
+  .el-card {
+    --el-card-bg-color: var(--card-bg);
+    --el-card-border-color: var(--border-color);
+  }
+
+  .el-table {
+    --el-table-bg-color: var(--card-bg);
+    --el-table-tr-bg-color: var(--card-bg);
+    --el-table-header-bg-color: var(--panel-bg);
+    --el-table-border-color: var(--border-color);
+    --el-table-text-color: var(--text-color);
+    --el-table-header-text-color: var(--text-color);
+    --el-table-row-hover-bg-color: #2f3742;
+  }
+
+  .el-dialog,
+  .el-message-box,
+  .el-popover,
+  .el-dropdown-menu {
+    --el-dialog-bg-color: var(--card-bg);
+    --el-bg-color: var(--card-bg);
+  }
+
+  .el-input__wrapper,
+  .el-textarea__inner {
+    background-color: var(--panel-bg);
+    box-shadow: 0 0 0 1px var(--border-color) inset;
+  }
+
+  .el-form-item__label {
+    color: var(--text-color);
+  }
+
+  .el-descriptions {
+    --el-descriptions-item-bordered-label-background: var(--panel-bg);
+    --el-fill-color-light: var(--panel-bg);
   }
 }
 
@@ -63,12 +136,13 @@
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
+    'Microsoft YaHei', 'Roboto', 'Helvetica Neue', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   background-color: var(--bg-color);
+  background-image: var(--bg-grad);
+  background-attachment: fixed;
   color: var(--text-color);
   transition: background-color 0.3s, color 0.3s;
 }
@@ -80,7 +154,7 @@ body {
 
 .page-container {
   padding: 20px;
-  
+
   @media (max-width: 768px) {
     padding: 10px;
   }

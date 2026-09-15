@@ -193,6 +193,9 @@ func (l *RegisterInstanceLogic) RegisterInstance(groupID int64, req *types.Regis
 		return err
 	}
 
+	// 集群去重：清理其他节点上的同名实例，避免一个实例被多个节点注册
+	dedupSingle(client, req)
+
 	registration := buildRegistration(req)
 
 	if err := client.Agent().ServiceRegister(registration); err != nil {
@@ -574,6 +577,9 @@ func (l *ImportInstancesLogic) ImportInstances(groupID int64, format string, dat
 		}
 	}
 
+	// 集群去重：清理其他节点上的同名实例
+	_, _ = dedupClusterRegistrations(client, instances)
+
 	success, skipped, failed := 0, 0, 0
 	var errs []string
 	seen := map[string]bool{}
@@ -883,13 +889,21 @@ func (l *BatchRegisterInstancesLogic) BatchRegisterInstances(req *types.BatchReg
 		return 0, 0, 0, nil, err
 	}
 
-	// 解析 IP:端口 表达式
-	items, perr := ParseIPPorts(req.Instances)
-	if perr != nil {
-		return 0, 0, 0, nil, perr
+	// 构建目标实例集合
+	targets, err := buildBatchTargets(req)
+	if err != nil {
+		return 0, 0, 0, nil, err
 	}
 
-	// 现有实例集合
+	ids := make([]string, 0, len(targets))
+	for i := range targets {
+		ids = append(ids, targets[i].ID)
+	}
+
+	// 集群去重：清理其他节点上的同名实例
+	_, _ = dedupClusterRegistrations(client, targets)
+
+	// 本地已存在实例集合（用于跳过/覆盖判断）
 	existing := map[string]bool{}
 	if all, aerr := client.Agent().Services(); aerr == nil {
 		for id := range all {
@@ -897,60 +911,21 @@ func (l *BatchRegisterInstancesLogic) BatchRegisterInstances(req *types.BatchReg
 		}
 	}
 
-	prefix := req.IDPrefix
-	if prefix == "" {
-		prefix = req.Service
-	}
-
 	success, skipped, failed := 0, 0, 0
-	var ids []string
 	var errs []string
 
-	for _, item := range items {
-		address := item
-		port := req.DefaultPort
-		if idx := strings.LastIndex(item, ":"); idx >= 0 {
-			address = item[:idx]
-			if p, e := strconv.Atoi(item[idx+1:]); e == nil {
-				port = p
-			}
-		}
+	for i := range targets {
+		ins := &targets[i]
 
-		// 生成实例 ID：前缀 + IP + 端口
-		id := prefix + "_" + strings.ReplaceAll(address, ".", "_")
-		if port > 0 {
-			id = id + "_" + strconv.Itoa(port)
-		}
-		ids = append(ids, id)
-
-		if existing[id] && !req.Overwrite {
+		if existing[ins.ID] && !req.Overwrite {
 			skipped++
 			continue
 		}
 
-		ins := types.RegisterInstanceRequest{
-			GroupID: req.GroupID,
-			ID:      id,
-			Service: req.Service,
-			Address: address,
-			Port:    port,
-			Tags:    req.Tags,
-			Meta:    req.Meta,
-			Check:   req.Check,
-		}
-
-		// 元数据补充实例地址信息（与 Ansible 脚本行为一致）
-		if ins.Meta == nil {
-			ins.Meta = map[string]string{}
-		}
-		if _, ok := ins.Meta["instance"]; !ok {
-			ins.Meta["instance"] = item
-		}
-
-		registration := buildRegistration(&ins)
+		registration := buildRegistration(ins)
 		if rerr := client.Agent().ServiceRegister(registration); rerr != nil {
 			failed++
-			errs = append(errs, fmt.Sprintf("%s: %v", id, rerr))
+			errs = append(errs, fmt.Sprintf("%s: %v", ins.ID, rerr))
 			continue
 		}
 		success++
@@ -966,8 +941,8 @@ func (l *BatchRegisterInstancesLogic) BatchRegisterInstances(req *types.BatchReg
 	return success, skipped, failed, ids, nil
 }
 
-// PreviewBatchRegister 预览批量注册将生成的实例列表（不实际注册）
-func (l *BatchRegisterInstancesLogic) PreviewBatchRegister(req *types.BatchRegisterRequest) ([]string, error) {
+// buildBatchTargets 根据批量注册请求构建目标实例列表
+func buildBatchTargets(req *types.BatchRegisterRequest) ([]types.RegisterInstanceRequest, error) {
 	items, err := ParseIPPorts(req.Instances)
 	if err != nil {
 		return nil, err
@@ -978,7 +953,7 @@ func (l *BatchRegisterInstancesLogic) PreviewBatchRegister(req *types.BatchRegis
 		prefix = req.Service
 	}
 
-	result := make([]string, 0, len(items))
+	targets := make([]types.RegisterInstanceRequest, 0, len(items))
 	for _, item := range items {
 		address := item
 		port := req.DefaultPort
@@ -988,11 +963,45 @@ func (l *BatchRegisterInstancesLogic) PreviewBatchRegister(req *types.BatchRegis
 				port = p
 			}
 		}
+
+		// 生成实例 ID：前缀 + IP + 端口
 		id := prefix + "_" + strings.ReplaceAll(address, ".", "_")
 		if port > 0 {
 			id = id + "_" + strconv.Itoa(port)
 		}
-		result = append(result, id)
+
+		// 复制 Meta，避免多个实例共享同一个 map
+		meta := map[string]string{}
+		for k, v := range req.Meta {
+			meta[k] = v
+		}
+		if _, ok := meta["instance"]; !ok {
+			meta["instance"] = item
+		}
+
+		targets = append(targets, types.RegisterInstanceRequest{
+			GroupID: req.GroupID,
+			ID:      id,
+			Service: req.Service,
+			Address: address,
+			Port:    port,
+			Tags:    req.Tags,
+			Meta:    meta,
+			Check:   req.Check,
+		})
+	}
+	return targets, nil
+}
+
+// PreviewBatchRegister 预览批量注册将生成的实例列表（不实际注册）
+func (l *BatchRegisterInstancesLogic) PreviewBatchRegister(req *types.BatchRegisterRequest) ([]string, error) {
+	targets, err := buildBatchTargets(req)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]string, 0, len(targets))
+	for i := range targets {
+		result = append(result, targets[i].ID)
 	}
 	return result, nil
 }

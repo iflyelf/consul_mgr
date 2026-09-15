@@ -7,12 +7,17 @@
       
       <div class="header-right">
         <el-dropdown class="theme-switcher" @command="handleThemeChange">
-          <el-button :icon="Sunny" circle />
+          <el-button :icon="themeIcon" circle />
           <template #dropdown>
             <el-dropdown-menu>
-              <el-dropdown-item command="light">浅色主题</el-dropdown-item>
-              <el-dropdown-item command="dark">深色主题</el-dropdown-item>
-              <el-dropdown-item command="blue">蓝色主题</el-dropdown-item>
+              <el-dropdown-item
+                v-for="t in themeStore.themes"
+                :key="t.value"
+                :command="t.value"
+                :class="{ 'is-active-theme': themeStore.currentTheme === t.value }"
+              >
+                {{ t.label }}
+              </el-dropdown-item>
             </el-dropdown-menu>
           </template>
         </el-dropdown>
@@ -68,14 +73,24 @@
 
 <script setup>
 import { useRouter } from 'vue-router'
+import { computed } from 'vue'
 import { ElMessageBox, ElMessage } from 'element-plus'
-import { UserFilled, SwitchButton, Sunny, Grid, Connection, Monitor, ArrowDown } from '@element-plus/icons-vue'
+import { UserFilled, SwitchButton, Sunny, MostlyCloudy, Moon, Grid, Connection, Monitor, ArrowDown } from '@element-plus/icons-vue'
 import { useUserStore } from '@/store/user'
 import { useThemeStore } from '@/store/theme'
 
 const router = useRouter()
 const userStore = useUserStore()
 const themeStore = useThemeStore()
+
+// 当前主题对应的切换按钮图标
+const themeIcon = computed(() => {
+  switch (themeStore.currentTheme) {
+    case 'cool': return MostlyCloudy
+    case 'dark': return Moon
+    default: return Sunny
+  }
+})
 
 const handleCommand = async (command) => {
   if (command === 'logout') {
@@ -133,6 +148,11 @@ const handleThemeChange = (theme) => {
 
 .theme-switcher {
   margin-right: 10px;
+}
+
+.is-active-theme {
+  color: var(--primary-color);
+  font-weight: 600;
 }
 
 .user-info {
