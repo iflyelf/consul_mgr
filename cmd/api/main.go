@@ -39,6 +39,9 @@ func main() {
 	var c config.Config
 	conf.MustLoad(*configFile, &c)
 
+	// 环境变量覆盖监听地址/端口/模式/超时（支持容器编排自定义端口）
+	c.ApplyEnvOverrides()
+
 	// 创建服务上下文
 	ctx := svc.NewServiceContext(c)
 	

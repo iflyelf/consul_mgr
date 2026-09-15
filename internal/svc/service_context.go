@@ -14,14 +14,12 @@ import (
 	"github.com/iflyelf/consul_mgr/internal/pkg/cache"
 	"github.com/iflyelf/consul_mgr/internal/pkg/casdoor"
 	"github.com/iflyelf/consul_mgr/internal/pkg/consul"
-	"github.com/iflyelf/consul_mgr/internal/pkg/jwt"
 )
 
 // ServiceContext 服务上下文
 type ServiceContext struct {
 	Config         config.Config
 	DB             sqlx.SqlConn
-	JWTManager     *jwt.JWTManager
 	ConsulManager  *consul.Manager
 	CasdoorClient  *casdoor.Client
 	Cache          *cache.Cache
@@ -122,19 +120,11 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	// 初始化数据库连接
 	db := initDB(c)
 	
-	// 初始化数据库表（不再创建用户表，由 Casdoor 管理）
+	// 初始化数据库表（不创建用户表，认证由 Casdoor 负责）
 	if err := initSchema(db, c); err != nil {
 		log.Fatalf("初始化数据库失败: %v", err)
 	}
-	
-	// 初始化 JWT 管理器
-	jwtManager := jwt.NewJWTManager(
-		c.JWT.Secret,
-		c.JWT.AccessExpire,
-		c.JWT.RefreshExpire,
-		c.JWT.Issuer,
-	)
-	
+
 	// 初始化 Consul 管理器
 	consulManager := consul.NewManager()
 	
@@ -157,7 +147,6 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	return &ServiceContext{
 		Config:         c,
 		DB:             sqlx.NewSqlConnFromDB(db),
-		JWTManager:     jwtManager,
 		ConsulManager:  consulManager,
 		CasdoorClient:  casdoorClient,
 		Cache:          cacheClient,

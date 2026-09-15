@@ -1,63 +1,77 @@
+# =============================================================================
+# Consul Manager 配置文件（生产环境 / 容器部署）
+#
+# 所有参数均可通过环境变量覆盖，语法：default
+# 代码中不硬编码任何地址、端口与凭据。
+# =============================================================================
+
 Name: consul_mgr
 Host: 0.0.0.0
 Port: 8080
 Mode: release
+Timeout: 30000
 
 Database:
-  DSN: ${DATABASE_URL}
-  # 或者分开配置
-  Host: ${DB_HOST:localhost}
-  Port: ${DB_PORT:5432}
-  User: ${DB_USER:postgres}
-  Password: ${DB_PASSWORD}
-  DBName: ${DB_NAME:consul_mgr}
-  SSLMode: ${DB_SSLMODE:disable}
+  # 优先使用完整 DSN；未设置时用下方分项拼装
+  DSN: ""
+  Host: localhost
+  Port: 5432
+  User: postgres
+  Password: ""
+  DBName: consul_mgr
+  SSLMode: disable
   MaxOpenConns: 100
   MaxIdleConns: 10
   ConnMaxLifetime: 3600
 
 JWT:
-  Secret: ${JWT_SECRET}
+  Secret: ""
   AccessExpire: 7200
   RefreshExpire: 604800
   Issuer: consul_mgr
 
 Admin:
-  Username: ${ADMIN_USERNAME:admin}
-  Password: ${ADMIN_PASSWORD}
-  Email: ${ADMIN_EMAIL:admin@example.com}
+  Username: admin
+  Password: ""
+  Email: 
 
 Consul:
-  DefaultAddress: ${CONSUL_ADDRESS:http://localhost:8500}
-  DefaultToken: ${CONSUL_TOKEN:}
-  DefaultDatacenter: ${CONSUL_DATACENTER:dc1}
+  DefaultAddress: http://localhost:8500
+  DefaultToken: 
+  DefaultDatacenter: dc1
   Timeout: 10
 
 Casdoor:
-  Endpoint: ${CASDOOR_ENDPOINT:http://localhost:8000}
-  PublicEndpoint: ${CASDOOR_PUBLIC_ENDPOINT:}
-  ClientId: ${CASDOOR_CLIENT_ID}
-  ClientSecret: ${CASDOOR_CLIENT_SECRET}
-  Certificate: ${CASDOOR_CERTIFICATE:}
-  OrganizationName: ${CASDOOR_ORGANIZATION:consul_mgr}
-  ApplicationName: ${CASDOOR_APPLICATION:consul_manager}
+  Endpoint: http://localhost:8000
+  PublicEndpoint: 
+  ClientId: ""
+  ClientSecret: ""
+  Certificate: 
+  OrganizationName: consul_mgr
+  ApplicationName: consul_manager
 
 Web:
   Embedded: true
   StaticDir: ./web/dist
+  Port: 5173
+  Host: 0.0.0.0
 
 LogConfig:
   Level: info
   Format: json
 
 Redis:
-  Enabled: ${REDIS_ENABLED:true}
-  Host: ${REDIS_HOST:localhost}
-  Port: ${REDIS_PORT:6379}
-  Password: ${REDIS_PASSWORD:}
-  DB: ${REDIS_DB:0}
-  TTL: ${REDIS_CACHE_TTL:30}
+  Enabled: true
+  Host: localhost
+  Port: 6379
+  Password: ""
+  DB: 0
+  TTL: 30
 
 Audit:
   Enabled: true
   RetentionDays: 90
+
+Permission:
+  EnableServiceGroupAuth: true
+  DefaultPermissions: [read]

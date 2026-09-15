@@ -1,0 +1,67 @@
+# =============================================================================
+# Consul Manager - 配置与密钥
+#
+# 注意：以下为示例值，生产环境请通过以下方式之一覆盖：
+#   1) 修改本文件后再 kubectl apply
+#   2) 使用 kubectl create secret / kubectl create configmap 单独维护
+#   3) 使用外部密钥管理（Vault / External Secrets）
+# =============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: consul-mgr-config
+  namespace: consul-mgr
+data:
+  # 监听地址与端口（端口支持自定义）
+  SERVER_HOST: "0.0.0.0"
+  SERVER_PORT: "8080"
+  SERVER_MODE: "release"
+  SERVER_TIMEOUT: "30000"
+
+  # 日志
+  LOG_LEVEL: "info"
+  LOG_FORMAT: "json"
+
+  # 审计
+  AUDIT_ENABLED: "true"
+  AUDIT_RETENTION_DAYS: "90"
+
+  # Redis 缓存（不可用时自动降级）
+  REDIS_ENABLED: "true"
+  REDIS_HOST: "redis"
+  REDIS_PORT: "6379"
+  REDIS_DB: "0"
+  REDIS_CACHE_TTL: "30"
+
+  # Casdoor 配置
+  CASDOOR_ENDPOINT: "http://casdoor:8000"
+  CASDOOR_PUBLIC_ENDPOINT: ""
+  CASDOOR_ORGANIZATION: "consul_mgr"
+  CASDOOR_APPLICATION: "consul_manager"
+
+  # 默认 Consul（服务组可在页面另行配置）
+  CONSUL_DATACENTER: "dc1"
+  CONSUL_TIMEOUT: "10"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: consul-mgr-secret
+  namespace: consul-mgr
+type: Opaque
+stringData:
+  # 数据库连接（必填）
+  DATABASE_URL: "postgresql://user:password@postgres:5432/consul_mgr?sslmode=disable"
+  # JWT 密钥（必填，建议 32 位以上随机串）
+  JWT_SECRET: "change_me_to_a_random_secret_at_least_32_chars"
+  # 管理员账号（必填）
+  ADMIN_USERNAME: "admin"
+  ADMIN_PASSWORD: "change_me_please"
+  ADMIN_EMAIL: "admin@example.com"
+  # Casdoor 客户端凭据（必填）
+  CASDOOR_CLIENT_ID: "change_me"
+  CASDOOR_CLIENT_SECRET: "change_me"
+  # Redis 密码（可选）
+  REDIS_PASSWORD: ""
+  # 默认 Consul Token（可选）
+  CONSUL_TOKEN: ""
