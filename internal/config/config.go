@@ -71,7 +71,7 @@ type Config struct {
 		Password string `json:",optional,env=REDIS_PASSWORD"`
 		DB       int    `json:",default=0,env=REDIS_DB"`
 		// 缓存过期时间（秒）
-		TTL int `json:",default=30,env=REDIS_CACHE_TTL"`
+		TTL int `json:",default=300,env=REDIS_CACHE_TTL"`
 	}
 
 	Casdoor struct {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/hashicorp/consul/api"
@@ -55,17 +56,20 @@ func (l *ListServicesLogic) ListServices(groupID int64, keyword string) ([]types
 			return nil, fmt.Errorf("查询服务列表失败: %w", consul.FriendlyError(addr, err))
 		}
 
-		for serviceName := range services {
-			// 查询服务的所有实例
-			entries, _, err := client.Health().Service(serviceName, "", false, nil)
-			if err != nil {
-				continue
-			}
-			if len(entries) == 0 {
-				continue
-			}
+		// 并行拉取各服务健康条目（服务多时避免串行累积变慢）
+		names := make([]string, 0, len(services))
+		for name := range services {
+			names = append(names, name)
+		}
+		sort.Strings(names)
 
-			all = append(all, buildServiceInfo(serviceName, entries))
+		healthMap := consul.FetchServiceHealth(client, names)
+		for _, name := range names {
+			entries, ok := healthMap[name]
+			if !ok || len(entries) == 0 {
+				continue
+			}
+			all = append(all, buildServiceInfo(name, entries))
 		}
 
 		l.svcCtx.Cache.Set(l.ctx, cacheKey, all)

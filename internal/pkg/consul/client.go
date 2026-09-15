@@ -43,6 +43,12 @@ func NewClient(cfg *Config) (*Client, error) {
 		Timeout: timeout,
 		Transport: &http.Transport{
 			Proxy: nil, // 不使用代理
+			// 连接池：并发批量查询各服务时，默认 MaxIdleConnsPerHost=2
+			// 会导致大量连接反复新建，显著拖慢。这里放宽以提升复用率。
+			MaxIdleConns:        200,
+			MaxIdleConnsPerHost: 64,
+			MaxConnsPerHost:     0, // 不限制总连接数
+			IdleConnTimeout:     90 * time.Second,
 		},
 	}
 

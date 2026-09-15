@@ -71,7 +71,7 @@ Redis:
   Password: ""
   DB: 0
   # 缓存过期时间（秒）
-  TTL: 30
+  TTL: 300
 
 Audit:
   Enabled: true

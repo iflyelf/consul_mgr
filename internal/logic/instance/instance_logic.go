@@ -7,10 +7,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 
 	"github.com/hashicorp/consul/api"
+
 	"github.com/iflyelf/consul_mgr/internal/pkg/consul"
 	"github.com/iflyelf/consul_mgr/internal/svc"
 	"github.com/iflyelf/consul_mgr/internal/types"
@@ -67,13 +69,18 @@ func (l *ListInstancesLogic) ListInstances(groupID int64, serviceName, status st
 		for name := range catalogServices {
 			serviceNames = append(serviceNames, name)
 		}
+		// 固定顺序，保证分页结果稳定
+		sort.Strings(serviceNames)
 	}
+
+	// 并行拉取各服务健康条目（服务多时相比串行显著提速）
+	healthMap := consul.FetchServiceHealth(client, serviceNames)
 
 	instances := make([]types.ConsulInstanceInfo, 0)
 	for _, name := range serviceNames {
-		entries, _, herr := client.Health().Service(name, "", false, nil)
-		if herr != nil {
-			return nil, fmt.Errorf("查询实例失败: %w", consul.FriendlyError(addr, herr))
+		entries, ok := healthMap[name]
+		if !ok {
+			continue
 		}
 		for _, entry := range entries {
 			service := entry.Service
@@ -257,7 +264,11 @@ func (l *UpdateInstanceLogic) UpdateInstance(groupID int64, instanceID string, r
 		Port:    service.Port,
 	}
 
-	// 健康检查：请求指定则替换；否则保留该实例已有的自定义检查
+	// 健康检查：
+	//   - 请求显式指定则替换为新配置；
+	//   - 未指定则不动（Consul 重新注册服务时会保留已有检查，
+	//     无需从 Agent().Checks() 重建——重建容易因字段缺失导致
+	//     "Invalid check: TTL must be > 0" 之类的错误）。
 	if req.Check != nil && req.Check.Type != "" {
 		reg := buildRegistration(&types.RegisterInstanceRequest{
 			ID:      service.ID,
@@ -267,10 +278,6 @@ func (l *UpdateInstanceLogic) UpdateInstance(groupID int64, instanceID string, r
 			Check:   req.Check,
 		})
 		registration.Check = reg.Check
-	} else {
-		if existing := findCustomCheck(client, service.ID); existing != nil {
-			registration.Check = existing
-		}
 	}
 
 	if err := client.Agent().ServiceRegister(registration); err != nil {
@@ -278,40 +285,6 @@ func (l *UpdateInstanceLogic) UpdateInstance(groupID int64, instanceID string, r
 	}
 
 	invalidateInstanceCache(l.ctx, l.svcCtx, groupID)
-	return nil
-}
-
-// findCustomCheck 查找实例已有的自定义健康检查配置
-func findCustomCheck(client *api.Client, serviceID string) *api.AgentServiceCheck {
-	checks, err := client.Agent().Checks()
-	if err != nil {
-		return nil
-	}
-	for _, c := range checks {
-		if c.ServiceID != serviceID {
-			continue
-		}
-		if isBuiltinCheck(c.CheckID, c.Name) {
-			continue
-		}
-		check := &api.AgentServiceCheck{
-			CheckID: c.CheckID,
-			Name:    c.Name,
-			Notes:   c.Notes,
-		}
-		def := c.Definition
-		if def.Interval != 0 {
-			check.Interval = (&def.Interval).String()
-		}
-		if def.Timeout != 0 {
-			check.Timeout = (&def.Timeout).String()
-		}
-		check.HTTP = def.HTTP
-		check.TCP = def.TCP
-		check.GRPC = def.GRPC
-		check.GRPCUseTLS = def.GRPCUseTLS
-		return check
-	}
 	return nil
 }
 
