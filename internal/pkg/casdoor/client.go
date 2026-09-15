@@ -39,8 +39,8 @@ func NewClient(config *Config) (*Client, error) {
 		return nil, fmt.Errorf("Casdoor application_name 不能为空")
 	}
 
-	// 初始化 Casdoor SDK
-	casdoorsdk.InitConfig(
+	// 创建 Casdoor SDK 客户端
+	sdk := casdoorsdk.NewClient(
 		config.Endpoint,
 		config.ClientId,
 		config.ClientSecret,
@@ -51,7 +51,7 @@ func NewClient(config *Config) (*Client, error) {
 
 	return &Client{
 		config: config,
-		sdk:    casdoorsdk.GetGlobalClient(),
+		sdk:    sdk,
 	}, nil
 }
 
@@ -74,7 +74,7 @@ func (c *Client) GetSigninUrl(redirectUri string) string {
 // 返回:
 //   string - 注册 URL
 func (c *Client) GetSignupUrl(redirectUri string) string {
-	return c.sdk.GetSignupUrl(redirectUri)
+	return c.sdk.GetSignupUrl(true, redirectUri)
 }
 
 // GetToken 通过授权码获取 Token
@@ -122,7 +122,7 @@ func (c *Client) ParseToken(token string) (*Claims, error) {
 	}
 
 	// 提取用户信息
-	if claims.User != nil {
+	if claims.User.Name != "" {
 		result.User = &UserInfo{
 			Owner:       claims.User.Owner,
 			Name:        claims.User.Name,
@@ -197,8 +197,7 @@ func (c *Client) GetUserInfo(username string) (*UserInfo, error) {
 		Phone:         user.Phone,
 		Avatar:        user.Avatar,
 		IsAdmin:       user.IsAdmin,
-		IsGlobalAdmin: user.IsGlobalAdmin,
-		IsForbidden:   user.IsForbidden,
+		IsGlobalAdmin: user.IsAdmin, // Casdoor SDK 中使用 IsAdmin 表示全局管理员
 	}, nil
 }
 
@@ -254,7 +253,7 @@ func (c *Client) CheckPermission(username, resource, action string) (bool, error
 	}
 
 	// 全局管理员拥有所有权限
-	if user.IsGlobalAdmin {
+	if user.IsAdmin {
 		return true, nil
 	}
 
@@ -313,7 +312,7 @@ func (c *Client) CheckPermissionByToken(token, resource, action string) (bool, e
 	}
 
 	// 全局管理员拥有所有权限
-	if claims.User.IsGlobalAdmin {
+	if claims.User.IsAdmin {
 		return true, nil
 	}
 

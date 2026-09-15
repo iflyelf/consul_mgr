@@ -6,9 +6,9 @@ Mode: release
 Database:
   DSN: ${DATABASE_URL}
   # 或者分开配置
-  Host: ${DB_HOST:10.0.51.88}
-  Port: ${DB_PORT:6000}
-  User: ${DB_USER:iflyelf}
+  Host: ${DB_HOST:localhost}
+  Port: ${DB_PORT:5432}
+  User: ${DB_USER:postgres}
   Password: ${DB_PASSWORD}
   DBName: ${DB_NAME:consul_mgr}
   SSLMode: ${DB_SSLMODE:disable}
@@ -23,15 +23,23 @@ JWT:
   Issuer: consul_mgr
 
 Admin:
-  Username: ${ADMIN_USERNAME:iflyelf}
+  Username: ${ADMIN_USERNAME:admin}
   Password: ${ADMIN_PASSWORD}
-  Email: ${ADMIN_EMAIL:iflyelf@gmail.com}
+  Email: ${ADMIN_EMAIL:admin@example.com}
 
 Consul:
-  DefaultAddress: http://10.0.56.118:8510
-  DefaultToken: a597a2fa-fbcb-9aba-e743-5043ea6cd673
-  DefaultDatacenter: dc1
+  DefaultAddress: ${CONSUL_ADDRESS:http://localhost:8500}
+  DefaultToken: ${CONSUL_TOKEN:}
+  DefaultDatacenter: ${CONSUL_DATACENTER:dc1}
   Timeout: 10
+
+Casdoor:
+  Endpoint: ${CASDOOR_ENDPOINT:http://localhost:8000}
+  ClientId: ${CASDOOR_CLIENT_ID}
+  ClientSecret: ${CASDOOR_CLIENT_SECRET}
+  Certificate: ${CASDOOR_CERTIFICATE:}
+  OrganizationName: ${CASDOOR_ORGANIZATION:consul_mgr}
+  ApplicationName: ${CASDOOR_APPLICATION:consul_manager}
 
 Web:
   Embedded: true

@@ -87,7 +87,7 @@ func (m *CasdoorAuthMiddleware) Handle(next http.HandlerFunc) http.HandlerFunc {
 
 		// 4. 检查用户是否被禁用
 		if claims.User.IsForbidden {
-			logx.Warnf("用户已被禁用: %s", claims.User.Name)
+			logx.Errorf("用户已被禁用: %s", claims.User.Name)
 			httpx.WriteJson(w, http.StatusForbidden, map[string]interface{}{
 				"code":    403,
 				"message": "您的账号已被禁用，请联系管理员",

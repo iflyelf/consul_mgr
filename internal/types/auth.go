@@ -1,5 +1,5 @@
-// Package auth 提供认证相关的类型定义
-package auth
+// Package types 提供认证相关的类型定义
+package types
 
 // LoginResponse 登录响应
 type LoginResponse struct {

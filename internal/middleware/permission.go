@@ -84,7 +84,7 @@ func (m *PermissionMiddleware) RequirePermission(resource, action string) func(h
 			}
 
 			if !hasPermission {
-				logx.Warnf("用户 %s (%s) 没有权限: %s:%s", username, userId, resource, action)
+				logx.Errorf("用户 %s (%s) 没有权限: %s:%s", username, userId, resource, action)
 				httpx.WriteJson(w, http.StatusForbidden, map[string]interface{}{
 					"code":    403,
 					"message": fmt.Sprintf("没有权限执行此操作（需要 %s:%s 权限）", resource, action),
@@ -120,7 +120,7 @@ func (m *PermissionMiddleware) RequireServiceGroupAccess(action string) func(htt
 			ctx := r.Context()
 
 			// 1. 获取用户信息
-			userId, ok := GetUserIdFromContext(ctx)
+			_, ok := GetUserIdFromContext(ctx)
 			if !ok {
 				httpx.WriteJson(w, http.StatusUnauthorized, map[string]interface{}{
 					"code":    401,
@@ -183,7 +183,7 @@ func (m *PermissionMiddleware) RequireServiceGroupAccess(action string) func(htt
 			// 暂时先通过全局权限控制
 			// 在 Phase 8 中会实现完整的服务组授权逻辑
 
-			logx.Warnf("用户 %s 没有访问服务组 %d 的权限", username, groupId)
+			logx.Errorf("用户 %s 没有访问服务组 %d 的权限", username, groupId)
 			httpx.WriteJson(w, http.StatusForbidden, map[string]interface{}{
 				"code":    403,
 				"message": fmt.Sprintf("没有权限访问该服务组（需要 %s 权限）", action),
@@ -211,7 +211,7 @@ func (m *PermissionMiddleware) RequireAdmin() func(http.HandlerFunc) http.Handle
 			}
 
 			username, _ := GetUsernameFromContext(ctx)
-			logx.Warnf("用户 %s 尝试访问管理员接口", username)
+			logx.Errorf("用户 %s 尝试访问管理员接口", username)
 
 			httpx.WriteJson(w, http.StatusForbidden, map[string]interface{}{
 				"code":    403,
@@ -263,7 +263,7 @@ func (m *PermissionMiddleware) RequireRole(roles ...string) func(http.HandlerFun
 			}
 
 			username, _ := GetUsernameFromContext(ctx)
-			logx.Warnf("用户 %s 角色不匹配，要求: %v，拥有: %v", username, roles, userRoles)
+			logx.Errorf("用户 %s 角色不匹配，要求: %v，拥有: %v", username, roles, userRoles)
 
 			httpx.WriteJson(w, http.StatusForbidden, map[string]interface{}{
 				"code":    403,

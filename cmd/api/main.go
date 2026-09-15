@@ -358,13 +358,7 @@ func registerHandlers(server *rest.Server, ctx *svc.ServiceContext) {
 		server.AddRoute(rest.Route{
 			Method:  http.MethodGet,
 			Path:    "/",
-			Handler: serveEmbeddedWeb(),
-		})
-		
-		server.AddRoute(rest.Route{
-			Method:  http.MethodGet,
-			Path:    "/assets/:file",
-			Handler: serveEmbeddedAssets(),
+			Handler: getSPAHandler().ServeHTTP,
 		})
 	}
 }
@@ -376,65 +370,4 @@ func healthHandler() http.HandlerFunc {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(`{"status":"ok","message":"Consul Manager is running","version":"1.0.0"}`))
 	}
-}
-
-// serveEmbeddedWeb 提供嵌入式 Web 界面
-func serveEmbeddedWeb() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		content, err := webFS.ReadFile("web/dist/index.html")
-		if err != nil {
-			http.Error(w, "Web UI not found", http.StatusNotFound)
-			return
-		}
-		
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.WriteHeader(http.StatusOK)
-		w.Write(content)
-	}
-}
-
-// serveEmbeddedAssets 提供嵌入式静态资源
-func serveEmbeddedAssets() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		file := r.URL.Query().Get(":file")
-		if file == "" {
-			http.Error(w, "File not specified", http.StatusBadRequest)
-			return
-		}
-		
-		path := fmt.Sprintf("web/dist/assets/%s", file)
-		content, err := webFS.ReadFile(path)
-		if err != nil {
-			http.Error(w, "File not found", http.StatusNotFound)
-			return
-		}
-		
-		contentType := getContentType(file)
-		w.Header().Set("Content-Type", contentType)
-		w.WriteHeader(http.StatusOK)
-		w.Write(content)
-	}
-}
-
-// getContentType 根据文件扩展名获取 Content-Type
-func getContentType(filename string) string {
-	if len(filename) > 3 && filename[len(filename)-3:] == ".js" {
-		return "application/javascript"
-	}
-	if len(filename) > 4 && filename[len(filename)-4:] == ".css" {
-		return "text/css"
-	}
-	if len(filename) > 4 && filename[len(filename)-4:] == ".png" {
-		return "image/png"
-	}
-	if len(filename) > 4 && filename[len(filename)-4:] == ".jpg" {
-		return "image/jpeg"
-	}
-	if len(filename) > 5 && filename[len(filename)-5:] == ".jpeg" {
-		return "image/jpeg"
-	}
-	if len(filename) > 4 && filename[len(filename)-4:] == ".svg" {
-		return "image/svg+xml"
-	}
-	return "application/octet-stream"
 }

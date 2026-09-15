@@ -5,12 +5,36 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"os"
 
 	_ "github.com/lib/pq"
 )
 
 func main() {
-	connStr := "postgresql://iflyelf:1q23l@Yc45j@10.0.51.88:6000/consul_mgr?sslmode=disable"
+	// 从环境变量读取数据库连接信息
+	dbHost := os.Getenv("DB_HOST")
+	if dbHost == "" {
+		dbHost = "localhost"
+	}
+	dbPort := os.Getenv("DB_PORT")
+	if dbPort == "" {
+		dbPort = "5432"
+	}
+	dbUser := os.Getenv("DB_USER")
+	if dbUser == "" {
+		dbUser = "postgres"
+	}
+	dbPassword := os.Getenv("DB_PASSWORD")
+	if dbPassword == "" {
+		log.Fatal("❌ 请设置环境变量 DB_PASSWORD")
+	}
+	dbName := os.Getenv("DB_NAME")
+	if dbName == "" {
+		dbName = "consul_mgr"
+	}
+	
+	connStr := fmt.Sprintf("postgresql://%s:%s@%s:%s/%s?sslmode=disable",
+		dbUser, dbPassword, dbHost, dbPort, dbName)
 	
 	// 连接数据库
 	db, err := sql.Open("postgres", connStr)
