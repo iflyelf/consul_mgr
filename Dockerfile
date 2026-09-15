@@ -1,4 +1,3 @@
-# syntax=docker/dockerfile:1
 #############################
 #     设置公共的变量         #
 #############################
@@ -7,9 +6,7 @@ FROM ubuntu:${BASE_IMAGE_TAG}
 
 # 作者描述信息
 LABEL org.opencontainers.image.authors="iflyelf" \
-      org.opencontainers.image.vendor="iflyelf" \
-      org.opencontainers.image.source="https://github.com/iflyelf/consul_mgr" \
-      org.opencontainers.image.description="Consul 服务管理平台 (Go + Vue 3, 支持多集群管理)"
+      org.opencontainers.image.vendor="iflyelf"
 
 ARG TARGETARCH
 ARG TARGETVARIANT
@@ -34,7 +31,7 @@ ARG DEBIAN_FRONTEND=noninteractive
 ENV DEBIAN_FRONTEND=$DEBIAN_FRONTEND
 
 # GO环境变量
-ARG GO_VERSION=1.26.8
+ARG GO_VERSION=1.27.1
 ENV GO_VERSION=$GO_VERSION
 ARG GOROOT=/opt/go
 ENV GOROOT=$GOROOT
@@ -56,11 +53,11 @@ ARG PKG_DEPS="\
     conntrack \
     ipset \
     ipvsadm \
-    nftables \
     bind9-dnsutils \
     iproute2 \
     net-tools \
     iptables \
+    nftables \
     bridge-utils \
     openvswitch-switch \
     libseccomp2 \
@@ -162,16 +159,23 @@ RUN set -eux && \
    # 解决证书认证失败问题
    touch /etc/apt/apt.conf.d/99verify-peer.conf && echo >>/etc/apt/apt.conf.d/99verify-peer.conf "Acquire { https::Verify-Peer false }" && \
    # 更新系统软件
-   DEBIAN_FRONTEND=noninteractive apt-get update -qqy && apt-get upgrade -qqy && \
+   DEBIAN_FRONTEND=noninteractive apt update -qqy && apt upgrade -qqy && \
    # 安装依赖包
-   DEBIAN_FRONTEND=noninteractive apt-get install -qqy --no-install-recommends $PKG_DEPS --option=Dpkg::Options::=--force-confdef && \
+   DEBIAN_FRONTEND=noninteractive apt install -qqy $PKG_DEPS --option=Dpkg::Options::=--force-confdef && \
    # multilib/i386 交叉编译包仅 amd64 架构提供, 其他架构跳过
    if [ "${TARGETARCH}" = "amd64" ]; then \
-       DEBIAN_FRONTEND=noninteractive apt-get install -qqy --no-install-recommends \
+       DEBIAN_FRONTEND=noninteractive apt install -qqy \
            gcc-multilib g++-multilib libc6-dev-i386 --option=Dpkg::Options::=--force-confdef ; \
    fi && \
-   DEBIAN_FRONTEND=noninteractive apt-get -qqy --no-install-recommends autoremove --purge && \
-   DEBIAN_FRONTEND=noninteractive apt-get -qqy --no-install-recommends autoclean && \
+   # 验证依赖包是否真正安装成功(逐个检查 dpkg 状态, 缺失则构建失败)
+   for pkg in $PKG_DEPS; do \
+       if ! dpkg-query -W -f='${Status}' "$pkg" 2>/dev/null | grep -q "install ok installed"; then \
+           echo "ERROR: 依赖包未成功安装: $pkg" >&2 && exit 1; \
+       fi; \
+   done && \
+   echo "所有依赖包验证通过" && \
+   DEBIAN_FRONTEND=noninteractive apt -qqy autoremove --purge && \
+   DEBIAN_FRONTEND=noninteractive apt -qqy autoclean && \
    rm -rf /var/lib/apt/lists/* && \
    # 更新时区
    ln -sf /usr/share/zoneinfo/${TZ} /etc/localtime && \
@@ -183,6 +187,27 @@ RUN set -eux && \
    # vim 默认配置文件存在时才关闭 mouse(不同版本路径不同, 用 find 定位)
    find /usr/share/vim -name defaults.vim -exec sed -i -e 's/mouse=/mouse-=/g' {} + && \
    locale-gen zh_CN.UTF-8 && localedef -f UTF-8 -i zh_CN zh_CN.UTF-8 && locale-gen
+
+# ***** 安装 Node.js 最新 LTS（每次构建时安装当前最新版本）*****
+# 使用 n 在构建时获取最新 LTS；若需最新 Current 可改为 n latest
+RUN set -eux && \
+curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
+   DEBIAN_FRONTEND=noninteractive apt update -qqy && \
+   DEBIAN_FRONTEND=noninteractive apt install -qqy nodejs && \
+   npm config set registry https://registry.npmmirror.com && \
+   npm install -g n && \
+   n lts && \
+   npm install -g wrangler && \
+   rm -rf /var/lib/apt/lists/* /tmp/*
+
+# ***** 安装 python3 版本 *****
+RUN set -eux && \
+    python3 -m pip config set global.break-system-packages true && \
+    pip3 config set global.index-url http://mirrors.aliyun.com/pypi/simple/ && \
+    pip3 config set install.trusted-host mirrors.aliyun.com && \
+    python3 -m pip install --no-cache-dir --ignore-installed setuptools wheel cython && \
+    python3 -m pip install --no-cache-dir pycryptodome lxml cython beautifulsoup4 requests && \
+    rm -rf /tmp/* /var/lib/apt/lists/*
 
 # ***** 安装golang *****
 RUN set -eux && \
@@ -199,9 +224,17 @@ RUN set -eux && \
          -O /tmp/go-${GO_ARCH}.tar.gz && \
     tar xzf /tmp/go-${GO_ARCH}.tar.gz -C /opt && \
     mkdir -pv ${GOPATH}/bin && \
+    # 仅删除 Go 压缩包, 不清空整个 /tmp (避免误删 DOWNLOAD_SRC=/tmp/src)
     rm -f /tmp/go-${GO_ARCH}.tar.gz && \
     # 软链 go 到 /usr/bin, 后续 RUN 层无需配 PATH
     ln -sf /opt/go/bin/* /usr/bin/ && \
+    # 加载环境变量
+    export GOROOT=/opt/go && \
+    export GOPATH=/opt/golang && \
+    export PATH=$PATH:$GOROOT/bin:$GOPATH/bin && \
+    # 创建目录并清理文件
+    mkdir -pv $GOPATH/bin && rm -rf /tmp/* /var/lib/apt/lists/* && \
+    # 验证版本
     go version
 
 # ***** 编译 consul_mgr *****

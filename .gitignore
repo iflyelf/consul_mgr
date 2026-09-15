@@ -1,6 +1,8 @@
 # Binaries
-consul_mgr
-consul_mgr-*
+# 注意：项目目录本身也叫 consul_mgr，故用前导 / 锚定到根目录，
+# 避免误伤同名目录（也避免 VSCode 等工具把整个项目隐藏）
+/consul_mgr
+/consul_mgr-*
 *.exe
 *.dll
 *.so

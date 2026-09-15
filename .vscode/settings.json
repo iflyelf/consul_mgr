@@ -10,6 +10,7 @@
     "**/dist": true,
     "**/.git": true
   },
+  "explorer.excludeGitIgnore": false,
   "go.lintTool": "golangci-lint",
   "go.lintOnSave": "workspace",
   "editor.formatOnSave": true,
