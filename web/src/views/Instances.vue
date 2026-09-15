@@ -989,7 +989,7 @@ onMounted(() => {
 
 <style scoped>
 .instances-container {
-  padding: 20px;
+  width: 100%;
 }
 
 .card-header {

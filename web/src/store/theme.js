@@ -3,9 +3,9 @@ import { ref } from 'vue'
 
 // 三套主题：warm(暖沙米·默认) / cool(冷蓝) / dark(暗黑)
 export const THEMES = [
-  { value: 'warm', label: '暖沙米', icon: 'Sunny' },
-  { value: 'cool', label: '冷蓝', icon: 'MostlyCloudy' },
-  { value: 'dark', label: '暗黑', icon: 'Moon' }
+  { value: 'warm', label: '暖沙米', emoji: '🌞' },
+  { value: 'cool', label: '冷蓝', emoji: '🌊' },
+  { value: 'dark', label: '暗黑', emoji: '🌙' }
 ]
 
 const VALID = THEMES.map(t => t.value)

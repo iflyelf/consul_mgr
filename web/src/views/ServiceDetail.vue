@@ -763,7 +763,7 @@ onMounted(() => {
 
 <style scoped>
 .service-detail-container {
-  padding: 20px;
+  width: 100%;
 }
 
 .card-header {
