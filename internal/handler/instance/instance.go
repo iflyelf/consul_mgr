@@ -2,6 +2,7 @@
 package instance
 
 import (
+	"io"
 	"net/http"
 	"strconv"
 
@@ -12,6 +13,18 @@ import (
 	"github.com/iflyelf/consul_mgr/internal/middleware"
 	"github.com/iflyelf/consul_mgr/internal/svc"
 )
+
+// instanceIDFromRequest 从路径或查询参数中提取实例 ID
+func instanceIDFromRequest(r *http.Request) (int64, error) {
+	idStr := pathvar.Vars(r)["id"]
+	if idStr == "" {
+		idStr = r.URL.Query().Get("instance_id")
+	}
+	if idStr == "" {
+		idStr = r.URL.Query().Get("id")
+	}
+	return strconv.ParseInt(idStr, 10, 64)
+}
 
 // RegisterInstanceRequest 注册实例请求
 type RegisterInstanceRequest struct {
@@ -136,9 +149,7 @@ func RegisterInstanceHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 // UpdateInstanceHandler 更新实例
 func UpdateInstanceHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		idStr := pathvar.Vars(r)["id"]
-		
-		id, err := strconv.ParseInt(idStr, 10, 64)
+		id, err := instanceIDFromRequest(r)
 		if err != nil {
 			httpx.WriteJson(w, http.StatusBadRequest, map[string]interface{}{
 				"code":    400,
@@ -215,9 +226,7 @@ func UpdateInstanceHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 // DeregisterInstanceHandler 注销实例
 func DeregisterInstanceHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		idStr := pathvar.Vars(r)["id"]
-		
-		id, err := strconv.ParseInt(idStr, 10, 64)
+		id, err := instanceIDFromRequest(r)
 		if err != nil {
 			httpx.WriteJson(w, http.StatusBadRequest, map[string]interface{}{
 				"code":    400,
@@ -246,9 +255,7 @@ func DeregisterInstanceHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 // GetInstanceHandler 获取实例详情
 func GetInstanceHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		idStr := pathvar.Vars(r)["id"]
-		
-		id, err := strconv.ParseInt(idStr, 10, 64)
+		id, err := instanceIDFromRequest(r)
 		if err != nil {
 			httpx.WriteJson(w, http.StatusBadRequest, map[string]interface{}{
 				"code":    400,
@@ -350,6 +357,74 @@ func GetServicesHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 			"code":    200,
 			"message": "success",
 			"data":    services,
+		})
+	}
+}
+
+// ExportInstancesHandler 导出实例
+func ExportInstancesHandler(ctx *svc.ServiceContext) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		groupID, _ := strconv.ParseInt(r.URL.Query().Get("group_id"), 10, 64)
+		serviceName := r.URL.Query().Get("service")
+		format := r.URL.Query().Get("format")
+		if format == "" {
+			format = "json"
+		}
+
+		l := instance.NewExportInstancesLogic(r.Context(), ctx)
+		data, err := l.ExportInstances(groupID, serviceName, format)
+		if err != nil {
+			httpx.WriteJson(w, http.StatusInternalServerError, map[string]interface{}{
+				"code":    500,
+				"message": err.Error(),
+			})
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/octet-stream")
+		w.Header().Set("Content-Disposition", "attachment; filename=instances."+format)
+		w.Write(data)
+	}
+}
+
+// ImportInstancesHandler 导入实例
+func ImportInstancesHandler(ctx *svc.ServiceContext) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		groupID, _ := strconv.ParseInt(r.FormValue("group_id"), 10, 64)
+		format := r.FormValue("format")
+		if format == "" {
+			format = "json"
+		}
+
+		data := []byte(r.FormValue("data"))
+		if len(data) == 0 {
+			file, _, err := r.FormFile("file")
+			if err == nil {
+				defer file.Close()
+				data, _ = io.ReadAll(file)
+			}
+		}
+
+		if len(data) == 0 {
+			httpx.WriteJson(w, http.StatusBadRequest, map[string]interface{}{
+				"code":    400,
+				"message": "导入数据不能为空",
+			})
+			return
+		}
+
+		l := instance.NewImportInstancesLogic(r.Context(), ctx)
+		if err := l.ImportInstances(groupID, format, data); err != nil {
+			httpx.WriteJson(w, http.StatusInternalServerError, map[string]interface{}{
+				"code":    500,
+				"message": err.Error(),
+			})
+			return
+		}
+
+		httpx.WriteJson(w, http.StatusOK, map[string]interface{}{
+			"code":    200,
+			"message": "导入成功",
 		})
 	}
 }

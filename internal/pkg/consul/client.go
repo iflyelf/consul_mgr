@@ -64,6 +64,36 @@ func (c *Client) GetAPIClient() *api.Client {
 	return c.client
 }
 
+// DetectDatacenter 自动检测 Consul 的数据中心
+//
+// 返回:
+//   string - 数据中心名称
+//   string - 节点名称
+//   error - 错误信息
+func (c *Client) DetectDatacenter() (string, string, error) {
+	self, err := c.client.Agent().Self()
+	if err != nil {
+		return "", "", fmt.Errorf("获取 Consul 信息失败: %w", err)
+	}
+
+	datacenter := ""
+	nodeName := ""
+	if cfg := self["Config"]; cfg != nil {
+		if v, ok := cfg["Datacenter"].(string); ok {
+			datacenter = v
+		}
+		if v, ok := cfg["NodeName"].(string); ok {
+			nodeName = v
+		}
+	}
+
+	if datacenter == "" {
+		return "", "", fmt.Errorf("无法检测到数据中心")
+	}
+
+	return datacenter, nodeName, nil
+}
+
 // TestConnection 测试连接
 func (c *Client) TestConnection() error {
 	_, err := c.client.Agent().Self()

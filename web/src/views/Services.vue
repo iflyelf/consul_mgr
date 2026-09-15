@@ -55,9 +55,9 @@
         border
       >
         <el-table-column type="selection" width="55" />
-        <el-table-column prop="name" label="服务名称" min-width="150">
+        <el-table-column prop="service" label="服务名称" min-width="150">
           <template #default="{ row }">
-            <el-link type="primary" @click="handleViewDetail(row)">{{ row.name }}</el-link>
+            <el-link type="primary" @click="handleViewDetail(row)">{{ row.service }}</el-link>
           </template>
         </el-table-column>
         <el-table-column label="Tags" min-width="200">
@@ -71,13 +71,16 @@
         <el-table-column prop="instance_count" label="实例数" width="100" align="center" />
         <el-table-column label="健康状态" width="200" align="center">
           <template #default="{ row }">
-            <div v-if="row.health_summary">
+            <div v-if="row.instance_count > 0">
               <el-progress
-                :percentage="getHealthPercentage(row.health_summary)"
-                :color="getHealthColor(row.health_summary)"
-                :format="() => `${row.health_summary.passing}/${row.health_summary.total}`"
+                :percentage="getHealthPercentage(row)"
+                :color="getHealthColor(row)"
+                :format="() => `${row.healthy_count}/${row.instance_count}`"
               />
             </div>
+            <el-tag v-else-if="row.health_status" :type="row.health_status === 'passing' ? 'success' : 'warning'" size="small">
+              {{ row.health_status }}
+            </el-tag>
             <span v-else class="text-muted">-</span>
           </template>
         </el-table-column>
@@ -127,7 +130,7 @@ const searchForm = reactive({
 const fetchGroups = async () => {
   try {
     const res = await getGroups()
-    groups.value = res.data.list || []
+    groups.value = res.list || []
     // 默认选择第一个服务组
     if (groups.value.length > 0 && !searchForm.group_id) {
       searchForm.group_id = groups.value[0].id
@@ -148,7 +151,7 @@ const fetchServices = async () => {
   loading.value = true
   try {
     const res = await getServices(searchForm)
-    services.value = res.data.list || []
+    services.value = res.list || []
   } catch (error) {
     ElMessage.error('获取服务列表失败')
   } finally {
@@ -183,7 +186,7 @@ const handleViewDetail = (row) => {
     name: 'ServiceDetail',
     query: {
       group_id: searchForm.group_id,
-      service: row.name
+      service: row.service
     }
   })
 }
@@ -193,7 +196,7 @@ const handleDelete = async (row) => {
   try {
     await deleteService({
       group_id: searchForm.group_id,
-      service: row.name
+      service: row.service
     })
     ElMessage.success('删除成功')
     fetchServices()
@@ -221,7 +224,7 @@ const handleBatchDelete = async () => {
     )
     
     batchLoading.value = true
-    const serviceNames = selectedServices.value.map(s => s.name)
+    const serviceNames = selectedServices.value.map(s => s.service)
     await batchDeleteServices({
       group_id: searchForm.group_id,
       services: serviceNames
@@ -240,14 +243,14 @@ const handleBatchDelete = async () => {
 }
 
 // 计算健康度百分比
-const getHealthPercentage = (health) => {
-  if (!health || health.total === 0) return 0
-  return Math.round((health.passing / health.total) * 100)
+const getHealthPercentage = (row) => {
+  if (!row || !row.instance_count || row.instance_count === 0) return 0
+  return Math.round((row.healthy_count / row.instance_count) * 100)
 }
 
 // 获取健康度颜色
-const getHealthColor = (health) => {
-  const percentage = getHealthPercentage(health)
+const getHealthColor = (row) => {
+  const percentage = getHealthPercentage(row)
   if (percentage >= 90) return '#67C23A'
   if (percentage >= 60) return '#E6A23C'
   return '#F56C6C'

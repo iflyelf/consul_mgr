@@ -30,8 +30,8 @@ func ListServicesHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
 		}
 
 		response.Success(w, map[string]interface{}{
-			"services": services,
-			"total":    len(services),
+			"list":  services,
+			"total": len(services),
 		})
 	}
 }

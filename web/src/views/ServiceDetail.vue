@@ -14,13 +14,13 @@
       </template>
 
       <el-descriptions :column="2" border v-if="serviceDetail">
-        <el-descriptions-item label="服务名称">{{ serviceDetail.name }}</el-descriptions-item>
+        <el-descriptions-item label="服务名称">{{ serviceDetail.service_name }}</el-descriptions-item>
         <el-descriptions-item label="实例数量">{{ serviceDetail.instances?.length || 0 }}</el-descriptions-item>
         <el-descriptions-item label="Tags" :span="2">
-          <el-tag v-for="tag in serviceDetail.tags" :key="tag" size="small" style="margin-right: 5px">
+          <el-tag v-for="tag in serviceTags" :key="tag" size="small" style="margin-right: 5px">
             {{ tag }}
           </el-tag>
-          <span v-if="!serviceDetail.tags || serviceDetail.tags.length === 0" class="text-muted">-</span>
+          <span v-if="serviceTags.length === 0" class="text-muted">-</span>
         </el-descriptions-item>
       </el-descriptions>
     </el-card>
@@ -61,8 +61,8 @@
         </el-table-column>
         <el-table-column label="状态" width="100" align="center">
           <template #default="{ row }">
-            <el-tag :type="getStatusType(row.status)">
-              {{ row.status }}
+            <el-tag :type="getStatusType(row.health_status)">
+              {{ row.health_status }}
             </el-tag>
           </template>
         </el-table-column>
@@ -257,6 +257,12 @@ const serviceName = ref(route.query.service)
 
 const serviceDetail = ref(null)
 const instances = computed(() => serviceDetail.value?.instances || [])
+// 汇总所有实例的标签（去重）
+const serviceTags = computed(() => {
+  const set = new Set()
+  instances.value.forEach(i => (i.tags || []).forEach(t => set.add(t)))
+  return Array.from(set)
+})
 
 const dialogVisible = ref(false)
 const dialogTitle = ref('注册实例')
@@ -302,7 +308,7 @@ const fetchServiceDetail = async () => {
       group_id: groupId.value,
       service: serviceName.value
     })
-    serviceDetail.value = res.data
+    serviceDetail.value = res
   } catch (error) {
     ElMessage.error('获取服务详情失败')
   } finally {

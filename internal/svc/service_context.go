@@ -1,6 +1,7 @@
 package svc
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"log"
@@ -22,6 +23,57 @@ type ServiceContext struct {
 	JWTManager     *jwt.JWTManager
 	ConsulManager  *consul.Manager
 	CasdoorClient  *casdoor.Client
+}
+
+// GetConsulClient 获取指定服务组的 Consul 客户端
+//
+// 功能:
+//  1. 从数据库读取服务组配置
+//  2. 自动检测数据中心，若与配置不符则自动更新数据库并重建客户端
+//
+// 参数:
+//   ctx     - 上下文
+//   groupID - 服务组 ID
+//
+// 返回:
+//   *consul.Client - Consul 客户端
+//   error - 错误信息
+func (s *ServiceContext) GetConsulClient(ctx context.Context, groupID int64) (*consul.Client, error) {
+	query := `SELECT consul_address, consul_token, consul_datacenter FROM service_groups WHERE id = $1`
+
+	var group struct {
+		ConsulAddress    string `db:"consul_address"`
+		ConsulToken      string `db:"consul_token"`
+		ConsulDatacenter string `db:"consul_datacenter"`
+	}
+
+	if err := s.DB.QueryRowCtx(ctx, &group, query, groupID); err != nil {
+		return nil, fmt.Errorf("查询服务组失败: %w", err)
+	}
+
+	cfg := &consul.Config{
+		Address:    group.ConsulAddress,
+		Token:      group.ConsulToken,
+		Datacenter: group.ConsulDatacenter,
+	}
+
+	client, err := s.ConsulManager.GetClient(groupID, cfg)
+	if err != nil {
+		return nil, fmt.Errorf("创建 Consul 客户端失败: %w", err)
+	}
+
+	// 自动检测数据中心，若与配置不符则自动更新数据库并重建客户端
+	if dc, _, derr := client.DetectDatacenter(); derr == nil && dc != group.ConsulDatacenter {
+		cfg.Datacenter = dc
+		s.ConsulManager.RemoveClient(groupID)
+		client, err = s.ConsulManager.GetClient(groupID, cfg)
+		if err != nil {
+			return nil, fmt.Errorf("创建 Consul 客户端失败: %w", err)
+		}
+		_, _ = s.DB.ExecCtx(ctx, `UPDATE service_groups SET consul_datacenter = $1 WHERE id = $2`, dc, groupID)
+	}
+
+	return client, nil
 }
 
 // NewServiceContext 创建服务上下文

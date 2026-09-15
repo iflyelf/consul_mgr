@@ -6,40 +6,16 @@ import (
 	"fmt"
 
 	"github.com/hashicorp/consul/api"
-	"github.com/iflyelf/consul_mgr/internal/pkg/consul"
 	"github.com/iflyelf/consul_mgr/internal/svc"
 	"github.com/iflyelf/consul_mgr/internal/types"
 )
 
 // getConsulClient 获取 Consul 客户端的辅助函数
 func getConsulClient(ctx context.Context, svcCtx *svc.ServiceContext, groupID int64) (*api.Client, error) {
-	// 从数据库查询服务组配置
-	query := `SELECT consul_address, consul_token, consul_datacenter FROM service_groups WHERE id = $1 AND deleted_at IS NULL`
-	
-	var group struct {
-		ConsulAddress    string `db:"consul_address"`
-		ConsulToken      string `db:"consul_token"`
-		ConsulDatacenter string `db:"consul_datacenter"`
-	}
-	
-	err := svcCtx.DB.QueryRowCtx(ctx, &group, query, groupID)
+	client, err := svcCtx.GetConsulClient(ctx, groupID)
 	if err != nil {
-		return nil, fmt.Errorf("查询服务组失败: %w", err)
+		return nil, err
 	}
-
-	// 创建 Consul 配置
-	cfg := &consul.Config{
-		Address:    group.ConsulAddress,
-		Token:      group.ConsulToken,
-		Datacenter: group.ConsulDatacenter,
-	}
-
-	// 获取或创建客户端
-	client, err := svcCtx.ConsulManager.GetClient(groupID, cfg)
-	if err != nil {
-		return nil, fmt.Errorf("创建 Consul 客户端失败: %w", err)
-	}
-
 	return client.GetAPIClient(), nil
 }
 

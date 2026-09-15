@@ -259,6 +259,31 @@ func registerHandlers(server *rest.Server, ctx *svc.ServiceContext) {
 		),
 	})
 	
+	// 兼容基于查询参数的更新/删除（前端使用 instance_id 查询参数）
+	server.AddRoute(rest.Route{
+		Method: http.MethodPut,
+		Path:   "/api/instances",
+		Handler: casdoorAuth.Handle(
+			auditMw.Handle(
+				permissionMw.RequireServiceGroupAccess("write")(
+					instance.UpdateInstanceHandler(ctx),
+				),
+			),
+		),
+	})
+	
+	server.AddRoute(rest.Route{
+		Method: http.MethodDelete,
+		Path:   "/api/instances",
+		Handler: casdoorAuth.Handle(
+			auditMw.Handle(
+				permissionMw.RequireServiceGroupAccess("delete")(
+					instance.DeregisterInstanceHandler(ctx),
+				),
+			),
+		),
+	})
+	
 	server.AddRoute(rest.Route{
 		Method: http.MethodDelete,
 		Path:   "/api/instances/:id",
@@ -269,6 +294,18 @@ func registerHandlers(server *rest.Server, ctx *svc.ServiceContext) {
 				),
 			),
 		),
+	})
+	
+	server.AddRoute(rest.Route{
+		Method:  http.MethodGet,
+		Path:    "/api/instances/export",
+		Handler: casdoorAuth.Handle(instance.ExportInstancesHandler(ctx)),
+	})
+	
+	server.AddRoute(rest.Route{
+		Method:  http.MethodPost,
+		Path:    "/api/instances/import",
+		Handler: casdoorAuth.Handle(instance.ImportInstancesHandler(ctx)),
 	})
 	
 	server.AddRoute(rest.Route{

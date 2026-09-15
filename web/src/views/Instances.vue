@@ -83,7 +83,7 @@
         border
       >
         <el-table-column type="selection" width="55" />
-        <el-table-column prop="id" label="实例ID" min-width="200" show-overflow-tooltip />
+        <el-table-column prop="instance_id" label="实例ID" min-width="200" show-overflow-tooltip />
         <el-table-column prop="service_name" label="服务名称" min-width="150" />
         <el-table-column label="地址" min-width="150">
           <template #default="{ row }">
@@ -407,7 +407,7 @@ const uploadRef = ref(null)
 const fetchGroups = async () => {
   try {
     const res = await getGroups()
-    groups.value = res.data.list || []
+    groups.value = res.list || []
     if (groups.value.length > 0 && !searchForm.group_id) {
       searchForm.group_id = groups.value[0].id
       await fetchServices()
@@ -423,7 +423,7 @@ const fetchServices = async () => {
   
   try {
     const res = await getServices({ group_id: searchForm.group_id })
-    services.value = res.data.list || []
+    services.value = res.list || []
   } catch (error) {
     ElMessage.error('获取服务列表失败')
   }
@@ -439,8 +439,8 @@ const fetchInstances = async () => {
   loading.value = true
   try {
     const res = await getInstances(searchForm)
-    instances.value = res.data.list || []
-    total.value = res.data.total || 0
+    instances.value = res.list || []
+    total.value = res.total || 0
   } catch (error) {
     ElMessage.error('获取实例列表失败')
   } finally {

@@ -3,7 +3,7 @@ import request from '@/utils/request'
 // 获取实例列表
 export function getInstances(params) {
   return request({
-    url: '/api/instances',
+    url: '/instances',
     method: 'get',
     params
   })
@@ -12,7 +12,7 @@ export function getInstances(params) {
 // 注册实例
 export function registerInstance(data) {
   return request({
-    url: '/api/instances',
+    url: '/instances',
     method: 'post',
     data
   })
@@ -21,7 +21,7 @@ export function registerInstance(data) {
 // 更新实例
 export function updateInstance(params, data) {
   return request({
-    url: '/api/instances',
+    url: '/instances',
     method: 'put',
     params,
     data
@@ -31,7 +31,7 @@ export function updateInstance(params, data) {
 // 删除实例
 export function deleteInstance(params) {
   return request({
-    url: '/api/instances',
+    url: '/instances',
     method: 'delete',
     params
   })
@@ -40,7 +40,7 @@ export function deleteInstance(params) {
 // 批量删除实例
 export function batchDeleteInstances(data) {
   return request({
-    url: '/api/instances/batch-delete',
+    url: '/instances/batch-delete',
     method: 'post',
     data
   })
@@ -49,7 +49,7 @@ export function batchDeleteInstances(data) {
 // 导出实例
 export function exportInstances(params) {
   return request({
-    url: '/api/instances/export',
+    url: '/instances/export',
     method: 'get',
     params,
     responseType: 'blob'
@@ -59,7 +59,7 @@ export function exportInstances(params) {
 // 导入实例
 export function importInstances(data) {
   return request({
-    url: '/api/instances/import',
+    url: '/instances/import',
     method: 'post',
     data,
     headers: {
