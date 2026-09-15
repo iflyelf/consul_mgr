@@ -372,6 +372,14 @@
             <el-option v-for="tag in commonTags" :key="tag" :label="tag" :value="tag" />
           </el-select>
         </el-form-item>
+        <el-form-item label="Meta">
+          <div v-for="(m, i) in batchRegForm.metaList" :key="i" class="meta-input">
+            <el-input v-model="m.key" placeholder="Key" style="width: 40%" />
+            <el-input v-model="m.value" placeholder="Value" style="width: 40%; margin-left: 8px" />
+            <el-button type="danger" size="small" style="margin-left: 8px" @click="removeBatchMetaItem(i)">删除</el-button>
+          </div>
+          <el-button type="primary" size="small" @click="addBatchMetaItem">添加 Meta</el-button>
+        </el-form-item>
         <el-form-item label="强制覆盖">
           <el-switch v-model="batchRegForm.overwrite" />
           <span class="form-tip" style="margin-left: 8px">开启后覆盖已存在的同名实例</span>
@@ -457,6 +465,7 @@ const batchRegForm = reactive({
   id_prefix: '',
   default_port: null,
   tags: [],
+  metaList: [],
   overwrite: false
 })
 
@@ -893,9 +902,29 @@ const handleBatchRegister = () => {
   batchRegForm.id_prefix = ''
   batchRegForm.default_port = null
   batchRegForm.tags = []
+  batchRegForm.metaList = []
   batchRegForm.overwrite = false
   batchPreview.value = []
   batchRegVisible.value = true
+}
+
+// 批量注册 - 添加 Meta 项
+const addBatchMetaItem = () => {
+  batchRegForm.metaList.push({ key: '', value: '' })
+}
+
+// 批量注册 - 删除 Meta 项
+const removeBatchMetaItem = (index) => {
+  batchRegForm.metaList.splice(index, 1)
+}
+
+// 批量注册 - 收集 Meta
+const buildBatchMeta = () => {
+  const meta = {}
+  batchRegForm.metaList.forEach(item => {
+    if (item.key) meta[item.key] = item.value
+  })
+  return meta
 }
 
 // 预览批量注册
@@ -939,6 +968,7 @@ const handleSubmitBatchRegister = async () => {
       id_prefix: batchRegForm.id_prefix || undefined,
       default_port: batchRegForm.default_port || undefined,
       tags: batchRegForm.tags,
+      meta: buildBatchMeta(),
       overwrite: batchRegForm.overwrite
     })
     ElMessage.success(res?.success != null ? `成功注册 ${res.success} 个（跳过 ${res.skipped || 0}）` : '批量注册成功')
