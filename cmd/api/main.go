@@ -21,12 +21,19 @@ import (
 )
 
 var (
-	configFile = flag.String("c", "etc/config.yaml", "配置文件路径")
-	version    = "1.0.0"
+	configFile  = flag.String("c", "etc/config.yaml", "配置文件路径")
+	showVersion = flag.Bool("version", false, "显示版本号并退出")
+	version     = "1.0.0"
 )
 
 func main() {
 	flag.Parse()
+
+	// 显示版本号
+	if *showVersion {
+		fmt.Printf("consul_mgr version %s\n", version)
+		return
+	}
 
 	// 加载配置
 	var c config.Config
