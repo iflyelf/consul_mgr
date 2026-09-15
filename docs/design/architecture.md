@@ -61,7 +61,11 @@ Consul Manager 是一个 Consul 服务与实例管理平台，采用 **单二进
 ### 3.2 多 Consul 集群
 - 每个「服务组」对应一套 Consul 连接配置（地址 / Token / 数据中心）。
 - `internal/pkg/consul/manager.go` 按服务组 ID 缓存并复用客户端。
-- **数据中心自动探测**：创建/修改服务组时调用 Consul Agent 自动获取 DC，无需手填。
+- **数据中心自动探测**：仅在**创建/修改服务组**时调用 Consul Agent 探测 DC 并落库，
+  也可通过 `POST /api/groups/detect-datacenter` 手动触发。
+  > ⚠️ 查询路径（`GetConsulClient`）**不再探测数据中心**：`Agent().Self()` 属于 Agent API，
+  > 在只读网关/负载均衡后可能不可达并卡满超时；且每次列表都多一次往返会导致查询极慢
+  > （实测单请求被拖到 10s，移除后降至 0.05s）。
 
 ### 3.3 集群去重
 - Consul 的 `Agent.ServiceDeregister` 只能注销本节点注册的服务。

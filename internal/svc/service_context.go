@@ -96,20 +96,17 @@ func (s *ServiceContext) GetConsulClient(ctx context.Context, groupID int64) (*c
 		Datacenter: group.ConsulDatacenter,
 	}
 
+	// 直接使用数据库中已保存的数据中心。
+	//
+	// 说明:
+	//   数据中心在「创建/更新服务组」时由 GroupLogic.DetectDatacenter 探测并落库，
+	//   也可通过 POST /api/groups/detect-datacenter 手动触发。
+	//   此处绝不能再探测：Agent().Self() 属于 Agent API，在只读网关/负载均衡后
+	//   可能不可达并卡满超时，且每次列表请求都多一次 Consul 往返，
+	//   会导致查询极慢（实测单请求被拖到 10s）。
 	client, err := s.ConsulManager.GetClient(groupID, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("创建 Consul 客户端失败: %w", err)
-	}
-
-	// 自动检测数据中心，若与配置不符则自动更新数据库并重建客户端
-	if dc, _, derr := client.DetectDatacenter(); derr == nil && dc != group.ConsulDatacenter {
-		cfg.Datacenter = dc
-		s.ConsulManager.RemoveClient(groupID)
-		client, err = s.ConsulManager.GetClient(groupID, cfg)
-		if err != nil {
-			return nil, fmt.Errorf("创建 Consul 客户端失败: %w", err)
-		}
-		_, _ = s.DB.ExecCtx(ctx, `UPDATE service_groups SET consul_datacenter = $1 WHERE id = $2`, dc, groupID)
 	}
 
 	return client, nil
