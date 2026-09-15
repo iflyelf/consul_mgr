@@ -92,10 +92,28 @@
   --el-text-color-primary: var(--text-color);
   --el-text-color-regular: var(--text-color);
   --el-text-color-secondary: var(--text-secondary);
+  --el-text-color-placeholder: var(--text-secondary);
   --el-border-color: var(--border-color);
   --el-border-color-light: var(--border-color);
   --el-border-color-lighter: var(--border-color);
+  --el-border-color-extra-light: color-mix(in srgb, var(--border-color) 60%, var(--card-bg));
+  --el-border-color-dark: color-mix(in srgb, var(--border-color) 80%, var(--text-color));
+  --el-border-color-darker: color-mix(in srgb, var(--border-color) 60%, var(--text-color));
+
+  /* 填充色：全部由主题色派生，避免 Element Plus 中性灰破坏暖/冷配色 */
   --el-fill-color-blank: var(--card-bg);
+  --el-fill-color: color-mix(in srgb, var(--primary-color) 10%, var(--card-bg));
+  --el-fill-color-light: color-mix(in srgb, var(--primary-color) 6%, var(--card-bg));
+  --el-fill-color-lighter: color-mix(in srgb, var(--primary-color) 3.5%, var(--card-bg));
+  --el-fill-color-extra-light: color-mix(in srgb, var(--primary-color) 1.5%, var(--card-bg));
+  --el-fill-color-dark: color-mix(in srgb, var(--primary-color) 14%, var(--card-bg));
+  --el-fill-color-darker: color-mix(in srgb, var(--primary-color) 18%, var(--card-bg));
+
+  --el-mask-color: color-mix(in srgb, var(--text-color) 8%, transparent);
+  --el-mask-color-extra-light: color-mix(in srgb, var(--text-color) 3%, transparent);
+  --el-disabled-bg-color: color-mix(in srgb, var(--primary-color) 6%, var(--card-bg));
+  --el-disabled-text-color: color-mix(in srgb, var(--text-color) 45%, var(--card-bg));
+  --el-disabled-border-color: var(--border-color);
 
   /* Mac 圆角 */
   --el-border-radius-base: var(--radius-sm);
@@ -188,6 +206,33 @@
 .el-table {
   border-radius: var(--radius);
   overflow: hidden;
+  /* 表体/表头/斑马纹/悬停 全部使用主题色，避免 Element Plus 中性灰 */
+  --el-table-bg-color: var(--card-bg);
+  --el-table-tr-bg-color: var(--card-bg);
+  --el-table-header-bg-color: var(--panel-bg);
+  --el-table-header-text-color: var(--text-color);
+  --el-table-text-color: var(--text-color);
+  --el-table-border-color: var(--border-color);
+  --el-table-row-hover-bg-color: color-mix(in srgb, var(--primary-color) 8%, var(--card-bg));
+  --el-table-current-row-bg-color: color-mix(in srgb, var(--primary-color) 10%, var(--card-bg));
+  --el-table-fixed-box-shadow: none;
+}
+
+/* 斑马纹与空状态：用主题填充色，避免 #fafafa 中性灰 */
+.el-table--striped .el-table__body tr.el-table__row--striped td.el-table__cell {
+  background: color-mix(in srgb, var(--primary-color) 3.5%, var(--card-bg));
+}
+
+.el-table__empty-block {
+  background: var(--card-bg);
+}
+
+.el-table__empty-text {
+  color: var(--text-secondary);
+}
+
+.el-table__body tr:hover > td.el-table__cell {
+  background: color-mix(in srgb, var(--primary-color) 8%, var(--card-bg)) !important;
 }
 
 .el-table__header-wrapper th.el-table__cell {
@@ -269,20 +314,6 @@
 /* ---------------- 暗黑主题补充适配 ---------------- */
 [data-theme="dark"] {
   --el-bg-color-page: #171a1f;
-  --el-fill-color-light: #2c333d;
-  --el-fill-color-lighter: #313842;
-  --el-fill-color-dark: #1f252d;
-  --el-mask-color: rgba(0, 0, 0, 0.6);
-
-  .el-table {
-    --el-table-bg-color: var(--card-bg);
-    --el-table-tr-bg-color: var(--card-bg);
-    --el-table-header-bg-color: var(--panel-bg);
-    --el-table-border-color: var(--border-color);
-    --el-table-text-color: var(--text-color);
-    --el-table-header-text-color: var(--text-color);
-    --el-table-row-hover-bg-color: #2f3742;
-  }
 
   .el-input__wrapper,
   .el-textarea__inner {
