@@ -14,20 +14,32 @@ import (
 
 // CreateGroupRequest 创建服务组请求
 type CreateGroupRequest struct {
-	Name          string `json:"name" validate:"required"`
-	ConsulAddress string `json:"consul_address" validate:"required"`
-	ConsulToken   string `json:"consul_token,omitempty"`
-	Datacenter    string `json:"datacenter,default=dc1"`
-	Description   string `json:"description"`
+	Name             string `json:"name" validate:"required"`
+	Code             string `json:"code,omitempty"`
+	ConsulAddress    string `json:"consul_address" validate:"required"`
+	ConsulToken      string `json:"consul_token,omitempty"`
+	Datacenter       string `json:"datacenter,omitempty"`
+	ConsulDatacenter string `json:"consul_datacenter,omitempty"`
+	Description      string `json:"description"`
 }
 
 // UpdateGroupRequest 更新服务组请求
 type UpdateGroupRequest struct {
-	Name          string `json:"name,omitempty"`
-	ConsulAddress string `json:"consul_address,omitempty"`
-	ConsulToken   string `json:"consul_token,omitempty"`
-	Datacenter    string `json:"datacenter,omitempty"`
-	Description   string `json:"description,omitempty"`
+	Name             string `json:"name,omitempty"`
+	ConsulAddress    string `json:"consul_address,omitempty"`
+	ConsulToken      string `json:"consul_token,omitempty"`
+	Datacenter       string `json:"datacenter,omitempty"`
+	ConsulDatacenter string `json:"consul_datacenter,omitempty"`
+	Description      string `json:"description,omitempty"`
+	Status           *int   `json:"status,omitempty"`
+}
+
+// resolveDatacenter 兼容 datacenter / consul_datacenter 两种字段名
+func resolveDatacenter(dc, consulDC string) string {
+	if consulDC != "" {
+		return consulDC
+	}
+	return dc
 }
 
 // ListGroupsHandler 查询服务组列表
@@ -85,9 +97,10 @@ func CreateGroupHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 		logic := group.NewGroupLogic(r.Context(), ctx.DB)
 		result, err := logic.CreateGroup(
 			req.Name,
+			req.Code,
 			req.ConsulAddress,
 			req.ConsulToken,
-			req.Datacenter,
+			resolveDatacenter(req.Datacenter, req.ConsulDatacenter),
 			req.Description,
 		)
 		
@@ -156,8 +169,9 @@ func UpdateGroupHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 		if req.ConsulAddress == "" {
 			req.ConsulAddress = original.ConsulAddress
 		}
-		if req.Datacenter == "" {
-			req.Datacenter = original.Datacenter
+		reqDatacenter := resolveDatacenter(req.Datacenter, req.ConsulDatacenter)
+		if reqDatacenter == "" {
+			reqDatacenter = original.ConsulDatacenter
 		}
 		if req.Description == "" {
 			req.Description = original.Description
@@ -168,7 +182,7 @@ func UpdateGroupHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 			req.Name,
 			req.ConsulAddress,
 			req.ConsulToken,
-			req.Datacenter,
+			reqDatacenter,
 			req.Description,
 		)
 		
@@ -258,6 +272,39 @@ func GetGroupHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 				"group": result,
 				"stats": stats,
 			},
+		})
+	}
+}
+
+// TestConnectionHandler 测试 Consul 连接
+func TestConnectionHandler(ctx *svc.ServiceContext) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		idStr := r.URL.Query().Get(":id")
+		if idStr == "" {
+			idStr = r.URL.Query().Get("id")
+		}
+
+		id, err := strconv.ParseInt(idStr, 10, 64)
+		if err != nil {
+			httpx.WriteJson(w, http.StatusBadRequest, map[string]interface{}{
+				"code":    400,
+				"message": "无效的 ID",
+			})
+			return
+		}
+
+		logic := group.NewGroupLogic(r.Context(), ctx.DB)
+		if err := logic.TestConnection(id, ctx.ConsulManager); err != nil {
+			httpx.WriteJson(w, http.StatusInternalServerError, map[string]interface{}{
+				"code":    500,
+				"message": err.Error(),
+			})
+			return
+		}
+
+		httpx.WriteJson(w, http.StatusOK, map[string]interface{}{
+			"code":    200,
+			"message": "连接测试成功",
 		})
 	}
 }

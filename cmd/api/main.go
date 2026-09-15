@@ -15,6 +15,7 @@ import (
 	"github.com/iflyelf/consul_mgr/internal/handler/group"
 	"github.com/iflyelf/consul_mgr/internal/handler/instance"
 	permissionHandler "github.com/iflyelf/consul_mgr/internal/handler/permission"
+	serviceHandler "github.com/iflyelf/consul_mgr/internal/handler/service"
 	"github.com/iflyelf/consul_mgr/internal/middleware"
 	"github.com/iflyelf/consul_mgr/internal/svc"
 )
@@ -169,6 +170,46 @@ func registerHandlers(server *rest.Server, ctx *svc.ServiceContext) {
 					group.DeleteGroupHandler(ctx),
 				),
 			),
+		),
+	})
+	
+	server.AddRoute(rest.Route{
+		Method: http.MethodPost,
+		Path:   "/api/groups/:id/test",
+		Handler: casdoorAuth.Handle(
+			group.TestConnectionHandler(ctx),
+		),
+	})
+	
+	// ============================================================
+	// 服务管理（需要权限：consul_service）
+	// ============================================================
+	
+	server.AddRoute(rest.Route{
+		Method:  http.MethodGet,
+		Path:    "/api/services",
+		Handler: casdoorAuth.Handle(serviceHandler.ListServicesHandler(ctx)),
+	})
+	
+	server.AddRoute(rest.Route{
+		Method:  http.MethodGet,
+		Path:    "/api/services/detail",
+		Handler: casdoorAuth.Handle(serviceHandler.GetServiceDetailHandler(ctx)),
+	})
+	
+	server.AddRoute(rest.Route{
+		Method: http.MethodDelete,
+		Path:   "/api/services",
+		Handler: casdoorAuth.Handle(
+			auditMw.Handle(serviceHandler.DeleteServiceHandler(ctx)),
+		),
+	})
+	
+	server.AddRoute(rest.Route{
+		Method: http.MethodPost,
+		Path:   "/api/services/batch-delete",
+		Handler: casdoorAuth.Handle(
+			auditMw.Handle(serviceHandler.BatchDeleteServicesHandler(ctx)),
 		),
 	})
 	
