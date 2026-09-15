@@ -6,19 +6,25 @@ import (
 	"fmt"
 
 	"github.com/hashicorp/consul/api"
+	"github.com/iflyelf/consul_mgr/internal/pkg/consul"
 	"github.com/iflyelf/consul_mgr/internal/svc"
 	"github.com/iflyelf/consul_mgr/internal/types"
 )
 
 // getConsulClient 获取 Consul 客户端的辅助函数
 func getConsulClient(ctx context.Context, svcCtx *svc.ServiceContext, groupID int64) (*api.Client, error) {
-	client, err := svcCtx.GetConsulClient(ctx, groupID)
-	if err != nil {
-		return nil, err
-	}
-	return client.GetAPIClient(), nil
+	client, _, err := getConsulClientWithAddr(ctx, svcCtx, groupID)
+	return client, err
 }
 
+// getConsulClientWithAddr 获取 Consul 客户端及其地址
+func getConsulClientWithAddr(ctx context.Context, svcCtx *svc.ServiceContext, groupID int64) (*api.Client, string, error) {
+	client, err := svcCtx.GetConsulClient(ctx, groupID)
+	if err != nil {
+		return nil, "", err
+	}
+	return client.GetAPIClient(), client.Address(), nil
+}
 // ListServicesLogic 服务列表逻辑
 type ListServicesLogic struct {
 	ctx    context.Context
@@ -33,7 +39,7 @@ func NewListServicesLogic(ctx context.Context, svcCtx *svc.ServiceContext) *List
 }
 
 func (l *ListServicesLogic) ListServices(groupID int64, keyword string) ([]types.ConsulServiceInfo, error) {
-	client, err := getConsulClient(l.ctx, l.svcCtx, groupID)
+	client, addr, err := getConsulClientWithAddr(l.ctx, l.svcCtx, groupID)
 	if err != nil {
 		return nil, err
 	}
@@ -41,7 +47,7 @@ func (l *ListServicesLogic) ListServices(groupID int64, keyword string) ([]types
 	// 查询所有服务
 	services, _, err := client.Catalog().Services(nil)
 	if err != nil {
-		return nil, fmt.Errorf("查询服务列表失败: %w", err)
+		return nil, fmt.Errorf("查询服务列表失败: %w", consul.FriendlyError(addr, err))
 	}
 
 	var result []types.ConsulServiceInfo

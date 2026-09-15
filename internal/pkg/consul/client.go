@@ -3,6 +3,7 @@ package consul
 import (
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/hashicorp/consul/api"
@@ -62,6 +63,11 @@ func NewClient(cfg *Config) (*Client, error) {
 // GetAPIClient 获取原生 API Client
 func (c *Client) GetAPIClient() *api.Client {
 	return c.client
+}
+
+// Address 返回客户端配置的 Consul 地址
+func (c *Client) Address() string {
+	return c.address
 }
 
 // DetectDatacenter 自动检测 Consul 的数据中心
@@ -212,4 +218,39 @@ func (c *Client) UpdateServiceMeta(serviceID string, meta map[string]string) err
 	}
 	
 	return c.RegisterService(registration)
+}
+
+// FriendlyError 将底层网络/Consul 错误转换为面向用户的友好提示
+//
+// 参数:
+//   address - Consul 地址
+//   err     - 原始错误
+//
+// 返回:
+//   error - 友好错误（含原始信息）
+func FriendlyError(address string, err error) error {
+	if err == nil {
+		return nil
+	}
+	msg := err.Error()
+
+	switch {
+	case strings.Contains(msg, "context deadline exceeded"),
+		strings.Contains(msg, "Client.Timeout exceeded"),
+		strings.Contains(msg, "i/o timeout"):
+		return fmt.Errorf("连接 Consul 超时（地址: %s），请检查该地址是否可达、网络是否通、Token 是否正确", address)
+	case strings.Contains(msg, "connection refused"):
+		return fmt.Errorf("无法连接 Consul（地址: %s），连接被拒绝，请确认 Consul 是否已启动、端口是否正确", address)
+	case strings.Contains(msg, "no such host"):
+		return fmt.Errorf("Consul 域名无法解析（地址: %s），请检查地址是否正确", address)
+	case strings.Contains(msg, "no route to host"):
+		return fmt.Errorf("无法路由到 Consul（地址: %s），请检查网络连通性", address)
+	case strings.Contains(msg, "permission denied"),
+		strings.Contains(msg, "403"):
+		return fmt.Errorf("访问 Consul 被拒绝（地址: %s），Token 权限不足或无效", address)
+	case strings.Contains(msg, "Unknown service ID"):
+		return fmt.Errorf("Consul 中不存在该实例（地址: %s），可能已被注销或不属于该 Consul 节点", address)
+	}
+
+	return fmt.Errorf("%s（地址: %s）", msg, address)
 }

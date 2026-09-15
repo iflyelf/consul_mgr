@@ -1,12 +1,17 @@
 package instance
 
 import (
+	"bytes"
 	"context"
+	"encoding/csv"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
+	"strings"
 
 	"github.com/hashicorp/consul/api"
+	"github.com/iflyelf/consul_mgr/internal/pkg/consul"
 	"github.com/iflyelf/consul_mgr/internal/svc"
 	"github.com/iflyelf/consul_mgr/internal/types"
 	"gopkg.in/yaml.v3"
@@ -14,11 +19,17 @@ import (
 
 // getConsulClient 获取 Consul 客户端的辅助函数
 func getConsulClient(ctx context.Context, svcCtx *svc.ServiceContext, groupID int64) (*api.Client, error) {
+	client, _, err := getConsulClientWithAddr(ctx, svcCtx, groupID)
+	return client, err
+}
+
+// getConsulClientWithAddr 获取 Consul 客户端及其地址
+func getConsulClientWithAddr(ctx context.Context, svcCtx *svc.ServiceContext, groupID int64) (*api.Client, string, error) {
 	client, err := svcCtx.GetConsulClient(ctx, groupID)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
-	return client.GetAPIClient(), nil
+	return client.GetAPIClient(), client.Address(), nil
 }
 type ListInstancesLogic struct {
 	ctx    context.Context
@@ -33,7 +44,7 @@ func NewListInstancesLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Lis
 }
 
 func (l *ListInstancesLogic) ListInstances(groupID int64, serviceName, status string) ([]types.ConsulInstanceInfo, error) {
-	client, err := getConsulClient(l.ctx, l.svcCtx, groupID)
+	client, addr, err := getConsulClientWithAddr(l.ctx, l.svcCtx, groupID)
 	if err != nil {
 		return nil, err
 	}
@@ -43,7 +54,7 @@ func (l *ListInstancesLogic) ListInstances(groupID int64, serviceName, status st
 	if serviceName == "" {
 		catalogServices, _, cerr := client.Catalog().Services(nil)
 		if cerr != nil {
-			return nil, fmt.Errorf("查询服务列表失败: %w", cerr)
+			return nil, fmt.Errorf("查询服务列表失败: %w", consul.FriendlyError(addr, cerr))
 		}
 		serviceNames = make([]string, 0, len(catalogServices))
 		for name := range catalogServices {
@@ -55,7 +66,7 @@ func (l *ListInstancesLogic) ListInstances(groupID int64, serviceName, status st
 	for _, name := range serviceNames {
 		entries, _, herr := client.Health().Service(name, "", false, nil)
 		if herr != nil {
-			return nil, fmt.Errorf("查询实例失败: %w", herr)
+			return nil, fmt.Errorf("查询实例失败: %w", consul.FriendlyError(addr, herr))
 		}
 		for _, entry := range entries {
 			service := entry.Service
@@ -163,39 +174,8 @@ func (l *RegisterInstanceLogic) RegisterInstance(groupID int64, req *types.Regis
 		return err
 	}
 
-	// 构建服务注册信息
-	registration := &api.AgentServiceRegistration{
-		ID:      req.ID,
-		Name:    req.Service,
-		Tags:    req.Tags,
-		Meta:    req.Meta,
-		Address: req.Address,
-		Port:    req.Port,
-	}
+	registration := buildRegistration(req)
 
-	// 添加健康检查
-	if req.Check != nil {
-		check := &api.AgentServiceCheck{
-			Interval: req.Check.Interval,
-			Timeout:  req.Check.Timeout,
-		}
-		
-		switch req.Check.Type {
-		case "http":
-			check.HTTP = req.Check.HTTP
-		case "tcp":
-			check.TCP = req.Check.TCP
-		case "ttl":
-			check.TTL = req.Check.TTL
-		case "grpc":
-			check.GRPC = req.Check.GRPC
-			check.GRPCUseTLS = req.Check.GRPCUseTLS
-		}
-		
-		registration.Check = check
-	}
-
-	// 注册服务
 	if err := client.Agent().ServiceRegister(registration); err != nil {
 		return fmt.Errorf("注册实例失败: %w", err)
 	}
@@ -222,10 +202,13 @@ func (l *UpdateInstanceLogic) UpdateInstance(groupID int64, instanceID string, r
 		return err
 	}
 
-	// 先获取现有实例信息
+	// 先获取现有实例信息（instanceID 必须是服务 ID，不能是服务名）
 	service, _, err := client.Agent().Service(instanceID, nil)
 	if err != nil {
 		return fmt.Errorf("获取实例失败: %w", err)
+	}
+	if service == nil {
+		return fmt.Errorf("实例不存在: %s", instanceID)
 	}
 
 	// 更新字段
@@ -242,7 +225,6 @@ func (l *UpdateInstanceLogic) UpdateInstance(groupID int64, instanceID string, r
 		service.Port = req.Port
 	}
 
-	// 重新注册（Consul 的更新方式）
 	registration := &api.AgentServiceRegistration{
 		ID:      service.ID,
 		Name:    service.Service,
@@ -252,10 +234,60 @@ func (l *UpdateInstanceLogic) UpdateInstance(groupID int64, instanceID string, r
 		Port:    service.Port,
 	}
 
+	// 健康检查：请求指定则替换；否则保留该实例已有的自定义检查
+	if req.Check != nil && req.Check.Type != "" {
+		reg := buildRegistration(&types.RegisterInstanceRequest{
+			ID:      service.ID,
+			Service: service.Service,
+			Address: service.Address,
+			Port:    service.Port,
+			Check:   req.Check,
+		})
+		registration.Check = reg.Check
+	} else {
+		if existing := findCustomCheck(client, service.ID); existing != nil {
+			registration.Check = existing
+		}
+	}
+
 	if err := client.Agent().ServiceRegister(registration); err != nil {
 		return fmt.Errorf("更新实例失败: %w", err)
 	}
 
+	return nil
+}
+
+// findCustomCheck 查找实例已有的自定义健康检查配置
+func findCustomCheck(client *api.Client, serviceID string) *api.AgentServiceCheck {
+	checks, err := client.Agent().Checks()
+	if err != nil {
+		return nil
+	}
+	for _, c := range checks {
+		if c.ServiceID != serviceID {
+			continue
+		}
+		if isBuiltinCheck(c.CheckID, c.Name) {
+			continue
+		}
+		check := &api.AgentServiceCheck{
+			CheckID: c.CheckID,
+			Name:    c.Name,
+			Notes:   c.Notes,
+		}
+		def := c.Definition
+		if def.Interval != 0 {
+			check.Interval = (&def.Interval).String()
+		}
+		if def.Timeout != 0 {
+			check.Timeout = (&def.Timeout).String()
+		}
+		check.HTTP = def.HTTP
+		check.TCP = def.TCP
+		check.GRPC = def.GRPC
+		check.GRPCUseTLS = def.GRPCUseTLS
+		return check
+	}
 	return nil
 }
 
@@ -273,13 +305,13 @@ func NewDeleteInstanceLogic(ctx context.Context, svcCtx *svc.ServiceContext) *De
 }
 
 func (l *DeleteInstanceLogic) DeleteInstance(groupID int64, instanceID string) error {
-	client, err := getConsulClient(l.ctx, l.svcCtx, groupID)
+	client, addr, err := getConsulClientWithAddr(l.ctx, l.svcCtx, groupID)
 	if err != nil {
 		return err
 	}
 
 	if err := client.Agent().ServiceDeregister(instanceID); err != nil {
-		return fmt.Errorf("删除实例失败: %w", err)
+		return fmt.Errorf("删除实例失败: %w", consul.FriendlyError(addr, err))
 	}
 
 	return nil
@@ -298,24 +330,38 @@ func NewBatchDeleteInstancesLogic(ctx context.Context, svcCtx *svc.ServiceContex
 	}
 }
 
-func (l *BatchDeleteInstancesLogic) BatchDeleteInstances(groupID int64, instanceIDs []string) error {
-	client, err := getConsulClient(l.ctx, l.svcCtx, groupID)
+// BatchDeleteInstances 批量删除实例
+//
+// 返回:
+//   int - 成功数量
+//   []string - 失败的实例ID
+//   error - 致命错误
+func (l *BatchDeleteInstancesLogic) BatchDeleteInstances(groupID int64, instanceIDs []string) (int, []string, error) {
+	client, addr, err := getConsulClientWithAddr(l.ctx, l.svcCtx, groupID)
 	if err != nil {
-		return err
+		return 0, nil, err
 	}
 
-	var errs []string
+	if len(instanceIDs) == 0 {
+		return 0, nil, errors.New("未选择任何实例")
+	}
+
+	success := 0
+	var failed []string
 	for _, instanceID := range instanceIDs {
 		if err := client.Agent().ServiceDeregister(instanceID); err != nil {
-			errs = append(errs, fmt.Sprintf("%s: %v", instanceID, err))
+			failed = append(failed, instanceID)
+			continue
 		}
+		success++
 	}
 
-	if len(errs) > 0 {
-		return errors.New("批量删除部分失败: " + fmt.Sprint(errs))
+	if len(failed) > 0 {
+		return success, failed, fmt.Errorf("部分删除失败（成功 %d，失败 %d）: %v（地址: %s）",
+			success, len(failed), failed, addr)
 	}
 
-	return nil
+	return success, nil, nil
 }
 
 // ExportInstancesLogic 导出实例逻辑
@@ -395,55 +441,129 @@ func NewImportInstancesLogic(ctx context.Context, svcCtx *svc.ServiceContext) *I
 	}
 }
 
-func (l *ImportInstancesLogic) ImportInstances(groupID int64, format string, data []byte) error {
+// buildRegistration 由请求构建 Consul 服务注册对象
+//
+// 说明：ID 为空时使用服务名作为 ID（与 Consul 默认行为一致）。
+func buildRegistration(instance *types.RegisterInstanceRequest) *api.AgentServiceRegistration {
+	id := instance.ID
+	if id == "" {
+		id = instance.Service
+	}
+
+	registration := &api.AgentServiceRegistration{
+		ID:      id,
+		Name:    instance.Service,
+		Tags:    instance.Tags,
+		Meta:    instance.Meta,
+		Address: instance.Address,
+		Port:    instance.Port,
+	}
+
+	// 健康检查
+	if instance.Check != nil && instance.Check.Type != "" {
+		check := &api.AgentServiceCheck{}
+		switch instance.Check.Type {
+		case "http":
+			check.HTTP = instance.Check.HTTP
+		case "tcp":
+			check.TCP = instance.Check.TCP
+		case "ttl":
+			check.TTL = instance.Check.TTL
+		case "grpc":
+			check.GRPC = instance.Check.GRPC
+			check.GRPCUseTLS = instance.Check.GRPCUseTLS
+		case "script":
+			check.Args = []string{instance.Check.Script}
+		}
+		// TTL 检查无需 interval/timeout；其余检查 Consul 要求 interval
+		if instance.Check.Type != "ttl" {
+			interval := instance.Check.Interval
+			if interval == "" {
+				interval = "10s"
+			}
+			check.Interval = interval
+			timeout := instance.Check.Timeout
+			if timeout == "" {
+				timeout = "3s"
+			}
+			check.Timeout = timeout
+		}
+		registration.Check = check
+	}
+
+	return registration
+}
+
+// ImportInstances 批量导入实例
+//
+// 返回:
+//   int - 成功数量
+//   int - 失败数量
+//   error - 致命错误（解析失败等）
+func (l *ImportInstancesLogic) ImportInstances(groupID int64, format string, data []byte) (int, int, error) {
 	client, err := getConsulClient(l.ctx, l.svcCtx, groupID)
 	if err != nil {
-		return err
+		return 0, 0, err
 	}
 
 	var instances []types.RegisterInstanceRequest
 
 	switch format {
 	case "json":
+		// 兼容两种格式：[{...}] 或 {"instances":[{...}]}
 		if err := json.Unmarshal(data, &instances); err != nil {
-			return fmt.Errorf("解析 JSON 失败: %w", err)
+			var wrapper types.InstanceImportData
+			if err2 := json.Unmarshal(data, &wrapper); err2 != nil || len(wrapper.Instances) == 0 {
+				return 0, 0, fmt.Errorf("解析 JSON 失败: %w", err)
+			}
+			instances = wrapper.Instances
 		}
 	case "yaml":
 		if err := yaml.Unmarshal(data, &instances); err != nil {
-			return fmt.Errorf("解析 YAML 失败: %w", err)
+			return 0, 0, fmt.Errorf("解析 YAML 失败: %w", err)
 		}
 	case "csv":
-		var err error
 		instances, err = importFromCSV(data)
 		if err != nil {
-			return fmt.Errorf("解析 CSV 失败: %w", err)
+			return 0, 0, err
 		}
 	default:
-		return errors.New("不支持的格式")
+		return 0, 0, errors.New("不支持的格式")
+	}
+
+	if len(instances) == 0 {
+		return 0, 0, errors.New("没有可导入的实例")
 	}
 
 	// 批量注册
+	success, failed := 0, 0
 	var errs []string
-	for _, instance := range instances {
-		registration := &api.AgentServiceRegistration{
-			ID:      instance.ID,
-			Name:    instance.Service,
-			Tags:    instance.Tags,
-			Meta:    instance.Meta,
-			Address: instance.Address,
-			Port:    instance.Port,
+	seen := map[string]bool{}
+	for i := range instances {
+		ins := &instances[i]
+		registration := buildRegistration(ins)
+
+		// 同一批次内重复 ID 检测
+		if seen[registration.ID] {
+			failed++
+			errs = append(errs, fmt.Sprintf("%s: 批次内重复", registration.ID))
+			continue
 		}
+		seen[registration.ID] = true
 
 		if err := client.Agent().ServiceRegister(registration); err != nil {
-			errs = append(errs, fmt.Sprintf("%s: %v", instance.ID, err))
+			failed++
+			errs = append(errs, fmt.Sprintf("%s: %v", registration.ID, err))
+			continue
 		}
+		success++
 	}
 
-	if len(errs) > 0 {
-		return errors.New("批量导入部分失败: " + fmt.Sprint(errs))
+	if failed > 0 {
+		return success, failed, fmt.Errorf("部分导入失败(成功 %d, 失败 %d): %s", success, failed, strings.Join(errs, "; "))
 	}
 
-	return nil
+	return success, failed, nil
 }
 
 // 辅助函数
@@ -463,23 +583,226 @@ func aggregateStatus(checks []*api.HealthCheck) string {
 func convertChecks(checks []*api.HealthCheck) []map[string]interface{} {
 	var result []map[string]interface{}
 	for _, check := range checks {
-		result = append(result, map[string]interface{}{
+		entry := map[string]interface{}{
 			"check_id": check.CheckID,
 			"name":     check.Name,
 			"status":   check.Status,
 			"notes":    check.Notes,
 			"output":   check.Output,
-		})
+		}
+		// 内置检查（serfHealth 等）标记，便于前端区分
+		entry["service_id"] = check.ServiceID
+		entry["builtin"] = isBuiltinCheck(check.CheckID, check.Name)
+
+		// 附带检查定义（HTTP/TCP/TTL/GRPC/间隔/超时等）
+		def := check.Definition
+		if check.Type != "" {
+			entry["type"] = check.Type
+		}
+		if def.HTTP != "" {
+			entry["http"] = def.HTTP
+		}
+		if def.TCP != "" {
+			entry["tcp"] = def.TCP
+		}
+		if def.GRPC != "" {
+			entry["grpc"] = def.GRPC
+		}
+		if def.Interval != 0 {
+			entry["interval"] = (&def.Interval).String()
+		}
+		if def.Timeout != 0 {
+			entry["timeout"] = (&def.Timeout).String()
+		}
+		result = append(result, entry)
 	}
 	return result
 }
 
-func exportToCSV(instances []types.RegisterInstanceRequest) ([]byte, error) {
-	// 实现 CSV 导出
-	return []byte("id,service,address,port,tags,meta\n"), nil
+// isBuiltinCheck 判断是否为 Consul 内置检查
+//
+// Consul 会为每个服务自动附加 serfHealth 检查，它不代表用户配置的健康检查。
+func isBuiltinCheck(checkID, name string) bool {
+	if checkID == "serfHealth" || checkID == "_node_maintenance" || checkID == "_service_maintenance" {
+		return true
+	}
+	if name == "Serf Health Status" || name == "Node Maintenance Mode" {
+		return true
+	}
+	return false
 }
 
+// HasCustomCheck 判断检查列表中是否存在用户自定义健康检查
+func HasCustomCheck(checks []map[string]interface{}) bool {
+	for _, c := range checks {
+		if b, ok := c["builtin"].(bool); ok && b {
+			continue
+		}
+		return true
+	}
+	return false
+}
+
+// exportToCSV 将实例列表导出为 CSV
+//
+// 列：id, service, address, port, tags, meta, check_type, check_target, check_interval, check_timeout
+// tags 用 "|" 分隔；meta 用 JSON 字符串。
+func exportToCSV(instances []types.RegisterInstanceRequest) ([]byte, error) {
+	var buf bytes.Buffer
+	buf.WriteString("id,service,address,port,tags,meta,check_type,check_target,check_interval,check_timeout\n")
+
+	for _, ins := range instances {
+		metaJSON, _ := json.Marshal(ins.Meta)
+
+		checkType, checkTarget, interval, timeout := "", "", "", ""
+		if ins.Check != nil {
+			checkType = ins.Check.Type
+			switch ins.Check.Type {
+			case "http":
+				checkTarget = ins.Check.HTTP
+			case "tcp":
+				checkTarget = ins.Check.TCP
+			case "ttl":
+				checkTarget = ins.Check.TTL
+			case "grpc":
+				checkTarget = ins.Check.GRPC
+			case "script":
+				checkTarget = ins.Check.Script
+			}
+			interval = ins.Check.Interval
+			timeout = ins.Check.Timeout
+		}
+
+		record := []string{
+			ins.ID,
+			ins.Service,
+			ins.Address,
+			strconv.Itoa(ins.Port),
+			strings.Join(ins.Tags, "|"),
+			string(metaJSON),
+			checkType,
+			checkTarget,
+			interval,
+			timeout,
+		}
+		for i, v := range record {
+			record[i] = csvEscape(v)
+		}
+		buf.WriteString(strings.Join(record, ",") + "\n")
+	}
+
+	return buf.Bytes(), nil
+}
+
+// importFromCSV 从 CSV 解析实例列表
 func importFromCSV(data []byte) ([]types.RegisterInstanceRequest, error) {
-	// 实现 CSV 导入
-	return nil, errors.New("CSV 导入暂未实现")
+	reader := csv.NewReader(bytes.NewReader(data))
+	reader.FieldsPerRecord = -1
+	reader.TrimLeadingSpace = true
+
+	rows, err := reader.ReadAll()
+	if err != nil {
+		return nil, fmt.Errorf("解析 CSV 失败: %w", err)
+	}
+	if len(rows) < 2 {
+		return nil, errors.New("CSV 内容为空或缺少数据行")
+	}
+
+	// 构建表头索引
+	header := make(map[string]int)
+	for i, h := range rows[0] {
+		header[strings.ToLower(strings.TrimSpace(h))] = i
+	}
+	get := func(row []string, key string) string {
+		if idx, ok := header[key]; ok && idx < len(row) {
+			return strings.TrimSpace(row[idx])
+		}
+		return ""
+	}
+
+	var instances []types.RegisterInstanceRequest
+	for lineNo, row := range rows[1:] {
+		// 跳过空行
+		joined := strings.TrimSpace(strings.Join(row, ""))
+		if joined == "" {
+			continue
+		}
+
+		service := get(row, "service")
+		address := get(row, "address")
+		if service == "" || address == "" {
+			return nil, fmt.Errorf("第 %d 行缺少 service 或 address", lineNo+2)
+		}
+
+		port, _ := strconv.Atoi(get(row, "port"))
+		if port == 0 {
+			port = 0
+		}
+
+		ins := types.RegisterInstanceRequest{
+			ID:      get(row, "id"),
+			Service: service,
+			Address: address,
+			Port:    port,
+		}
+
+		// tags：优先 "|" 分隔，兼容 "," 分隔
+		if tags := get(row, "tags"); tags != "" {
+			sep := "|"
+			if !strings.Contains(tags, "|") && strings.Contains(tags, ",") {
+				sep = ","
+			}
+			for _, t := range strings.Split(tags, sep) {
+				if t = strings.TrimSpace(t); t != "" {
+					ins.Tags = append(ins.Tags, t)
+				}
+			}
+		}
+
+		// meta：JSON 字符串
+		if meta := get(row, "meta"); meta != "" {
+			m := map[string]string{}
+			if jerr := json.Unmarshal([]byte(meta), &m); jerr == nil {
+				ins.Meta = m
+			}
+		}
+
+		// 健康检查
+		if ct := get(row, "check_type"); ct != "" {
+			check := &types.HealthCheckConfig{
+				Type:     ct,
+				Interval: get(row, "check_interval"),
+				Timeout:  get(row, "check_timeout"),
+			}
+			target := get(row, "check_target")
+			switch ct {
+			case "http":
+				check.HTTP = target
+			case "tcp":
+				check.TCP = target
+			case "ttl":
+				check.TTL = target
+			case "grpc":
+				check.GRPC = target
+			case "script":
+				check.Script = target
+			}
+			ins.Check = check
+		}
+
+		instances = append(instances, ins)
+	}
+
+	if len(instances) == 0 {
+		return nil, errors.New("CSV 中没有有效的实例数据")
+	}
+	return instances, nil
+}
+
+// csvEscape CSV 字段转义
+func csvEscape(s string) string {
+	if strings.ContainsAny(s, ",\"\n\r") {
+		return "\"" + strings.ReplaceAll(s, "\"", "\"\"") + "\""
+	}
+	return s
 }

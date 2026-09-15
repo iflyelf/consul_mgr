@@ -5,6 +5,7 @@
 package instance
 
 import (
+	"fmt"
 	"io"
 	"net/http"
 	"strconv"
@@ -240,15 +241,18 @@ func BatchDeleteHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 		}
 
 		l := instance.NewBatchDeleteInstancesLogic(r.Context(), ctx)
-		if err := l.BatchDeleteInstances(req.GroupID, req.IDs); err != nil {
+		success, failed, err := l.BatchDeleteInstances(req.GroupID, req.IDs)
+		if err != nil {
 			httpx.WriteJson(w, http.StatusOK, map[string]interface{}{
 				"code": 500, "message": err.Error(),
+				"data":   map[string]interface{}{"success": success, "failed": failed},
 			})
 			return
 		}
 
 		httpx.WriteJson(w, http.StatusOK, map[string]interface{}{
-			"code": 200, "message": "批量删除成功",
+			"code": 200, "message": fmt.Sprintf("成功删除 %d 个实例", success),
+			"data": map[string]interface{}{"success": success, "failed": failed},
 		})
 	}
 }
@@ -339,15 +343,18 @@ func ImportInstancesHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 		}
 
 		l := instance.NewImportInstancesLogic(r.Context(), ctx)
-		if err := l.ImportInstances(groupID, format, data); err != nil {
+		success, failed, err := l.ImportInstances(groupID, format, data)
+		if err != nil {
 			httpx.WriteJson(w, http.StatusOK, map[string]interface{}{
 				"code": 500, "message": err.Error(),
+				"data":   map[string]interface{}{"success": success, "failed": failed},
 			})
 			return
 		}
 
 		httpx.WriteJson(w, http.StatusOK, map[string]interface{}{
-			"code": 200, "message": "导入成功",
+			"code": 200, "message": fmt.Sprintf("成功导入 %d 个实例", success),
+			"data": map[string]interface{}{"success": success, "failed": failed},
 		})
 	}
 }

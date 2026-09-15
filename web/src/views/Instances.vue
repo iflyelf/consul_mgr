@@ -137,8 +137,8 @@
         <el-table-column label="健康检查" width="100" align="center">
           <template #default="{ row }">
             <el-tooltip
-              v-if="row.checks && row.checks.length > 0"
-              :content="`${row.checks.length} 个检查`"
+              v-if="customChecks(row).length > 0"
+              :content="customChecks(row).map(c => `${c.type || 'check'}: ${c.http || c.tcp || c.grpc || c.ttl || ''}`).join(' | ')"
               placement="top"
             >
               <el-icon color="#67C23A" :size="20"><CircleCheck /></el-icon>
@@ -519,6 +519,11 @@ const handleRegister = () => {
   dialogVisible.value = true
 }
 
+// 过滤出用户自定义健康检查（排除 serfHealth 等 Consul 内置检查）
+const customChecks = (row) => {
+  return (row.checks || []).filter(c => !c.builtin)
+}
+
 // 编辑实例
 const handleEdit = (row) => {
   dialogTitle.value = '编辑实例'
@@ -530,7 +535,32 @@ const handleEdit = (row) => {
   instanceForm.port = row.port
   instanceForm.tags = row.tags || []
   instanceForm.metaList = Object.entries(row.meta || {}).map(([key, value]) => ({ key, value }))
-  instanceForm.enableHealthCheck = row.checks && row.checks.length > 0
+
+  // 健康检查：仅当存在自定义检查时才视为启用，并回填配置
+  const checks = customChecks(row)
+  if (checks.length > 0) {
+    const c = checks[0]
+    instanceForm.enableHealthCheck = true
+    instanceForm.checkType = c.type || 'http'
+    instanceForm.interval = c.interval || '10s'
+    instanceForm.timeout = c.timeout || '3s'
+    if (c.http) instanceForm.checkUrl = c.http
+    if (c.tcp) {
+      const parts = String(c.tcp).split(':')
+      instanceForm.checkPort = Number(parts[parts.length - 1]) || 8080
+    }
+    if (c.grpc) instanceForm.grpc = c.grpc
+    if (c.ttl) instanceForm.ttl = c.ttl
+  } else {
+    instanceForm.enableHealthCheck = false
+    instanceForm.checkType = 'http'
+    instanceForm.checkUrl = ''
+    instanceForm.checkPort = 8080
+    instanceForm.grpc = ''
+    instanceForm.interval = '10s'
+    instanceForm.timeout = '5s'
+    instanceForm.ttl = '30s'
+  }
   dialogVisible.value = true
 }
 
@@ -653,7 +683,8 @@ const handleDelete = async (row) => {
     ElMessage.success('删除成功')
     fetchInstances()
   } catch (error) {
-    ElMessage.error('删除失败')
+    // 错误提示已由响应拦截器统一处理
+    console.error('删除失败:', error)
   }
 }
 
@@ -677,17 +708,18 @@ const handleBatchDelete = async () => {
     
     batchLoading.value = true
     const instanceIds = selectedInstances.value.map(i => i.id)
-    await batchDeleteInstances({
+    const res = await batchDeleteInstances({
       group_id: searchForm.group_id,
       ids: instanceIds
     })
     
-    ElMessage.success('批量删除成功')
+    ElMessage.success(res?.success != null ? `成功删除 ${res.success} 个实例` : '批量删除成功')
     selectedInstances.value = []
     fetchInstances()
   } catch (error) {
+    // 错误提示已由响应拦截器统一处理
     if (error !== 'cancel') {
-      ElMessage.error('批量删除失败')
+      console.error('批量删除失败:', error)
     }
   } finally {
     batchLoading.value = false
@@ -754,17 +786,23 @@ const handleConfirmImport = async () => {
   
   importLoading.value = true
   try {
+    const name = (uploadFile.value.name || '').toLowerCase()
+    let format = 'json'
+    if (name.endsWith('.csv')) format = 'csv'
+    else if (name.endsWith('.yaml') || name.endsWith('.yml')) format = 'yaml'
+
     const formData = new FormData()
     formData.append('file', uploadFile.value)
     formData.append('group_id', searchForm.group_id)
+    formData.append('format', format)
     
-    await importInstances(formData)
-    ElMessage.success('导入成功')
+    const res = await importInstances(formData)
+    ElMessage.success(res?.success != null ? `成功导入 ${res.success} 个实例` : '导入成功')
     importDialogVisible.value = false
     uploadRef.value.clearFiles()
     fetchInstances()
   } catch (error) {
-    ElMessage.error('导入失败')
+    ElMessage.error(error?.message || '导入失败')
   } finally {
     importLoading.value = false
   }

@@ -268,25 +268,25 @@ func (l *GroupLogic) DetectDatacenter(address, token string) (string, string, er
 	client, err := consul.NewClient(&consul.Config{
 		Address: address,
 		Token:   token,
-		Timeout: 15 * time.Second,
+		Timeout: 5 * time.Second,
 	})
 	if err != nil {
 		return "", "", fmt.Errorf("创建 Consul 客户端失败: %w", err)
 	}
 
-	// 内网偶发抖动时重试
+	// 内网偶发抖动时重试（快速失败，避免用户长时间等待）
 	var dc, nodeName string
 	var lastErr error
-	for i := 0; i < 3; i++ {
+	for i := 0; i < 2; i++ {
 		dc, nodeName, lastErr = client.DetectDatacenter()
 		if lastErr == nil {
 			break
 		}
-		time.Sleep(300 * time.Millisecond)
+		time.Sleep(200 * time.Millisecond)
 	}
 	if lastErr != nil {
 		l.logger.Errorf("探测数据中心失败: %v", lastErr)
-		return "", "", fmt.Errorf("探测数据中心失败: %w", lastErr)
+		return "", "", consul.FriendlyError(address, lastErr)
 	}
 
 	l.logger.Infof("数据中心探测成功: %s (节点: %s)", dc, nodeName)
