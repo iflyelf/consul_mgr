@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/zeromicro/go-zero/rest/httpx"
+	"github.com/zeromicro/go-zero/rest/pathvar"
 
 	"github.com/iflyelf/consul_mgr/internal/logic/instance"
 	"github.com/iflyelf/consul_mgr/internal/middleware"
@@ -19,23 +20,23 @@ type RegisterInstanceRequest struct {
 	GroupID     int64                  `json:"group_id" validate:"required"`
 	Address     string                 `json:"address" validate:"required"`
 	Port        int                    `json:"port" validate:"required"`
-	Tags        []string               `json:"tags,omitempty"`
-	Meta        map[string]interface{} `json:"meta,omitempty"`
-	HealthCheck map[string]interface{} `json:"health_check,omitempty"`
-	Datacenter  string                 `json:"datacenter,default=dc1"`
-	NodeName    string                 `json:"node_name,omitempty"`
+	Tags        []string               `json:"tags,optional"`
+	Meta        map[string]interface{} `json:"meta,optional"`
+	HealthCheck map[string]interface{} `json:"health_check,optional"`
+	Datacenter  string                 `json:"datacenter,optional"`
+	NodeName    string                 `json:"node_name,optional"`
 }
 
 // UpdateInstanceRequest 更新实例请求
 type UpdateInstanceRequest struct {
-	Address     string                 `json:"address,omitempty"`
-	Port        int                    `json:"port,omitempty"`
-	Tags        []string               `json:"tags,omitempty"`
-	Meta        map[string]interface{} `json:"meta,omitempty"`
-	HealthCheck map[string]interface{} `json:"health_check,omitempty"`
-	Status      string                 `json:"status,omitempty"`
-	Datacenter  string                 `json:"datacenter,omitempty"`
-	NodeName    string                 `json:"node_name,omitempty"`
+	Address     string                 `json:"address,optional"`
+	Port        int                    `json:"port,optional"`
+	Tags        []string               `json:"tags,optional"`
+	Meta        map[string]interface{} `json:"meta,optional"`
+	HealthCheck map[string]interface{} `json:"health_check,optional"`
+	Status      string                 `json:"status,optional"`
+	Datacenter  string                 `json:"datacenter,optional"`
+	NodeName    string                 `json:"node_name,optional"`
 }
 
 // BatchDeleteRequest 批量删除请求
@@ -135,10 +136,7 @@ func RegisterInstanceHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 // UpdateInstanceHandler 更新实例
 func UpdateInstanceHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		idStr := r.URL.Query().Get(":id")
-		if idStr == "" {
-			idStr = r.URL.Query().Get("id")
-		}
+		idStr := pathvar.Vars(r)["id"]
 		
 		id, err := strconv.ParseInt(idStr, 10, 64)
 		if err != nil {
@@ -217,10 +215,7 @@ func UpdateInstanceHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 // DeregisterInstanceHandler 注销实例
 func DeregisterInstanceHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		idStr := r.URL.Query().Get(":id")
-		if idStr == "" {
-			idStr = r.URL.Query().Get("id")
-		}
+		idStr := pathvar.Vars(r)["id"]
 		
 		id, err := strconv.ParseInt(idStr, 10, 64)
 		if err != nil {
@@ -251,10 +246,7 @@ func DeregisterInstanceHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 // GetInstanceHandler 获取实例详情
 func GetInstanceHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		idStr := r.URL.Query().Get(":id")
-		if idStr == "" {
-			idStr = r.URL.Query().Get("id")
-		}
+		idStr := pathvar.Vars(r)["id"]
 		
 		id, err := strconv.ParseInt(idStr, 10, 64)
 		if err != nil {

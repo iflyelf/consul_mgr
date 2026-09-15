@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/zeromicro/go-zero/rest/httpx"
+	"github.com/zeromicro/go-zero/rest/pathvar"
 
 	"github.com/iflyelf/consul_mgr/internal/logic/group"
 	"github.com/iflyelf/consul_mgr/internal/middleware"
@@ -15,23 +16,23 @@ import (
 // CreateGroupRequest 创建服务组请求
 type CreateGroupRequest struct {
 	Name             string `json:"name" validate:"required"`
-	Code             string `json:"code,omitempty"`
+	Code             string `json:"code,optional"`
 	ConsulAddress    string `json:"consul_address" validate:"required"`
-	ConsulToken      string `json:"consul_token,omitempty"`
-	Datacenter       string `json:"datacenter,omitempty"`
-	ConsulDatacenter string `json:"consul_datacenter,omitempty"`
-	Description      string `json:"description"`
+	ConsulToken      string `json:"consul_token,optional"`
+	Datacenter       string `json:"datacenter,optional"`
+	ConsulDatacenter string `json:"consul_datacenter,optional"`
+	Description      string `json:"description,optional"`
 }
 
 // UpdateGroupRequest 更新服务组请求
 type UpdateGroupRequest struct {
-	Name             string `json:"name,omitempty"`
-	ConsulAddress    string `json:"consul_address,omitempty"`
-	ConsulToken      string `json:"consul_token,omitempty"`
-	Datacenter       string `json:"datacenter,omitempty"`
-	ConsulDatacenter string `json:"consul_datacenter,omitempty"`
-	Description      string `json:"description,omitempty"`
-	Status           *int   `json:"status,omitempty"`
+	Name             string `json:"name,optional"`
+	ConsulAddress    string `json:"consul_address,optional"`
+	ConsulToken      string `json:"consul_token,optional"`
+	Datacenter       string `json:"datacenter,optional"`
+	ConsulDatacenter string `json:"consul_datacenter,optional"`
+	Description      string `json:"description,optional"`
+	Status           *int   `json:"status,optional"`
 }
 
 // resolveDatacenter 兼容 datacenter / consul_datacenter 两种字段名
@@ -127,10 +128,7 @@ func CreateGroupHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 func UpdateGroupHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// 获取 ID
-		idStr := r.URL.Query().Get(":id")
-		if idStr == "" {
-			idStr = r.URL.Query().Get("id")
-		}
+		idStr := pathvar.Vars(r)["id"]
 		
 		id, err := strconv.ParseInt(idStr, 10, 64)
 		if err != nil {
@@ -206,10 +204,7 @@ func UpdateGroupHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 func DeleteGroupHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// 获取 ID
-		idStr := r.URL.Query().Get(":id")
-		if idStr == "" {
-			idStr = r.URL.Query().Get("id")
-		}
+		idStr := pathvar.Vars(r)["id"]
 		
 		id, err := strconv.ParseInt(idStr, 10, 64)
 		if err != nil {
@@ -241,10 +236,7 @@ func DeleteGroupHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 func GetGroupHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// 获取 ID
-		idStr := r.URL.Query().Get(":id")
-		if idStr == "" {
-			idStr = r.URL.Query().Get("id")
-		}
+		idStr := pathvar.Vars(r)["id"]
 		
 		id, err := strconv.ParseInt(idStr, 10, 64)
 		if err != nil {
@@ -279,10 +271,7 @@ func GetGroupHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 // TestConnectionHandler 测试 Consul 连接
 func TestConnectionHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		idStr := r.URL.Query().Get(":id")
-		if idStr == "" {
-			idStr = r.URL.Query().Get("id")
-		}
+		idStr := pathvar.Vars(r)["id"]
 
 		id, err := strconv.ParseInt(idStr, 10, 64)
 		if err != nil {

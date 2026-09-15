@@ -2,6 +2,7 @@ package consul
 
 import (
 	"fmt"
+	"net/http"
 	"time"
 
 	"github.com/hashicorp/consul/api"
@@ -30,21 +31,25 @@ func NewClient(cfg *Config) (*Client, error) {
 	config.Address = cfg.Address
 	config.Token = cfg.Token
 	config.Datacenter = cfg.Datacenter
-	
-	// 设置超时
-	if config.HttpClient != nil {
-		if cfg.Timeout > 0 {
-			config.HttpClient.Timeout = cfg.Timeout
-		} else {
-			config.HttpClient.Timeout = 10 * time.Second
-		}
+
+	// 关键：Consul 通常部署在内网，必须禁用 HTTP 代理，
+	// 否则 HTTP_PROXY 环境变量会导致请求被代理拦截而超时。
+	timeout := 10 * time.Second
+	if cfg.Timeout > 0 {
+		timeout = cfg.Timeout
 	}
-	
+	config.HttpClient = &http.Client{
+		Timeout: timeout,
+		Transport: &http.Transport{
+			Proxy: nil, // 不使用代理
+		},
+	}
+
 	client, err := api.NewClient(config)
 	if err != nil {
 		return nil, fmt.Errorf("创建 Consul 客户端失败: %w", err)
 	}
-	
+
 	return &Client{
 		client:     client,
 		config:     cfg,

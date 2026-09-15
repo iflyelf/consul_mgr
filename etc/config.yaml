@@ -2,6 +2,8 @@ Name: consul_mgr
 Host: 0.0.0.0
 Port: 8080
 Mode: dev
+# 服务端超时(毫秒)，需大于 Consul 操作超时
+Timeout: 30000
 
 Database:
   DSN: ${DATABASE_URL}
