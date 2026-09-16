@@ -115,6 +115,21 @@ releases:
       - casdoorClientSecret: {{ .Values.casdoorClientSecret | quote }}
       - casdoorOrganization: {{ .Values.casdoorOrganization | quote }}
       - casdoorApplication: {{ .Values.casdoorApplication | quote }}
+      # Casdoor 跨命名空间引用
+      - casdoorNamespace: {{ .Values.casdoorNamespace | quote }}
+      - casdoorServiceName: {{ .Values.casdoorServiceName | quote }}
+      - casdoorServicePort: {{ .Values.casdoorServicePort }}
+      - casdoorPodLabelKey: {{ .Values.casdoorPodLabelKey | quote }}
+      - casdoorPodLabelValue: {{ .Values.casdoorPodLabelValue | quote }}
+      - casdoorExternalServiceEnabled: {{ .Values.casdoorExternalServiceEnabled }}
+      - casdoorExternalServiceName: {{ .Values.casdoorExternalServiceName | quote }}
+      # NetworkPolicy 配置
+      - networkPolicyEnabled: {{ .Values.networkPolicyEnabled }}
+      - networkPolicyAllowAllIngress: {{ .Values.networkPolicyAllowAllIngress }}
+      - networkPolicyIngressNamespaces: {{ .Values.networkPolicyIngressNamespaces | quote }}
+      - networkPolicyDbCidrs: {{ .Values.networkPolicyDbCidrs | quote }}
+      - networkPolicyConsulCidrs: {{ .Values.networkPolicyConsulCidrs | quote }}
+      - networkPolicyAllowAllEgress: {{ .Values.networkPolicyAllowAllEgress }}
       # HPA 配置
       - hpaEnabled: {{ .Values.hpaEnabled }}
       - hpaMinReplicas: {{ .Values.hpaMinReplicas }}

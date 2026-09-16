@@ -8,17 +8,19 @@
 
 ```
 Helmfile
-  └── consul_mgr Chart
-       ├── Deployment  consul-mgr    # 应用（含嵌入前端）
-       ├── Service     consul-mgr
-       ├── Secret      consul-mgr-secret
+  └── consul_mgr Chart（namespace: consul-mgr）
+       ├── Deployment      consul-mgr      # 应用（含嵌入前端）
+       ├── Service         consul-mgr
+       ├── Secret          consul-mgr-secret
        ├── ServiceAccount
+       ├── NetworkPolicy   consul-mgr      # 出站精确放行（含跨命名空间 Casdoor）
+       ├── Service         casdoor         # ExternalName 别名 → casdoor.flyiam.svc
        └── HPA（可选）
 
 外部依赖（不由本 Chart 部署）：
   PostgreSQL（业务库 consul_mgr）
   Redis（缓存，可选）
-  FlyIAM（内置 Casdoor，提供 OAuth2 认证）
+  FlyIAM（内置 Casdoor，提供 OAuth2 认证；通常位于独立命名空间 flyiam）
 ```
 
 Chart 仅暴露 ClusterIP Service，不包含 Ingress；域名访问请在集群入口层（Ingress Controller / Gateway）统一配置。
@@ -47,7 +49,8 @@ export CONSUL_MGR_DB_PASSWORD="your-db-password"
 export CONSUL_MGR_JWT_SECRET="your-jwt-secret-at-least-32-chars"
 export CONSUL_MGR_ADMIN_PASSWORD="your-admin-password"
 
-# 认证：指向 FlyIAM 的 Casdoor
+# 认证：FlyIAM 与本应用在不同命名空间
+export CONSUL_MGR_CASDOOR_NAMESPACE="flyiam"
 export CONSUL_MGR_CASDOOR_ENDPOINT="http://casdoor.flyiam.svc.cluster.local:8000"
 export CONSUL_MGR_CASDOOR_PUBLIC_ENDPOINT="http://casdoor.example.com:8000"
 export CONSUL_MGR_CASDOOR_CLIENT_ID="<从 FlyIAM 获取>"
@@ -76,6 +79,7 @@ helmfile -e prod sync
 | Casdoor 浏览器地址 | 浏览器可达，用于登录跳转 | `CONSUL_MGR_CASDOOR_PUBLIC_ENDPOINT` |
 | 应用凭据 | 从 FlyIAM 获取 | `CONSUL_MGR_CASDOOR_CLIENT_ID` / `..._SECRET` |
 | 组织 / 应用 | 与 FlyIAM 一致 | `CONSUL_MGR_CASDOOR_ORGANIZATION` / `..._APPLICATION` |
+| FlyIAM 命名空间 | 跨命名空间引用 | `CONSUL_MGR_CASDOOR_NAMESPACE` |
 
 **回调白名单**：需在 FlyIAM/Casdoor 应用中把本服务的回调地址加入白名单：
 
@@ -86,6 +90,94 @@ http(s)://<你的域名>/api/auth/callback
 
 > `CONSUL_MGR_CASDOOR_PUBLIC_ENDPOINT` 必须是**浏览器可达**地址，否则登录跳转会失败。
 > 详见 [FlyIAM 认证对接](flyiam.md)。
+
+### 4.1 跨命名空间引用 Casdoor
+
+FlyIAM（内置 Casdoor）与本应用位于不同命名空间时，二选一：
+
+**方式 A：直接使用 FQDN**
+
+```bash
+export CONSUL_MGR_CASDOOR_NAMESPACE="flyiam"
+export CONSUL_MGR_CASDOOR_ENDPOINT="http://casdoor.flyiam.svc.cluster.local:8000"
+```
+
+**方式 B：ExternalName 别名（Chart 默认开启，`casdoorExternalServiceEnabled=true`）**
+
+保持短名 `http://casdoor:8000` 不变，Chart 在本命名空间创建：
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: casdoor
+  namespace: consul-mgr
+spec:
+  type: ExternalName
+  externalName: casdoor.flyiam.svc.cluster.local
+  ports:
+    - name: http
+      port: 8000
+```
+
+| 环境变量 | 说明 | 默认 |
+|---------|------|------|
+| `CONSUL_MGR_CASDOOR_NAMESPACE` | FlyIAM 命名空间 | `flyiam` |
+| `CONSUL_MGR_CASDOOR_SERVICE_NAME` | Casdoor Service 名 | `casdoor` |
+| `CONSUL_MGR_CASDOOR_SERVICE_PORT` | Casdoor 端口 | `8000` |
+| `CONSUL_MGR_CASDOOR_EXTERNAL_SERVICE_ENABLED` | 是否创建别名 | `true` |
+| `CONSUL_MGR_CASDOOR_EXTERNAL_SERVICE_NAME` | 别名名称 | `casdoor` |
+
+### 4.2 NetworkPolicy
+
+Chart 默认创建 NetworkPolicy，精确放行跨命名空间 Casdoor：
+
+```yaml
+egress:
+  - to:                                   # DNS
+      - namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: kube-system
+    ports: [{ protocol: UDP, port: 53 }, { protocol: TCP, port: 53 }]
+
+  - to:                                   # 跨命名空间 Casdoor
+      - namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: flyiam
+        podSelector:
+          matchLabels:
+            app.kubernetes.io/component: casdoor
+    ports:
+      - protocol: TCP
+        port: 8000
+
+  - to:                                   # Consul 集群（consulCidrs 为空时不限制）
+      - ipBlock:
+          cidr: 10.0.56.0/24
+      # 全部端口
+
+  - ports:                                # 数据库（可按 dbCidrs 收紧）
+      - protocol: TCP
+        port: 5432
+```
+
+| 环境变量 | 说明 | 默认 |
+|---------|------|------|
+| `CONSUL_MGR_NETWORK_POLICY_ENABLED` | 是否创建 | `true` |
+| `CONSUL_MGR_NETWORK_POLICY_ALLOW_ALL_INGRESS` | 入站放开所有来源 | `true` |
+| `CONSUL_MGR_NETWORK_POLICY_INGRESS_NAMESPACES` | 收紧入站时允许的命名空间 | 空 |
+| `CONSUL_MGR_NETWORK_POLICY_CONSUL_CIDRS` | Consul 集群网段（全端口） | 空 |
+| `CONSUL_MGR_NETWORK_POLICY_DB_CIDRS` | 数据库/Redis 目标网段 | 空 |
+| `CONSUL_MGR_NETWORK_POLICY_ALLOW_ALL_EGRESS` | 放行全部出站（调试） | `false` |
+| `CONSUL_MGR_CASDOOR_POD_LABEL_KEY` / `_VALUE` | Casdoor Pod 标签 | `app.kubernetes.io/component` / `casdoor` |
+
+> 前置条件：集群 CNI 需支持 NetworkPolicy（Calico / Cilium / Antrea 等）。
+> 若使用不支持 NetworkPolicy 的 CNI，该对象会被忽略，不影响部署。
+> FlyIAM Chart 的 Casdoor Pod 默认带 `app.kubernetes.io/component=casdoor` 标签，与放行规则匹配。
+>
+> ⚠️ Consul 集群地址/端口在运行时按「服务组」配置，无法预先穷举。
+> `CONSUL_MGR_NETWORK_POLICY_CONSUL_CIDRS` 为空时出站对 Consul 不限制（`- {}`）；
+> 填写后可真正收紧出站，例如 `10.0.56.0/24,10.1.0.0/16`。
 
 ## 5. 多环境
 

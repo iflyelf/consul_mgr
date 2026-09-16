@@ -1,0 +1,139 @@
+{{- if .Values.networkPolicy.enabled }}
+# =============================================================================
+# NetworkPolicy 网络策略
+#
+# 说明：
+#   - 仅放行必要流量，适用于 FlyIAM(Casdoor)、数据库、Redis 均在不同位置的场景；
+#   - 跨命名空间 Casdoor 通过 namespaceSelector + podSelector 精确放行；
+#   - 需要集群 CNI 支持 NetworkPolicy（Calico / Cilium / Antrea 等），
+#     不支持的 CNI 会忽略本对象；
+#   - 生产环境建议保持 allowAllEgress=false，并按 dbCidrs 收紧数据库出站。
+# =============================================================================
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "consul_mgr.fullname" . }}
+  labels:
+    {{- include "consul_mgr.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "consul_mgr.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+    - Egress
+
+  # -------------------- 入站 --------------------
+  ingress:
+    {{- if .Values.networkPolicy.allowAllIngress }}
+    # 放开所有来源，仅限制端口
+    - ports:
+        - protocol: TCP
+          port: {{ .Values.networkPolicy.appPort }}
+    {{- else }}
+    - from:
+        # 同命名空间内
+        - podSelector: {}
+        {{- range $item := splitList "," .Values.networkPolicy.ingressNamespaces }}
+        {{- $ns := trim $item }}
+        {{- if $ns }}
+        # 指定命名空间（如入口控制器所在命名空间）
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ $ns | quote }}
+        {{- end }}
+        {{- end }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.networkPolicy.appPort }}
+    {{- end }}
+
+  # -------------------- 出站 --------------------
+  egress:
+    {{- if .Values.networkPolicy.allowAllEgress }}
+    # 调试模式：放行全部出站
+    - {}
+    {{- else }}
+    # DNS 解析（kube-system 的 kube-dns / coredns）
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+
+    # 跨命名空间 Casdoor（FlyIAM 内置）
+    #   仅放行 FlyIAM 命名空间中带指定标签的 Casdoor Pod
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.networkPolicy.casdoor.namespace | quote }}
+          podSelector:
+            matchLabels:
+              {{ .Values.networkPolicy.casdoor.podLabelKey | quote }}: {{ .Values.networkPolicy.casdoor.podLabelValue | quote }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.networkPolicy.casdoor.port }}
+
+    # Consul 集群（核心功能，地址/端口在运行时按服务组配置）
+    #   consulCidrs 非空：仅放行指定网段（全部端口）；
+    #   consulCidrs 为空：无法预先穷举，此处放开出站以保证 Consul 可达
+    {{- if .Values.networkPolicy.consulCidrs }}
+    - to:
+        {{- range $item := splitList "," .Values.networkPolicy.consulCidrs }}
+        {{- $cidr := trim $item }}
+        {{- if $cidr }}
+        - ipBlock:
+            cidr: {{ $cidr | quote }}
+        {{- end }}
+        {{- end }}
+    {{- else }}
+    - {}
+    {{- end }}
+
+    # 数据库（外置 PostgreSQL）
+    #   dbCidrs 为空：不限制目标，仅按端口放行；
+    #   dbCidrs 非空：仅放行指定网段
+    {{- if .Values.networkPolicy.dbCidrs }}
+    - to:
+        {{- range $item := splitList "," .Values.networkPolicy.dbCidrs }}
+        {{- $cidr := trim $item }}
+        {{- if $cidr }}
+        - ipBlock:
+            cidr: {{ $cidr | quote }}
+        {{- end }}
+        {{- end }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.networkPolicy.dbPort }}
+    {{- else }}
+    - ports:
+        - protocol: TCP
+          port: {{ .Values.networkPolicy.dbPort }}
+    {{- end }}
+
+    # Redis（可选）
+    {{- if .Values.networkPolicy.redisEnabled }}
+    {{- if .Values.networkPolicy.dbCidrs }}
+    - to:
+        {{- range $item := splitList "," .Values.networkPolicy.dbCidrs }}
+        {{- $cidr := trim $item }}
+        {{- if $cidr }}
+        - ipBlock:
+            cidr: {{ $cidr | quote }}
+        {{- end }}
+        {{- end }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.networkPolicy.redisPort }}
+    {{- else }}
+    - ports:
+        - protocol: TCP
+          port: {{ .Values.networkPolicy.redisPort }}
+    {{- end }}
+    {{- end }}
+    {{- end }}
+{{- end }}

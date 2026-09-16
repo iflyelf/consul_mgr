@@ -268,3 +268,39 @@ secret:
   {{- if .Values.consulToken }}
   CONSUL_TOKEN: {{ .Values.consulToken | quote }}
   {{- end }}
+
+# ============================================
+# Casdoor 跨命名空间引用（ExternalName Service）
+# 把 FlyIAM 命名空间中的 Casdoor Service 映射为本命名空间别名，
+# 从而可继续使用短名 http://<name>:<port> 访问。
+# ============================================
+casdoorExternalService:
+  enabled: {{ .Values.casdoorExternalServiceEnabled }}
+  name: {{ .Values.casdoorExternalServiceName | quote }}
+  namespace: {{ .Values.casdoorNamespace | quote }}
+  serviceName: {{ .Values.casdoorServiceName | quote }}
+  port: {{ .Values.casdoorServicePort }}
+
+# ============================================
+# NetworkPolicy 网络策略
+# ============================================
+networkPolicy:
+  enabled: {{ .Values.networkPolicyEnabled }}
+  # 入站
+  allowAllIngress: {{ .Values.networkPolicyAllowAllIngress }}
+  ingressNamespaces: {{ .Values.networkPolicyIngressNamespaces | quote }}
+  # 出站
+  allowAllEgress: {{ .Values.networkPolicyAllowAllEgress }}
+  dbCidrs: {{ .Values.networkPolicyDbCidrs | quote }}
+  consulCidrs: {{ .Values.networkPolicyConsulCidrs | quote }}
+  dbPort: {{ .Values.dbPort }}
+  redisEnabled: {{ .Values.redisEnabled }}
+  redisPort: {{ .Values.redisPort }}
+  # 跨命名空间 Casdoor 放行规则
+  casdoor:
+    namespace: {{ .Values.casdoorNamespace | quote }}
+    podLabelKey: {{ .Values.casdoorPodLabelKey | quote }}
+    podLabelValue: {{ .Values.casdoorPodLabelValue | quote }}
+    port: {{ .Values.casdoorServicePort }}
+  # 本应用端口（入站端口白名单）
+  appPort: {{ .Values.servicePort }}

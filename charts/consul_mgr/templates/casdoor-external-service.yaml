@@ -1,0 +1,29 @@
+{{- if .Values.casdoorExternalService.enabled }}
+# =============================================================================
+# Casdoor 跨命名空间引用（ExternalName Service）
+#
+# 说明：
+#   FlyIAM（内置 Casdoor）与本应用部署在不同命名空间时，后端只需访问
+#   Casdoor 的 Service。两种方式任选其一：
+#     A) 直接把 CASDOOR_ENDPOINT 设为跨命名空间 FQDN：
+#        http://<casdoor-svc>.<casdoor-ns>.svc.cluster.local:<port>
+#     B) 启用本模板，在本命名空间创建 ExternalName Service 作为别名，
+#        继续使用短名 http://<name>:<port>
+#
+# 本模板实现方式 B。externalName 指向 FlyIAM 命名空间的 Casdoor Service。
+# =============================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.casdoorExternalService.name }}
+  labels:
+    {{- include "consul_mgr.labels" . | nindent 4 }}
+    app.kubernetes.io/component: casdoor-external
+spec:
+  type: ExternalName
+  externalName: {{ printf "%s.%s.svc.cluster.local" .Values.casdoorExternalService.serviceName .Values.casdoorExternalService.namespace | quote }}
+  ports:
+    - name: http
+      port: {{ .Values.casdoorExternalService.port }}
+      protocol: TCP
+{{- end }}

@@ -102,6 +102,9 @@ consulMaxConcurrency: {{ env "CONSUL_MGR_CONSUL_MAX_CONCURRENCY" | default "16" 
 
 # ==================== 认证配置（复用外部 FlyIAM 提供的 Casdoor）====================
 # Casdoor 服务地址（Pod 内访问，指向 FlyIAM 内置 Casdoor 的 Service）
+#   跨命名空间部署时使用 FQDN，例如：
+#     http://casdoor.flyiam.svc.cluster.local:8000
+#   或启用下方 casdoorExternalService 后继续使用短名 http://casdoor:8000
 casdoorEndpoint: '{{ env "CONSUL_MGR_CASDOOR_ENDPOINT" | default "http://casdoor:8000" }}'
 # Casdoor 公开地址（浏览器访问；跨域名部署时必填，留空则用访问域名）
 casdoorPublicEndpoint: '{{ env "CONSUL_MGR_CASDOOR_PUBLIC_ENDPOINT" | default "" }}'
@@ -114,6 +117,38 @@ casdoorCertificate: '{{ env "CONSUL_MGR_CASDOOR_CERTIFICATE" | default "cert-bui
 casdoorOrganization: '{{ env "CONSUL_MGR_CASDOOR_ORGANIZATION" | default "flyiam" }}'
 # 应用名称（与 FlyIAM 保持一致）
 casdoorApplication: '{{ env "CONSUL_MGR_CASDOOR_APPLICATION" | default "flyiam" }}'
+
+# ==================== Casdoor 跨命名空间引用（FlyIAM 与本应用不在同一命名空间）====================
+# FlyIAM（内置 Casdoor）所在命名空间
+casdoorNamespace: '{{ env "CONSUL_MGR_CASDOOR_NAMESPACE" | default "flyiam" }}'
+# FlyIAM 中 Casdoor Service 的名称与端口（远端真实 Service）
+casdoorServiceName: '{{ env "CONSUL_MGR_CASDOOR_SERVICE_NAME" | default "casdoor" }}'
+casdoorServicePort: {{ env "CONSUL_MGR_CASDOOR_SERVICE_PORT" | default "8000" }}
+# Casdoor Pod 标签（用于 NetworkPolicy 精确放行；与 FlyIAM Chart 的 selector 一致）
+casdoorPodLabelKey: '{{ env "CONSUL_MGR_CASDOOR_POD_LABEL_KEY" | default "app.kubernetes.io/component" }}'
+casdoorPodLabelValue: '{{ env "CONSUL_MGR_CASDOOR_POD_LABEL_VALUE" | default "casdoor" }}'
+# 是否在本命名空间创建 ExternalName Service（把跨命名空间 Casdoor 映射为别名，便于使用短名）
+#   默认开启：跨命名空间部署时可用短名 http://casdoor:8000 访问 FlyIAM 的 Casdoor
+casdoorExternalServiceEnabled: {{ env "CONSUL_MGR_CASDOOR_EXTERNAL_SERVICE_ENABLED" | default "true" }}
+# 别名 Service 名称（默认与远端同名，指向 casdoor.<namespace>.svc.cluster.local）
+casdoorExternalServiceName: '{{ env "CONSUL_MGR_CASDOOR_EXTERNAL_SERVICE_NAME" | default "casdoor" }}'
+
+# ==================== NetworkPolicy 网络策略 ====================
+# 是否创建 NetworkPolicy（需集群 CNI 支持，如 Calico / Cilium；不支持的 CNI 会忽略）
+networkPolicyEnabled: {{ env "CONSUL_MGR_NETWORK_POLICY_ENABLED" | default "true" }}
+# 入站：允许访问本应用端口的所有来源（默认放开；可改为指定命名空间）
+networkPolicyAllowAllIngress: {{ env "CONSUL_MGR_NETWORK_POLICY_ALLOW_ALL_INGRESS" | default "true" }}
+# 入站：当 allowAllIngress=false 时，允许的入口命名空间列表（逗号分隔，留空表示仅当前命名空间）
+networkPolicyIngressNamespaces: '{{ env "CONSUL_MGR_NETWORK_POLICY_INGRESS_NAMESPACES" | default "" }}'
+# 出站：数据库/Redis 目标 CIDR 列表（逗号分隔；留空表示不限目标，仅按端口放行）
+#   外置数据库/Redis 在集群外时，建议填写其网段以收紧出站
+networkPolicyDbCidrs: '{{ env "CONSUL_MGR_NETWORK_POLICY_DB_CIDRS" | default "" }}'
+# 出站：Consul 集群网段（逗号分隔，放行全部端口）
+#   ⚠️ Consul 集群地址/端口在运行时按「服务组」配置，无法预先穷举；
+#      留空时出站对 Consul 不限制（等价放开出站），填写后可真正收紧。
+networkPolicyConsulCidrs: '{{ env "CONSUL_MGR_NETWORK_POLICY_CONSUL_CIDRS" | default "" }}'
+# 出站：是否放行全部出站（调试用；生产建议 false 并依赖下方精确规则）
+networkPolicyAllowAllEgress: {{ env "CONSUL_MGR_NETWORK_POLICY_ALLOW_ALL_EGRESS" | default "false" }}
 
 # ==================== 权限配置 ====================
 # 是否启用服务组级授权
