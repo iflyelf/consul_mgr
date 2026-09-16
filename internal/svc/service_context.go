@@ -18,11 +18,12 @@ import (
 
 // ServiceContext 服务上下文
 type ServiceContext struct {
-	Config         config.Config
-	DB             sqlx.SqlConn
-	ConsulManager  *consul.Manager
-	CasdoorClient  *casdoor.Client
-	Cache          *cache.Cache
+	Config        config.Config
+	DB            sqlx.SqlConn
+	RawDB         *sql.DB // 原生连接：PostgreSQL 数组(TEXT[])需 pq.Array 扫描
+	ConsulManager *consul.Manager
+	CasdoorClient *casdoor.Client
+	Cache         *cache.Cache
 }
 
 // CacheKeyInstances 实例列表缓存键
@@ -158,11 +159,12 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	})
 
 	return &ServiceContext{
-		Config:         c,
-		DB:             sqlx.NewSqlConnFromDB(db),
-		ConsulManager:  consulManager,
-		CasdoorClient:  casdoorClient,
-		Cache:          cacheClient,
+		Config:        c,
+		DB:            sqlx.NewSqlConnFromDB(db),
+		RawDB:         db,
+		ConsulManager: consulManager,
+		CasdoorClient: casdoorClient,
+		Cache:         cacheClient,
 	}
 }
 
@@ -266,21 +268,91 @@ func createServiceGroupTables(db *sql.DB) error {
 		id BIGSERIAL PRIMARY KEY,
 		group_id BIGINT NOT NULL,
 		user_id VARCHAR(100) NOT NULL,
-		permissions TEXT[] DEFAULT '{}',
+		username VARCHAR(100) NOT NULL DEFAULT '',
+		permissions TEXT[] DEFAULT '{read}',
+		created_by VARCHAR(100),
 		created_at TIMESTAMP DEFAULT NOW(),
+		updated_at TIMESTAMP DEFAULT NOW(),
 		FOREIGN KEY (group_id) REFERENCES service_groups(id) ON DELETE CASCADE,
 		UNIQUE(group_id, user_id)
 	);
 
-	-- 服务组角色权限表
+	-- 兼容旧库：补齐可能缺失的列，并为 username 提供默认值
+	-- （历史库里 username 为 NOT NULL 且无默认值，会导致插入失败）
+	ALTER TABLE service_group_users ADD COLUMN IF NOT EXISTS username VARCHAR(100);
+	ALTER TABLE service_group_users ALTER COLUMN username SET DEFAULT '';
+	ALTER TABLE service_group_users ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW();
+	ALTER TABLE service_group_users ADD COLUMN IF NOT EXISTS created_by VARCHAR(100);
+	ALTER TABLE service_group_users ALTER COLUMN permissions SET DEFAULT '{read}';
+
+	-- 服务组角色权限表（历史表：按服务组+角色名授权，保留兼容）
 	CREATE TABLE IF NOT EXISTS service_group_roles (
 		id BIGSERIAL PRIMARY KEY,
 		group_id BIGINT NOT NULL,
 		role_name VARCHAR(100) NOT NULL,
-		permissions TEXT[] DEFAULT '{}',
+		permissions TEXT[] DEFAULT '{read}',
+		created_by VARCHAR(100),
 		created_at TIMESTAMP DEFAULT NOW(),
+		updated_at TIMESTAMP DEFAULT NOW(),
 		FOREIGN KEY (group_id) REFERENCES service_groups(id) ON DELETE CASCADE,
 		UNIQUE(group_id, role_name)
+	);
+
+	ALTER TABLE service_group_roles ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW();
+	ALTER TABLE service_group_roles ADD COLUMN IF NOT EXISTS created_by VARCHAR(100);
+	ALTER TABLE service_group_roles ALTER COLUMN permissions SET DEFAULT '{read}';
+
+	-- ============================================================
+	-- 人员组织：角色 / 团队 / 团队成员 / 团队-服务组授权
+	-- ============================================================
+
+	-- 角色：可复用的权限集合（read/write/delete）
+	CREATE TABLE IF NOT EXISTS roles (
+		id BIGSERIAL PRIMARY KEY,
+		name VARCHAR(100) NOT NULL UNIQUE,
+		code VARCHAR(100) NOT NULL DEFAULT '',
+		description TEXT,
+		permissions TEXT[] DEFAULT '{}',
+		created_at TIMESTAMP DEFAULT NOW(),
+		updated_at TIMESTAMP DEFAULT NOW()
+	);
+
+	-- 团队
+	CREATE TABLE IF NOT EXISTS teams (
+		id BIGSERIAL PRIMARY KEY,
+		name VARCHAR(100) NOT NULL UNIQUE,
+		code VARCHAR(100) NOT NULL DEFAULT '',
+		description TEXT,
+		status SMALLINT DEFAULT 1,
+		created_by VARCHAR(100),
+		created_at TIMESTAMP DEFAULT NOW(),
+		updated_at TIMESTAMP DEFAULT NOW()
+	);
+
+	-- 团队成员（user_id 为 Casdoor 用户 ID）
+	CREATE TABLE IF NOT EXISTS team_members (
+		id BIGSERIAL PRIMARY KEY,
+		team_id BIGINT NOT NULL,
+		user_id VARCHAR(100) NOT NULL,
+		username VARCHAR(100),
+		display_name VARCHAR(200),
+		created_at TIMESTAMP DEFAULT NOW(),
+		FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE CASCADE,
+		UNIQUE(team_id, user_id)
+	);
+
+	-- 团队-服务组授权：permissions 为直接权限，role_ids 为引用角色的权限（取并集）
+	CREATE TABLE IF NOT EXISTS team_group_permissions (
+		id BIGSERIAL PRIMARY KEY,
+		team_id BIGINT NOT NULL,
+		group_id BIGINT NOT NULL,
+		permissions TEXT[] DEFAULT '{}',
+		role_ids BIGINT[] DEFAULT '{}',
+		created_at TIMESTAMP DEFAULT NOW(),
+		updated_at TIMESTAMP DEFAULT NOW(),
+		FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE CASCADE,
+		FOREIGN KEY (group_id) REFERENCES service_groups(id) ON DELETE CASCADE,
+		UNIQUE(team_id, group_id)
 	);
 
 	-- Consul 实例持久化表
@@ -327,6 +399,12 @@ func createServiceGroupTables(db *sql.DB) error {
 	CREATE INDEX IF NOT EXISTS idx_service_group_users_group ON service_group_users(group_id);
 	CREATE INDEX IF NOT EXISTS idx_service_group_users_user ON service_group_users(user_id);
 	CREATE INDEX IF NOT EXISTS idx_service_group_roles_group ON service_group_roles(group_id);
+	CREATE INDEX IF NOT EXISTS idx_teams_code ON teams(code);
+	CREATE INDEX IF NOT EXISTS idx_team_members_team ON team_members(team_id);
+	CREATE INDEX IF NOT EXISTS idx_team_members_user ON team_members(user_id);
+	CREATE INDEX IF NOT EXISTS idx_team_group_team ON team_group_permissions(team_id);
+	CREATE INDEX IF NOT EXISTS idx_team_group_group ON team_group_permissions(group_id);
+	CREATE INDEX IF NOT EXISTS idx_roles_code ON roles(code);
 	CREATE INDEX IF NOT EXISTS idx_consul_instances_group ON consul_instances(group_id);
 	CREATE INDEX IF NOT EXISTS idx_consul_instances_service ON consul_instances(service_name);
 	CREATE INDEX IF NOT EXISTS idx_consul_instances_status ON consul_instances(status);

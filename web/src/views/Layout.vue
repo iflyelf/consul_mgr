@@ -19,6 +19,27 @@
           <el-icon><component :is="m.icon" /></el-icon>
           <span>{{ m.label }}</span>
         </router-link>
+
+        <!-- 人员组织（下拉子菜单） -->
+        <el-dropdown class="org-dropdown" @command="handleOrgNav">
+          <span class="tab" :class="{ active: isOrgActive }">
+            <el-icon><OfficeBuilding /></el-icon>
+            <span>人员组织</span>
+            <el-icon class="org-arrow"><ArrowDown /></el-icon>
+          </span>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item
+                v-for="o in orgMenus"
+                :key="o.path"
+                :command="o.path"
+                :class="{ 'is-active-theme': $route.path.startsWith(o.path) }"
+              >
+                {{ o.label }}
+              </el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
       </nav>
 
       <div class="topbar-actions">
@@ -61,13 +82,13 @@
     <!-- 移动端导航（横向滚动） -->
     <nav class="tabs mobile-tabs">
       <router-link
-        v-for="m in menus"
+        v-for="m in [...menus, ...orgMenus]"
         :key="m.path"
         :to="m.path"
         class="tab"
         :class="{ active: $route.path.startsWith(m.path) }"
       >
-        <el-icon><component :is="m.icon" /></el-icon>
+        <el-icon v-if="m.icon"><component :is="m.icon" /></el-icon>
         <span>{{ m.label }}</span>
       </router-link>
     </nav>
@@ -83,8 +104,9 @@
 
 <script setup>
 import { useRouter } from 'vue-router'
+import { computed } from 'vue'
 import { ElMessageBox, ElMessage } from 'element-plus'
-import { UserFilled, SwitchButton, Grid, Connection, Monitor, ArrowDown } from '@element-plus/icons-vue'
+import { UserFilled, User, Avatar, SwitchButton, Grid, Connection, Monitor, ArrowDown, OfficeBuilding } from '@element-plus/icons-vue'
 import { useUserStore } from '@/store/user'
 import { useThemeStore } from '@/store/theme'
 
@@ -92,11 +114,25 @@ const router = useRouter()
 const userStore = useUserStore()
 const themeStore = useThemeStore()
 
+// 主导航
 const menus = [
   { path: '/groups', label: '服务组管理', icon: Grid },
   { path: '/services', label: 'Services 管理', icon: Connection },
   { path: '/instances', label: 'Instances 管理', icon: Monitor }
 ]
+
+// 人员组织子菜单
+const orgMenus = [
+  { path: '/users', label: '用户管理', icon: UserFilled },
+  { path: '/teams', label: '团队管理', icon: User },
+  { path: '/roles', label: '角色管理', icon: Avatar }
+]
+
+const isOrgActive = computed(() => orgMenus.some(o => router.currentRoute.value.path.startsWith(o.path)))
+
+const handleOrgNav = (path) => {
+  router.push(path)
+}
 
 const handleCommand = async (command) => {
   if (command === 'logout') {
@@ -199,6 +235,18 @@ const handleCommand = async (command) => {
 .tab.active {
   background: var(--primary-color);
   color: #fffaf3;
+}
+
+/* 人员组织下拉 */
+.org-dropdown {
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.org-arrow {
+  font-size: 12px;
+  margin-left: 2px;
 }
 
 /* 移动端导航默认隐藏 */

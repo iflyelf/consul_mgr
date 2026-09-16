@@ -490,3 +490,71 @@ func (c *Client) RefreshToken(refreshToken string) (string, error) {
 func (c *Client) GetConfig() *Config {
 	return c.config
 }
+
+// CasdoorUser 用于列表展示的 Casdoor 用户精简信息
+type CasdoorUser struct {
+	Id          string `json:"id"`
+	Owner       string `json:"owner"`
+	Name        string `json:"name"`
+	DisplayName string `json:"displayName"`
+	Email       string `json:"email"`
+	Phone       string `json:"phone"`
+	Avatar      string `json:"avatar"`
+	IsAdmin     bool   `json:"isAdmin"`
+	SignupApp   string `json:"signupApplication"`
+	CreatedTime string `json:"createdTime"`
+}
+
+// ListUsers 获取 Casdoor 用户列表
+//
+// 说明：用于「人员组织 → 用户管理」展示；用户体系仍由 Casdoor 维护。
+func (c *Client) ListUsers() ([]CasdoorUser, error) {
+	users, err := c.sdk.GetUsers()
+	if err != nil {
+		return nil, fmt.Errorf("获取用户列表失败: %w", err)
+	}
+	list := make([]CasdoorUser, 0, len(users))
+	for _, u := range users {
+		list = append(list, CasdoorUser{
+			Id:          u.Id,
+			Owner:       u.Owner,
+			Name:        u.Name,
+			DisplayName: u.DisplayName,
+			Email:       u.Email,
+			Phone:       u.Phone,
+			Avatar:      u.Avatar,
+			IsAdmin:     u.IsAdmin,
+			SignupApp:   u.SignupApplication,
+			CreatedTime: u.CreatedTime,
+		})
+	}
+	return list, nil
+}
+
+// CasdoorRole 用于列表展示的 Casdoor 角色信息
+type CasdoorRole struct {
+	Owner       string `json:"owner"`
+	Name        string `json:"name"`
+	DisplayName string `json:"displayName"`
+	Description string `json:"description"`
+	IsEnabled   bool   `json:"isEnabled"`
+}
+
+// ListCasdoorRoles 获取 Casdoor 角色列表（只读展示）
+func (c *Client) ListCasdoorRoles() ([]CasdoorRole, error) {
+	roles, err := c.sdk.GetRoles()
+	if err != nil {
+		return nil, fmt.Errorf("获取角色列表失败: %w", err)
+	}
+	list := make([]CasdoorRole, 0, len(roles))
+	for _, r := range roles {
+		list = append(list, CasdoorRole{
+			Owner:       r.Owner,
+			Name:        r.Name,
+			DisplayName: r.DisplayName,
+			Description: r.Description,
+			IsEnabled:   r.IsEnabled,
+		})
+	}
+	return list, nil
+}

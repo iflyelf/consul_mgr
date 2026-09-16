@@ -50,6 +50,24 @@ const routes = [
         name: 'Instances',
         component: () => import('@/views/Instances.vue'),
         meta: { title: 'Instances 管理' }
+      },
+      {
+        path: 'users',
+        name: 'Users',
+        component: () => import('@/views/Users.vue'),
+        meta: { title: '用户管理' }
+      },
+      {
+        path: 'teams',
+        name: 'Teams',
+        component: () => import('@/views/Teams.vue'),
+        meta: { title: '团队管理' }
+      },
+      {
+        path: 'roles',
+        name: 'Roles',
+        component: () => import('@/views/Roles.vue'),
+        meta: { title: '角色管理' }
       }
     ]
   }

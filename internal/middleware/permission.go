@@ -2,10 +2,13 @@
 package middleware
 
 import (
+	"context"
+	"database/sql"
 	"fmt"
 	"net/http"
 	"strconv"
 
+	"github.com/lib/pq"
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/rest/httpx"
 
@@ -16,22 +19,25 @@ import (
 //
 // 功能：
 //   - 检查 Casdoor 全局权限
-//   - 检查服务组级别权限
+//   - 检查服务组级别权限（用户直授 + 团队授权 + 角色）
 //   - 支持三层权限模型
 type PermissionMiddleware struct {
 	client *casdoor.Client
+	db     *sql.DB
 }
 
 // NewPermissionMiddleware 创建权限检查中间件
 //
 // 参数:
 //   client - Casdoor 客户端实例
+//   db     - 原生数据库连接（PostgreSQL TEXT[] 需 pq.Array 扫描）
 //
 // 返回:
 //   *PermissionMiddleware - 中间件实例
-func NewPermissionMiddleware(client *casdoor.Client) *PermissionMiddleware {
+func NewPermissionMiddleware(client *casdoor.Client, db *sql.DB) *PermissionMiddleware {
 	return &PermissionMiddleware{
 		client: client,
+		db:     db,
 	}
 }
 
@@ -120,7 +126,7 @@ func (m *PermissionMiddleware) RequireServiceGroupAccess(action string) func(htt
 			ctx := r.Context()
 
 			// 1. 获取用户信息
-			_, ok := GetUserIdFromContext(ctx)
+			userId, ok := GetUserIdFromContext(ctx)
 			if !ok {
 				httpx.WriteJson(w, http.StatusUnauthorized, map[string]interface{}{
 					"code":    401,
@@ -178,18 +184,114 @@ func (m *PermissionMiddleware) RequireServiceGroupAccess(action string) func(htt
 				return
 			}
 
-			// 5. 检查服务组级别权限
-			// TODO: 这里需要查询数据库中的 service_group_users 和 service_group_roles 表
-			// 暂时先通过全局权限控制
-			// 在 Phase 8 中会实现完整的服务组授权逻辑
+			// 5. 检查服务组级别权限（用户直授 → 团队授权 → 角色）
+			granted, gerr := m.checkServiceGroupPermission(userId, groupId, action)
+			if gerr != nil {
+				logx.Errorf("服务组权限检查失败: %v", gerr)
+				httpx.WriteJson(w, http.StatusInternalServerError, map[string]interface{}{
+					"code":    500,
+					"message": "权限检查失败",
+				})
+				return
+			}
+			if granted {
+				logx.Infof("用户 %s 通过服务组授权获得 %s 权限 (group=%d)", username, action, groupId)
+				next.ServeHTTP(w, r)
+				return
+			}
 
-			logx.Errorf("用户 %s 没有访问服务组 %d 的权限", username, groupId)
+			logx.Errorf("用户 %s 没有访问服务组 %d 的权限（需要 %s）", username, groupId, action)
 			httpx.WriteJson(w, http.StatusForbidden, map[string]interface{}{
 				"code":    403,
 				"message": fmt.Sprintf("没有权限访问该服务组（需要 %s 权限）", action),
 			})
 		}
 	}
+}
+
+// checkServiceGroupPermission 检查用户对某个服务组的权限
+//
+// 权限来源（任一满足即可）:
+//  1. service_group_users 中该用户的直接授权；
+//  2. 用户所在团队（team_members）对服务组的授权（team_group_permissions）；
+//  3. 团队授权中引用角色的权限（roles.permissions）。
+//
+// 权限取值: read / write / delete，支持 "*" 通配。
+func (m *PermissionMiddleware) checkServiceGroupPermission(userID string, groupID int64, action string) (bool, error) {
+	ctx := context.Background()
+
+	// 1. 用户直接授权
+	var directPerms []string
+	err := m.db.QueryRowContext(ctx,
+		`SELECT permissions FROM service_group_users WHERE group_id=$1 AND user_id=$2`,
+		groupID, userID).Scan(pq.Array(&directPerms))
+	if err == nil {
+		for _, p := range directPerms {
+			if p == "*" || p == action {
+				return true, nil
+			}
+		}
+	} else if err != sql.ErrNoRows {
+		return false, err
+	}
+
+	// 2. 团队授权（直接权限）
+	rows, err := m.db.QueryContext(ctx, `
+		SELECT gp.permissions, COALESCE(gp.role_ids, '{}') AS role_ids
+		FROM team_group_permissions gp
+		JOIN team_members tm ON tm.team_id = gp.team_id
+		WHERE tm.user_id = $1 AND gp.group_id = $2
+	`, userID, groupID)
+	if err != nil {
+		return false, err
+	}
+	defer rows.Close()
+
+	var roleIDs []int64
+	found := false
+	for rows.Next() {
+		found = true
+		var perms []string
+		var rids []int64
+		if err := rows.Scan(pq.Array(&perms), pq.Array(&rids)); err != nil {
+			return false, err
+		}
+		for _, p := range perms {
+			if p == "*" || p == action {
+				return true, nil
+			}
+		}
+		roleIDs = append(roleIDs, rids...)
+	}
+	if err := rows.Err(); err != nil {
+		return false, err
+	}
+	if !found {
+		return false, nil
+	}
+
+	// 3. 引用角色的权限
+	if len(roleIDs) > 0 {
+		rrows, err := m.db.QueryContext(ctx,
+			`SELECT DISTINCT unnest(permissions) FROM roles WHERE id = ANY($1)`,
+			pq.Array(roleIDs))
+		if err != nil {
+			logx.Errorf("查询角色权限失败: %v", err)
+			return false, nil
+		}
+		defer rrows.Close()
+		for rrows.Next() {
+			var p string
+			if err := rrows.Scan(&p); err != nil {
+				continue
+			}
+			if p == "*" || p == action {
+				return true, nil
+			}
+		}
+	}
+
+	return false, nil
 }
 
 // RequireAdmin 要求管理员权限（中间件生成器）

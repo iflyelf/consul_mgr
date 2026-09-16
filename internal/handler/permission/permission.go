@@ -37,7 +37,7 @@ func GrantUserPermissionHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 			return
 		}
 		
-		logic := permission.NewPermissionLogic(r.Context(), ctx.DB)
+		logic := permission.NewPermissionLogic(r.Context(), ctx.RawDB)
 		result, err := logic.GrantUserPermission(req.GroupID, req.UserID, req.Permissions)
 		if err != nil {
 			httpx.WriteJson(w, http.StatusInternalServerError, map[string]interface{}{
@@ -69,7 +69,7 @@ func RevokeUserPermissionHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 			return
 		}
 		
-		logic := permission.NewPermissionLogic(r.Context(), ctx.DB)
+		logic := permission.NewPermissionLogic(r.Context(), ctx.RawDB)
 		err := logic.RevokeUserPermission(groupID, userID)
 		if err != nil {
 			httpx.WriteJson(w, http.StatusInternalServerError, map[string]interface{}{
@@ -99,7 +99,7 @@ func ListUserPermissionsHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 			return
 		}
 		
-		logic := permission.NewPermissionLogic(r.Context(), ctx.DB)
+		logic := permission.NewPermissionLogic(r.Context(), ctx.RawDB)
 		perms, err := logic.ListUserPermissions(groupID)
 		if err != nil {
 			httpx.WriteJson(w, http.StatusInternalServerError, map[string]interface{}{
@@ -129,7 +129,7 @@ func GrantRolePermissionHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 			return
 		}
 		
-		logic := permission.NewPermissionLogic(r.Context(), ctx.DB)
+		logic := permission.NewPermissionLogic(r.Context(), ctx.RawDB)
 		result, err := logic.GrantRolePermission(req.GroupID, req.RoleName, req.Permissions)
 		if err != nil {
 			httpx.WriteJson(w, http.StatusInternalServerError, map[string]interface{}{
@@ -161,7 +161,7 @@ func RevokeRolePermissionHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 			return
 		}
 		
-		logic := permission.NewPermissionLogic(r.Context(), ctx.DB)
+		logic := permission.NewPermissionLogic(r.Context(), ctx.RawDB)
 		err := logic.RevokeRolePermission(groupID, roleName)
 		if err != nil {
 			httpx.WriteJson(w, http.StatusInternalServerError, map[string]interface{}{
@@ -191,7 +191,7 @@ func ListRolePermissionsHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 			return
 		}
 		
-		logic := permission.NewPermissionLogic(r.Context(), ctx.DB)
+		logic := permission.NewPermissionLogic(r.Context(), ctx.RawDB)
 		perms, err := logic.ListRolePermissions(groupID)
 		if err != nil {
 			httpx.WriteJson(w, http.StatusInternalServerError, map[string]interface{}{

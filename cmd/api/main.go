@@ -15,7 +15,10 @@ import (
 	"github.com/iflyelf/consul_mgr/internal/handler/group"
 	"github.com/iflyelf/consul_mgr/internal/handler/instance"
 	permissionHandler "github.com/iflyelf/consul_mgr/internal/handler/permission"
+	roleHandler "github.com/iflyelf/consul_mgr/internal/handler/role"
 	serviceHandler "github.com/iflyelf/consul_mgr/internal/handler/service"
+	teamHandler "github.com/iflyelf/consul_mgr/internal/handler/team"
+	userHandler "github.com/iflyelf/consul_mgr/internal/handler/user"
 	"github.com/iflyelf/consul_mgr/internal/middleware"
 	"github.com/iflyelf/consul_mgr/internal/svc"
 )
@@ -80,7 +83,7 @@ func main() {
 func registerHandlers(server *rest.Server, ctx *svc.ServiceContext) {
 	// 创建中间件
 	casdoorAuth := middleware.NewCasdoorAuthMiddleware(ctx.CasdoorClient)
-	permissionMw := middleware.NewPermissionMiddleware(ctx.CasdoorClient)
+	permissionMw := middleware.NewPermissionMiddleware(ctx.CasdoorClient, ctx.RawDB)
 	auditMw := middleware.NewAuditMiddleware(ctx)
 	
 	// ============================================================
@@ -451,6 +454,105 @@ func registerHandlers(server *rest.Server, ctx *svc.ServiceContext) {
 		),
 	})
 	
+	// ============================================================
+	// 人员组织：用户 / 团队 / 角色（需要管理员权限）
+	// ============================================================
+
+	// 用户管理（只读，来自 Casdoor）
+	server.AddRoute(rest.Route{
+		Method:  http.MethodGet,
+		Path:    "/api/users",
+		Handler: casdoorAuth.Handle(permissionMw.RequireAdmin()(userHandler.ListUsersHandler(ctx))),
+	})
+
+	// 角色管理
+	server.AddRoute(rest.Route{
+		Method:  http.MethodGet,
+		Path:    "/api/roles",
+		Handler: casdoorAuth.Handle(permissionMw.RequireAdmin()(roleHandler.ListRolesHandler(ctx))),
+	})
+	server.AddRoute(rest.Route{
+		Method: http.MethodPost,
+		Path:   "/api/roles",
+		Handler: casdoorAuth.Handle(
+			auditMw.Handle(permissionMw.RequireAdmin()(roleHandler.CreateRoleHandler(ctx)))),
+	})
+	server.AddRoute(rest.Route{
+		Method: http.MethodPut,
+		Path:   "/api/roles/:id",
+		Handler: casdoorAuth.Handle(
+			auditMw.Handle(permissionMw.RequireAdmin()(roleHandler.UpdateRoleHandler(ctx)))),
+	})
+	server.AddRoute(rest.Route{
+		Method: http.MethodDelete,
+		Path:   "/api/roles/:id",
+		Handler: casdoorAuth.Handle(
+			auditMw.Handle(permissionMw.RequireAdmin()(roleHandler.DeleteRoleHandler(ctx)))),
+	})
+
+	// 团队管理
+	server.AddRoute(rest.Route{
+		Method:  http.MethodGet,
+		Path:    "/api/teams",
+		Handler: casdoorAuth.Handle(permissionMw.RequireAdmin()(teamHandler.ListTeamsHandler(ctx))),
+	})
+	server.AddRoute(rest.Route{
+		Method: http.MethodPost,
+		Path:   "/api/teams",
+		Handler: casdoorAuth.Handle(
+			auditMw.Handle(permissionMw.RequireAdmin()(teamHandler.CreateTeamHandler(ctx)))),
+	})
+	server.AddRoute(rest.Route{
+		Method: http.MethodPut,
+		Path:   "/api/teams/:id",
+		Handler: casdoorAuth.Handle(
+			auditMw.Handle(permissionMw.RequireAdmin()(teamHandler.UpdateTeamHandler(ctx)))),
+	})
+	server.AddRoute(rest.Route{
+		Method: http.MethodDelete,
+		Path:   "/api/teams/:id",
+		Handler: casdoorAuth.Handle(
+			auditMw.Handle(permissionMw.RequireAdmin()(teamHandler.DeleteTeamHandler(ctx)))),
+	})
+
+	// 团队成员
+	server.AddRoute(rest.Route{
+		Method:  http.MethodGet,
+		Path:    "/api/teams/:id/members",
+		Handler: casdoorAuth.Handle(permissionMw.RequireAdmin()(teamHandler.ListMembersHandler(ctx))),
+	})
+	server.AddRoute(rest.Route{
+		Method: http.MethodPost,
+		Path:   "/api/teams/:id/members",
+		Handler: casdoorAuth.Handle(
+			auditMw.Handle(permissionMw.RequireAdmin()(teamHandler.AddMemberHandler(ctx)))),
+	})
+	server.AddRoute(rest.Route{
+		Method: http.MethodDelete,
+		Path:   "/api/teams/:id/members",
+		Handler: casdoorAuth.Handle(
+			auditMw.Handle(permissionMw.RequireAdmin()(teamHandler.RemoveMemberHandler(ctx)))),
+	})
+
+	// 团队 → 服务组授权
+	server.AddRoute(rest.Route{
+		Method:  http.MethodGet,
+		Path:    "/api/teams/:id/permissions",
+		Handler: casdoorAuth.Handle(permissionMw.RequireAdmin()(teamHandler.ListGroupPermissionsHandler(ctx))),
+	})
+	server.AddRoute(rest.Route{
+		Method: http.MethodPost,
+		Path:   "/api/teams/:id/permissions",
+		Handler: casdoorAuth.Handle(
+			auditMw.Handle(permissionMw.RequireAdmin()(teamHandler.GrantGroupPermissionHandler(ctx)))),
+	})
+	server.AddRoute(rest.Route{
+		Method: http.MethodDelete,
+		Path:   "/api/teams/:id/permissions",
+		Handler: casdoorAuth.Handle(
+			auditMw.Handle(permissionMw.RequireAdmin()(teamHandler.RevokeGroupPermissionHandler(ctx)))),
+	})
+
 	// ============================================================
 	// 审计日志（需要权限：audit_log）
 	// ============================================================
