@@ -98,6 +98,7 @@ charts/consul_mgr/
 | `CONSUL_MGR_NAMESPACE` | 命名空间 | `consul-mgr` |
 | `CONSUL_MGR_REPLICAS` | 应用副本数 | `2` |
 | `CONSUL_MGR_IMAGE_TAG` | 应用镜像标签 | `latest` |
+| `CONSUL_MGR_IMAGE_PULL_POLICY` | 应用镜像拉取策略 | `Always` |
 | `CONSUL_MGR_NODE_LABEL` / `CONSUL_MGR_NODE_LABEL_VALUE` | 硬性节点亲和性标签 | `consul_mgr` / `true` |
 | `CONSUL_MGR_DB_HOST` / `CONSUL_MGR_DB_PASSWORD` | 数据库 | - |
 | `CONSUL_MGR_REDIS_HOST` / `CONSUL_MGR_REDIS_PASSWORD` | 缓存 | - |
