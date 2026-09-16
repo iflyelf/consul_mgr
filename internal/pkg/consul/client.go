@@ -4,9 +4,12 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/hashicorp/consul/api"
+
+	"github.com/iflyelf/consul_mgr/internal/pkg/parallel"
 )
 
 // Client Consul 客户端封装
@@ -191,7 +194,10 @@ func isUnknownServiceErr(err error) bool {
 
 // DeregisterFromCatalog 通过 Catalog 在集群范围内注销实例
 //
-// 扫描所有节点，删除匹配 ServiceID 的条目。
+// 说明:
+//   - 先按服务名直接定位；若 ServiceID 与 ServiceName 不同，
+//     则并行扫描全部服务以找出该实例，再并行按节点注销；
+//   - 全流程并行，避免服务数量多时串行扫描导致缓慢。
 func DeregisterFromCatalog(client *api.Client, serviceID string) error {
 	// 先按服务名定位（ServiceID 可能与服务名不同，需回退全量扫描）
 	entries, _, err := client.Catalog().Service(serviceID, "", nil)
@@ -203,17 +209,28 @@ func DeregisterFromCatalog(client *api.Client, serviceID string) error {
 			}
 			return aerr
 		}
-		entries = nil
+		names := make([]string, 0, len(all))
 		for name := range all {
+			names = append(names, name)
+		}
+
+		// 并行扫描各服务，收集匹配 ServiceID 的条目
+		found := parallel.Map(names, parallel.DefaultConcurrency, func(name string) []*api.CatalogService {
 			es, _, eerr := client.Catalog().Service(name, "", nil)
 			if eerr != nil {
-				continue
+				return nil
 			}
+			var hit []*api.CatalogService
 			for _, e := range es {
 				if e.ServiceID == serviceID {
-					entries = append(entries, e)
+					hit = append(hit, e)
 				}
 			}
+			return hit
+		})
+		entries = nil
+		for _, h := range found {
+			entries = append(entries, h...)
 		}
 	}
 
@@ -221,15 +238,22 @@ func DeregisterFromCatalog(client *api.Client, serviceID string) error {
 		return fmt.Errorf("集群中未找到实例: %s", serviceID)
 	}
 
-	var lastErr error
-	for _, e := range entries {
+	// 并行按节点注销
+	var (
+		mu      sync.Mutex
+		lastErr error
+	)
+	_ = parallel.ForEach(entries, parallel.DefaultConcurrency, func(_ int, e *api.CatalogService) error {
 		if _, derr := client.Catalog().Deregister(&api.CatalogDeregistration{
 			Node:      e.Node,
 			ServiceID: e.ServiceID,
 		}, nil); derr != nil {
+			mu.Lock()
 			lastErr = derr
+			mu.Unlock()
 		}
-	}
+		return nil
+	})
 	return lastErr
 }
 

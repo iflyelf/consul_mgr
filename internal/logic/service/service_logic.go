@@ -128,41 +128,6 @@ func buildServiceInfoFromInstances(serviceName string, list []types.ConsulInstan
 	}
 }
 
-// buildServiceInfo 由 Consul 健康条目构建服务汇总信息
-func buildServiceInfo(serviceName string, entries []*api.ServiceEntry) types.ConsulServiceInfo {
-	healthyCount := 0
-	unhealthyCount := 0
-	healthStatus := "passing"
-
-	for _, entry := range entries {
-		status := aggregateStatus(entry.Checks)
-		if status == "passing" {
-			healthyCount++
-		} else {
-			unhealthyCount++
-			if status == "critical" {
-				healthStatus = "critical"
-			} else if status == "warning" && healthStatus != "critical" {
-				healthStatus = "warning"
-			}
-		}
-	}
-
-	service := entries[0].Service
-	return types.ConsulServiceInfo{
-		ID:             service.ID,
-		Service:        serviceName,
-		Tags:           service.Tags,
-		Meta:           service.Meta,
-		Address:        service.Address,
-		Port:           service.Port,
-		HealthStatus:   healthStatus,
-		InstanceCount:  len(entries),
-		HealthyCount:   healthyCount,
-		UnhealthyCount: unhealthyCount,
-	}
-}
-
 // DeleteServiceLogic 删除服务逻辑
 type DeleteServiceLogic struct {
 	ctx    context.Context
@@ -308,37 +273,16 @@ func (l *GetServiceDetailLogic) GetServiceDetail(groupID int64, serviceName, key
 	cacheKey := l.svcCtx.CacheKeyServiceDetail(groupID, serviceName)
 	var detail types.ServiceDetail
 	if !l.svcCtx.Cache.Get(l.ctx, cacheKey, &detail) {
-		client, addr, err := getConsulClientWithAddr(l.ctx, l.svcCtx, groupID)
+		client, _, err := getConsulClientWithAddr(l.ctx, l.svcCtx, groupID)
 		if err != nil {
 			return nil, err
 		}
 
-		entries, _, err := client.Health().Service(serviceName, "", false, nil)
-		if err != nil {
-			return nil, fmt.Errorf("查询服务失败: %w", consul.FriendlyError(addr, err))
-		}
-		if len(entries) == 0 {
+		// 复用实例模块的「按服务缓存」：与实例列表/服务列表共享同一份数据，
+		// 避免同一服务被重复请求 Consul。
+		instances := instance.ListInstancesCached(l.ctx, l.svcCtx, client, groupID, serviceName)
+		if len(instances) == 0 {
 			return nil, errors.New("服务不存在")
-		}
-
-		var instances []types.ConsulInstanceInfo
-		for _, entry := range entries {
-			service := entry.Service
-			node := entry.Node
-			checks := entry.Checks
-
-			instances = append(instances, types.ConsulInstanceInfo{
-				ID:           service.ID,
-				Service:      service.Service,
-				Tags:         service.Tags,
-				Meta:         service.Meta,
-				Address:      service.Address,
-				Port:         service.Port,
-				Node:         node.Node,
-				NodeAddress:  node.Address,
-				HealthStatus: aggregateStatus(checks),
-				Checks:       convertChecks(checks),
-			})
 		}
 
 		detail = types.ServiceDetail{
@@ -390,31 +334,4 @@ func matchInstanceKeyword(ins types.ConsulInstanceInfo, kw string) bool {
 // 辅助函数
 func contains(s, substr string) bool {
 	return strings.Contains(s, substr)
-}
-
-func aggregateStatus(checks []*api.HealthCheck) string {
-	status := "passing"
-	for _, check := range checks {
-		if check.Status == api.HealthCritical {
-			return "critical"
-		}
-		if check.Status == api.HealthWarning {
-			status = "warning"
-		}
-	}
-	return status
-}
-
-func convertChecks(checks []*api.HealthCheck) []map[string]interface{} {
-	var result []map[string]interface{}
-	for _, check := range checks {
-		result = append(result, map[string]interface{}{
-			"check_id": check.CheckID,
-			"name":     check.Name,
-			"status":   check.Status,
-			"notes":    check.Notes,
-			"output":   check.Output,
-		})
-	}
-	return result
 }

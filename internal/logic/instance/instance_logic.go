@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"sort"
 	"strconv"
+	"sync"
+	"sync/atomic"
 	"strings"
 
 	"github.com/hashicorp/consul/api"
@@ -597,33 +599,8 @@ func (l *ImportInstancesLogic) ImportInstances(groupID int64, format string, dat
 	// 集群去重：清理其他节点上的同名实例
 	_, _ = dedupClusterRegistrations(client, instances)
 
-	success, skipped, failed := 0, 0, 0
-	var errs []string
-	seen := map[string]bool{}
-	for i := range instances {
-		ins := &instances[i]
-		registration := buildRegistration(ins)
-
-		// 同一批次内重复 ID 检测
-		if seen[registration.ID] {
-			skipped++
-			continue
-		}
-		seen[registration.ID] = true
-
-		// 已存在且未开启覆盖：跳过
-		if existing[registration.ID] && !overwrite {
-			skipped++
-			continue
-		}
-
-		if err := client.Agent().ServiceRegister(registration); err != nil {
-			failed++
-			errs = append(errs, fmt.Sprintf("%s: %v", registration.ID, err))
-			continue
-		}
-		success++
-	}
+	// 并行注册（内存去重 + 并发写入）
+	success, skipped, failed, errs := registerInstancesParallel(client, l.svcCtx, instances, existing, overwrite)
 
 	invalidateInstanceCache(l.ctx, l.svcCtx, groupID)
 
@@ -633,6 +610,71 @@ func (l *ImportInstancesLogic) ImportInstances(groupID int64, format string, dat
 	}
 
 	return success, skipped, failed, nil
+}
+
+// registerInstancesParallel 并行注册实例
+//
+// 流程:
+//  1. 内存中完成「批内去重」与「已存在跳过」判定（无网络调用，很快）；
+//  2. 对待注册集合统一并发注册（单一并发池）。
+//
+// 返回:
+//   success - 成功数
+//   skipped - 跳过数（批内重复 或 已存在且不覆盖）
+//   failed  - 失败数
+//   errs    - 失败详情（已排序）
+func registerInstancesParallel(
+	client *api.Client,
+	svcCtx *svc.ServiceContext,
+	items []types.RegisterInstanceRequest,
+	existing map[string]bool,
+	overwrite bool,
+) (int, int, int, []string) {
+	concurrency := svcCtx.ConsulConcurrency()
+
+	type pending struct {
+		id  string
+		reg *api.AgentServiceRegistration
+	}
+
+	seen := make(map[string]bool, len(items))
+	toRegister := make([]pending, 0, len(items))
+	skipped := 0
+
+	for i := range items {
+		reg := buildRegistration(&items[i])
+		if seen[reg.ID] {
+			skipped++
+			continue
+		}
+		seen[reg.ID] = true
+		if existing[reg.ID] && !overwrite {
+			skipped++
+			continue
+		}
+		toRegister = append(toRegister, pending{id: reg.ID, reg: reg})
+	}
+
+	var (
+		success int64
+		failed  int64
+		mu      sync.Mutex
+		errs    []string
+	)
+	_ = parallel.ForEach(toRegister, concurrency, func(_ int, p pending) error {
+		if err := client.Agent().ServiceRegister(p.reg); err != nil {
+			atomic.AddInt64(&failed, 1)
+			mu.Lock()
+			errs = append(errs, fmt.Sprintf("%s: %v", p.id, err))
+			mu.Unlock()
+			return nil
+		}
+		atomic.AddInt64(&success, 1)
+		return nil
+	})
+
+	sort.Strings(errs)
+	return int(success), skipped, int(failed), errs
 }
 
 // 辅助函数
@@ -928,25 +970,8 @@ func (l *BatchRegisterInstancesLogic) BatchRegisterInstances(req *types.BatchReg
 		}
 	}
 
-	success, skipped, failed := 0, 0, 0
-	var errs []string
-
-	for i := range targets {
-		ins := &targets[i]
-
-		if existing[ins.ID] && !req.Overwrite {
-			skipped++
-			continue
-		}
-
-		registration := buildRegistration(ins)
-		if rerr := client.Agent().ServiceRegister(registration); rerr != nil {
-			failed++
-			errs = append(errs, fmt.Sprintf("%s: %v", ins.ID, rerr))
-			continue
-		}
-		success++
-	}
+	// 并行注册（内存去重 + 并发写入）
+	success, skipped, failed, errs := registerInstancesParallel(client, l.svcCtx, targets, existing, req.Overwrite)
 
 	invalidateInstanceCache(l.ctx, l.svcCtx, req.GroupID)
 
