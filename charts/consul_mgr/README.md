@@ -21,6 +21,7 @@ Consul Manager 的 Helm Chart，采用 Helmfile 结构，支持多环境与全�
 - Kubernetes 1.24+、Helm 3.x、Helmfile 0.150+
 - 外置 PostgreSQL（已创建空库 `consul_mgr`）
 - 外置 Redis（可选，不可用时自动降级）
+- **目标节点已打上 `consul_mgr=true` 标签**（硬性节点亲和性要求，见[节点亲和性配置](#节点亲和性配置)）
 - **已部署 FlyIAM**（提供 Casdoor 认证中心），并记录：
   - Casdoor 内网地址（集群内可达）
   - 从 FlyIAM 获取的组织 / 应用 / ClientID / ClientSecret
@@ -45,6 +46,11 @@ export CONSUL_MGR_CASDOOR_CLIENT_ID="<从 FlyIAM 获取>"
 export CONSUL_MGR_CASDOOR_CLIENT_SECRET="<从 FlyIAM 获取>"
 export CONSUL_MGR_CASDOOR_ORGANIZATION="flyiam"
 export CONSUL_MGR_CASDOOR_APPLICATION="flyiam"
+
+# 为目标节点打标签（硬性节点亲和性要求）
+kubectl get nodes
+kubectl label nodes <node-1> consul_mgr=true
+kubectl label nodes <node-2> consul_mgr=true
 
 helmfile sync
 ```
@@ -92,6 +98,7 @@ charts/consul_mgr/
 | `CONSUL_MGR_NAMESPACE` | 命名空间 | `consul-mgr` |
 | `CONSUL_MGR_REPLICAS` | 应用副本数 | `2` |
 | `CONSUL_MGR_IMAGE_TAG` | 应用镜像标签 | `latest` |
+| `CONSUL_MGR_NODE_LABEL` / `CONSUL_MGR_NODE_LABEL_VALUE` | 硬性节点亲和性标签 | `consul_mgr` / `true` |
 | `CONSUL_MGR_DB_HOST` / `CONSUL_MGR_DB_PASSWORD` | 数据库 | - |
 | `CONSUL_MGR_REDIS_HOST` / `CONSUL_MGR_REDIS_PASSWORD` | 缓存 | - |
 | `CONSUL_MGR_JWT_SECRET` | JWT 密钥 | - |
@@ -104,6 +111,57 @@ charts/consul_mgr/
 | `CONSUL_MGR_CASDOOR_APPLICATION` | 应用 | `flyiam` |
 
 > Chart 仅暴露 ClusterIP Service，不包含 Ingress；域名/HTTPS 请在集群入口层（Ingress Controller / Gateway）统一配置。
+
+## 节点亲和性配置
+
+Consul Manager 配置了**硬性节点亲和性**，必须调度到带 `consul_mgr=true` 标签的
+Linux 节点。部署前需为目标节点打标签：
+
+```bash
+# 查看节点
+kubectl get nodes
+
+# 为节点打标签
+kubectl label nodes <node-1> consul_mgr=true
+kubectl label nodes <node-2> consul_mgr=true
+
+# 确认标签
+kubectl get nodes -l consul_mgr=true
+```
+
+渲染后的亲和性规则：
+
+```yaml
+affinity:
+  nodeAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: consul_mgr    # nodeLabel
+              operator: In
+              values:
+                - "true"          # nodeLabelValue
+            - key: kubernetes.io/os
+              operator: In
+              values:
+                - linux
+  podAntiAffinity:            # 多副本尽量分散到不同节点
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          topologyKey: kubernetes.io/hostname
+```
+
+标签由 `CONSUL_MGR_NODE_LABEL` / `CONSUL_MGR_NODE_LABEL_VALUE` 控制（默认
+`consul_mgr` / `true`）：
+
+```bash
+export CONSUL_MGR_NODE_LABEL="consul_mgr"
+export CONSUL_MGR_NODE_LABEL_VALUE="true"
+```
+
+> ⚠️ 硬性亲和性不满足时 Pod 会一直 `Pending`，可用
+> `kubectl describe pod -n consul-mgr <pod>` 查看调度事件。
 
 ## 安装后验证
 
@@ -238,10 +296,30 @@ Chart 默认创建 NetworkPolicy（`CONSUL_MGR_NETWORK_POLICY_ENABLED=true`）�
    需确保 FlyIAM 的 Casdoor Pod 带有 `app.kubernetes.io/component=casdoor`
    标签（FlyIAM Chart 默认已带）。
 
+## 运维操作
+
+统一在 `charts/consul_mgr` 目录执行：
+
+```bash
+# 安装部署
+helmfile -f helmfile.yaml.gotmpl sync
+
+# 更新（修改配置/镜像后重新同步）
+helmfile -f helmfile.yaml.gotmpl diff     # 查看变更
+helmfile -f helmfile.yaml.gotmpl sync     # 应用变更
+
+# 指定环境
+helmfile -f helmfile.yaml.gotmpl -e prod sync
+
+# 卸载
+helmfile -f helmfile.yaml.gotmpl destroy
+```
+
 ## 故障排查
 
 | 现象 | 处理 |
 |------|------|
+| Pod Pending（节点亲和性不满足） | `kubectl get nodes -l consul_mgr=true` 确认节点已打标签，或调整 `CONSUL_MGR_NODE_LABEL` |
 | Pod CrashLoopBackOff | `kubectl logs` 查看；确认数据库可达、`JWT_SECRET` 与 `ADMIN_PASSWORD` 已设置 |
 | 启动报 Casdoor 客户端初始化失败 | 检查 `CONSUL_MGR_CASDOOR_CLIENT_ID/SECRET` 是否从 FlyIAM 正确获取 |
 | 登录报 Redirect URI 错误 | 在 FlyIAM/Casdoor 应用白名单中加入回调地址 |

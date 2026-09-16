@@ -161,6 +161,11 @@ networkPolicyCasdoorPorts: '{{ env "CONSUL_MGR_NETWORK_POLICY_CASDOOR_PORTS" | d
 # 出站：是否放行全部出站（调试用；生产建议 false 并依赖下方精确规则）
 networkPolicyAllowAllEgress: {{ env "CONSUL_MGR_NETWORK_POLICY_ALLOW_ALL_EGRESS" | default "false" }}
 
+# ==================== 节点调度配置 ====================
+# 节点标签（用于硬性节点亲和性，必须调度到带该标签的 Linux 节点）
+nodeLabel: '{{ env "CONSUL_MGR_NODE_LABEL" | default "consul_mgr" }}'
+nodeLabelValue: '{{ env "CONSUL_MGR_NODE_LABEL_VALUE" | default "true" }}'
+
 # ==================== 权限配置 ====================
 # 是否启用服务组级授权
 permissionEnableServiceGroupAuth: {{ env "CONSUL_MGR_PERMISSION_ENABLE_SERVICE_GROUP_AUTH" | default "true" }}

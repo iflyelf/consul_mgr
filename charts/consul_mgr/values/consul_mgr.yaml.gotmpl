@@ -55,8 +55,22 @@ autoscaling:
 # ============================================
 nodeSelector: {}
 
-# Pod 反亲和性（避免多副本调度到同一节点）
+# 节点亲和性 + Pod 反亲和性
 affinity:
+  # 硬性节点亲和性：必须调度到带 nodeLabel 标签的 Linux 节点
+  nodeAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: {{ .Values.nodeLabel | quote }}
+              operator: In
+              values:
+                - {{ .Values.nodeLabelValue | quote }}
+            - key: kubernetes.io/os
+              operator: In
+              values:
+                - linux
+  # Pod 反亲和性（避免多副本调度到同一节点）
   podAntiAffinity:
     preferredDuringSchedulingIgnoredDuringExecution:
       - weight: 100

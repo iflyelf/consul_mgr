@@ -31,6 +31,7 @@ Chart 仅暴露 ClusterIP Service，不包含 Ingress；域名访问请在集群
 - Helm 3.x、Helmfile 0.150+
 - 外置 PostgreSQL（已创建空库 `consul_mgr`）
 - 外置 Redis（可选，不可用时自动降级）
+- **目标节点已打上 `consul_mgr=true` 标签**（硬性节点亲和性要求）
 - **已部署 FlyIAM**（提供 Casdoor 认证中心），并准备好：
   - Casdoor 集群内可达地址（如 `http://casdoor.flyiam.svc.cluster.local:8000`）
   - 从 FlyIAM 获取的 `ClientID` / `ClientSecret`
@@ -61,6 +62,11 @@ export CONSUL_MGR_CASDOOR_APPLICATION="flyiam"
 export CONSUL_MGR_REDIS_HOST="redis.default.svc.cluster.local"
 export CONSUL_MGR_REDIS_PASSWORD="your-redis-password"
 
+# 为目标节点打标签（硬性节点亲和性要求）
+kubectl get nodes
+kubectl label nodes <node-1> consul_mgr=true
+kubectl label nodes <node-2> consul_mgr=true
+
 # 部署
 helmfile sync
 
@@ -69,6 +75,41 @@ helmfile -e prod sync
 ```
 
 首次启动会自动建表，无需手工执行 SQL。
+
+### 3.1 节点亲和性
+
+应用配置了**硬性节点亲和性**，必须调度到带 `consul_mgr=true` 标签的 Linux 节点：
+
+```bash
+kubectl get nodes                     # 查看节点
+kubectl label nodes <node-1> consul_mgr=true
+kubectl get nodes -l consul_mgr=true  # 确认标签
+```
+
+```yaml
+affinity:
+  nodeAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: consul_mgr      # nodeLabel
+              operator: In
+              values:
+                - "true"            # nodeLabelValue
+            - key: kubernetes.io/os
+              operator: In
+              values:
+                - linux
+```
+
+标签可通过环境变量覆盖：
+
+```bash
+export CONSUL_MGR_NODE_LABEL="consul_mgr"
+export CONSUL_MGR_NODE_LABEL_VALUE="true"
+```
+
+> 硬性亲和性不满足时 Pod 会一直 `Pending`，用 `kubectl describe pod` 查看调度事件。
 
 ## 4. 对接 FlyIAM（认证）说明
 
@@ -221,6 +262,7 @@ egress:
 | `CONSUL_MGR_NAMESPACE` | 命名空间 | `consul-mgr` |
 | `CONSUL_MGR_REPLICAS` | 应用副本数 | `2` |
 | `CONSUL_MGR_IMAGE_TAG` | 应用镜像标签 | `latest` |
+| `CONSUL_MGR_NODE_LABEL` / `CONSUL_MGR_NODE_LABEL_VALUE` | 硬性节点亲和性标签 | `consul_mgr` / `true` |
 | `CONSUL_MGR_DB_HOST` / `CONSUL_MGR_DB_PASSWORD` | 数据库 | - |
 | `CONSUL_MGR_DATABASE_URL` | 完整连接串（优先于分项） | - |
 | `CONSUL_MGR_REDIS_HOST` / `CONSUL_MGR_REDIS_PASSWORD` | 缓存 | - |
@@ -293,9 +335,14 @@ kubectl -n consul-mgr scale deploy/consul-mgr --replicas=3
 
 或启用 HPA（`CONSUL_MGR_HPA_ENABLED=true`）。
 
-## 11. 卸载
+## 11. 更新与卸载
 
 ```bash
+# 更新（修改配置/镜像后）
+helmfile -f helmfile.yaml.gotmpl diff    # 查看变更
+helmfile -f helmfile.yaml.gotmpl sync    # 应用变更
+
+# 卸载
 helmfile -e default destroy
 # 或
 helm uninstall consul-mgr -n consul-mgr
