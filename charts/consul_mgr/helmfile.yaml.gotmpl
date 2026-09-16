@@ -132,6 +132,7 @@ releases:
       - networkPolicyDbCidrs: {{ .Values.networkPolicyDbCidrs | quote }}
       - networkPolicyConsulCidrs: {{ .Values.networkPolicyConsulCidrs | quote }}
       - networkPolicyCasdoorCidrs: {{ .Values.networkPolicyCasdoorCidrs | quote }}
+      - networkPolicyCasdoorPorts: {{ .Values.networkPolicyCasdoorPorts | quote }}
       - networkPolicyAllowAllEgress: {{ .Values.networkPolicyAllowAllEgress }}
       # HPA 配置
       - hpaEnabled: {{ .Values.hpaEnabled }}

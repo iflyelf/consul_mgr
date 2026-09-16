@@ -101,8 +101,8 @@ export CONSUL_MGR_CASDOOR_ENDPOINT="https://casdoor.example.com"
 export CONSUL_MGR_CASDOOR_PUBLIC_ENDPOINT="https://casdoor.example.com"
 ```
 
-> 外置多为 HTTPS（默认 443）；自定义端口请设置
-> `CONSUL_MGR_CASDOOR_SERVICE_PORT`（NetworkPolicy 出站端口）。
+> 外置域名默认走标准端口 **443（https）/ 80（http）**，NetworkPolicy 已同时放行两者；
+> 非标准端口请设置 `CONSUL_MGR_NETWORK_POLICY_CASDOOR_PORTS`（如 `8443`）。
 
 **可选：集群内方式（`casdoorInCluster=true`）**
 
@@ -137,7 +137,7 @@ spec:
 | `CONSUL_MGR_CASDOOR_IN_CLUSTER` | Casdoor 是否在集群内 | `false` |
 | `CONSUL_MGR_CASDOOR_NAMESPACE` | FlyIAM 命名空间 | `flyiam` |
 | `CONSUL_MGR_CASDOOR_SERVICE_NAME` | Casdoor Service 名 | `casdoor` |
-| `CONSUL_MGR_CASDOOR_SERVICE_PORT` | Casdoor 端口 | `8000` |
+| `CONSUL_MGR_CASDOOR_SERVICE_PORT` | Casdoor 端口（集群内方式） | `8000` |
 | `CONSUL_MGR_CASDOOR_EXTERNAL_SERVICE_ENABLED` | 是否创建别名 | `false` |
 | `CONSUL_MGR_CASDOOR_EXTERNAL_SERVICE_NAME` | 别名名称 | `casdoor` |
 
@@ -154,10 +154,12 @@ egress:
             kubernetes.io/metadata.name: kube-system
     ports: [{ protocol: UDP, port: 53 }, { protocol: TCP, port: 53 }]
 
-  # 外置域名方式（默认）：按端口放行；填 casdoorCidrs 后仅放行对应网段
+  # 外置域名方式（默认）：放行标准端口 443/80；填 casdoorCidrs 后仅放行对应网段
   - ports:
       - protocol: TCP
-        port: 8000
+        port: 443
+      - protocol: TCP
+        port: 80
   # 集群内方式（casdoorInCluster=true）：
   # - to:
   #     - namespaceSelector:
@@ -186,6 +188,7 @@ egress:
 | `CONSUL_MGR_NETWORK_POLICY_ALLOW_ALL_INGRESS` | 入站放开所有来源 | `true` |
 | `CONSUL_MGR_NETWORK_POLICY_INGRESS_NAMESPACES` | 收紧入站时允许的命名空间 | 空 |
 | `CONSUL_MGR_NETWORK_POLICY_CASDOOR_CIDRS` | 外置 Casdoor 域名对应网段 | 空 |
+| `CONSUL_MGR_NETWORK_POLICY_CASDOOR_PORTS` | 外置 Casdoor 端口 | `443,80` |
 | `CONSUL_MGR_NETWORK_POLICY_CONSUL_CIDRS` | Consul 集群网段（全端口） | 空 |
 | `CONSUL_MGR_NETWORK_POLICY_DB_CIDRS` | 数据库/Redis 目标网段 | 空 |
 | `CONSUL_MGR_NETWORK_POLICY_ALLOW_ALL_EGRESS` | 放行全部出站（调试） | `false` |
@@ -223,7 +226,7 @@ egress:
 | `CONSUL_MGR_REDIS_HOST` / `CONSUL_MGR_REDIS_PASSWORD` | 缓存 | - |
 | `CONSUL_MGR_JWT_SECRET` | JWT 密钥（≥32 位） | - |
 | `CONSUL_MGR_ADMIN_PASSWORD` | 管理员密码 | - |
-| `CONSUL_MGR_CASDOOR_ENDPOINT` | Casdoor 地址（默认外置域名） | `http://casdoor.example.com:8000` |
+| `CONSUL_MGR_CASDOOR_ENDPOINT` | Casdoor 地址（默认外置域名） | `https://casdoor.example.com` |
 | `CONSUL_MGR_CASDOOR_PUBLIC_ENDPOINT` | Casdoor 浏览器地址（留空回退 Endpoint） | - |
 | `CONSUL_MGR_CASDOOR_IN_CLUSTER` | Casdoor 是否在集群内 | `false` |
 | `CONSUL_MGR_CASDOOR_ORGANIZATION` | 组织 | `flyiam` |

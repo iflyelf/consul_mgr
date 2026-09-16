@@ -81,7 +81,7 @@ spec:
         - protocol: TCP
           port: {{ .Values.networkPolicy.casdoor.port }}
     {{- else }}
-    # 外置域名方式
+    # 外置域名方式（默认走标准端口 443/80）
     {{- if .Values.networkPolicy.casdoor.externalCidrs }}
     # 仅放行外置 Casdoor 域名对应的网段
     - to:
@@ -93,13 +93,23 @@ spec:
         {{- end }}
         {{- end }}
       ports:
+        {{- range $item := splitList "," .Values.networkPolicy.casdoor.externalPorts }}
+        {{- $p := trim $item }}
+        {{- if $p }}
         - protocol: TCP
-          port: {{ .Values.networkPolicy.casdoor.port }}
+          port: {{ $p }}
+        {{- end }}
+        {{- end }}
     {{- else }}
     # 外置域名解析为公网 IP，无法预先穷举：按端口放行到任意目标
     - ports:
+        {{- range $item := splitList "," .Values.networkPolicy.casdoor.externalPorts }}
+        {{- $p := trim $item }}
+        {{- if $p }}
         - protocol: TCP
-          port: {{ .Values.networkPolicy.casdoor.port }}
+          port: {{ $p }}
+        {{- end }}
+        {{- end }}
     {{- end }}
     {{- end }}
 

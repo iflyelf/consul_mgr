@@ -96,7 +96,7 @@ charts/consul_mgr/
 | `CONSUL_MGR_REDIS_HOST` / `CONSUL_MGR_REDIS_PASSWORD` | 缓存 | - |
 | `CONSUL_MGR_JWT_SECRET` | JWT 密钥 | - |
 | `CONSUL_MGR_ADMIN_PASSWORD` | 管理员密码 | - |
-| `CONSUL_MGR_CASDOOR_ENDPOINT` | Casdoor 地址（默认外置域名） | `http://casdoor.example.com:8000` |
+| `CONSUL_MGR_CASDOOR_ENDPOINT` | Casdoor 地址（默认外置域名） | `https://casdoor.example.com` |
 | `CONSUL_MGR_CASDOOR_PUBLIC_ENDPOINT` | Casdoor 浏览器地址（留空回退 Endpoint） | - |
 | `CONSUL_MGR_CASDOOR_IN_CLUSTER` | Casdoor 是否在集群内 | `false` |
 | `CONSUL_MGR_CASDOOR_CLIENT_ID` / `..._SECRET` | 应用凭据（FlyIAM 获取） | - |
@@ -150,8 +150,8 @@ export CONSUL_MGR_CASDOOR_PUBLIC_ENDPOINT="https://casdoor.example.com"
 # casdoorInCluster 默认 false
 ```
 
-> 外置多为 HTTPS，默认端口 443；如使用自定义端口，请相应设置
-> `CONSUL_MGR_CASDOOR_SERVICE_PORT`（NetworkPolicy 出站端口）。
+> 外置域名默认走标准端口 **443（https）/ 80（http）**，NetworkPolicy 已同时放行两者；
+> 如使用非标准端口，请设置 `CONSUL_MGR_NETWORK_POLICY_CASDOOR_PORTS`（如 `8443`）。
 
 **可选：集群内方式（Casdoor 仅集群内可达）**
 
@@ -182,7 +182,7 @@ spec:
 | `CONSUL_MGR_CASDOOR_IN_CLUSTER` | Casdoor 是否在集群内 | `false` |
 | `CONSUL_MGR_CASDOOR_NAMESPACE` | FlyIAM 所在命名空间（集群内方式） | `flyiam` |
 | `CONSUL_MGR_CASDOOR_SERVICE_NAME` | FlyIAM 中 Casdoor Service 名 | `casdoor` |
-| `CONSUL_MGR_CASDOOR_SERVICE_PORT` | Casdoor 端口 | `8000` |
+| `CONSUL_MGR_CASDOOR_SERVICE_PORT` | Casdoor 端口（集群内方式） | `8000` |
 | `CONSUL_MGR_CASDOOR_EXTERNAL_SERVICE_ENABLED` | 是否创建别名 | `false` |
 | `CONSUL_MGR_CASDOOR_EXTERNAL_SERVICE_NAME` | 别名名称 | `casdoor` |
 
@@ -195,7 +195,7 @@ Chart 默认创建 NetworkPolicy（`CONSUL_MGR_NETWORK_POLICY_ENABLED=true`）�
 - **出站**：
   - DNS（kube-system:53）
   - **Casdoor**：
-    - 外置域名方式（默认）：按端口放行到任意目标；填 `networkPolicyCasdoorCidrs` 后仅放行对应网段
+    - 外置域名方式（默认）：放行标准端口 443/80 到任意目标；填 `networkPolicyCasdoorCidrs` 后仅放行对应网段
     - 集群内方式：`namespaceSelector=flyiam` + `podSelector=component=casdoor`
   - **Consul 集群**：地址/端口运行时可配，`consulCidrs` 为空时不限制（`- {}`）
   - 数据库（PostgreSQL 端口，可选按 `dbCidrs` 收紧）
@@ -207,6 +207,7 @@ Chart 默认创建 NetworkPolicy（`CONSUL_MGR_NETWORK_POLICY_ENABLED=true`）�
 | `CONSUL_MGR_NETWORK_POLICY_ALLOW_ALL_INGRESS` | 入站放开所有来源 | `true` |
 | `CONSUL_MGR_NETWORK_POLICY_INGRESS_NAMESPACES` | 收紧入站时允许的命名空间（逗号分隔） | 空 |
 | `CONSUL_MGR_NETWORK_POLICY_CASDOOR_CIDRS` | 外置 Casdoor 域名对应网段（逗号分隔） | 空 |
+| `CONSUL_MGR_NETWORK_POLICY_CASDOOR_PORTS` | 外置 Casdoor 端口（逗号分隔） | `443,80` |
 | `CONSUL_MGR_NETWORK_POLICY_CONSUL_CIDRS` | Consul 集群网段（逗号分隔，全端口） | 空 |
 | `CONSUL_MGR_NETWORK_POLICY_DB_CIDRS` | 数据库/Redis 目标网段（逗号分隔） | 空 |
 | `CONSUL_MGR_NETWORK_POLICY_ALLOW_ALL_EGRESS` | 放行全部出站（调试） | `false` |
@@ -222,15 +223,7 @@ Chart 默认创建 NetworkPolicy（`CONSUL_MGR_NETWORK_POLICY_ENABLED=true`）�
 > export CONSUL_MGR_NETWORK_POLICY_ALLOW_ALL_INGRESS=false
 > export CONSUL_MGR_NETWORK_POLICY_INGRESS_NAMESPACES="ingress-nginx"
 > export CONSUL_MGR_NETWORK_POLICY_CASDOOR_CIDRS="203.0.113.0/24"
-> export CONSUL_MGR_NETWORK_POLICY_CONSUL_CIDRS="10.0.56.0/24,10.1.0.0/16"
-> export CONSUL_MGR_NETWORK_POLICY_DB_CIDRS="10.0.51.0/24,10.1.230.0/24"
-> ```
-
-> 收紧示例（入站仅入口控制器命名空间，出站限定 Consul / DB 内网网段）：
->
-> ```bash
-> export CONSUL_MGR_NETWORK_POLICY_ALLOW_ALL_INGRESS=false
-> export CONSUL_MGR_NETWORK_POLICY_INGRESS_NAMESPACES="ingress-nginx"
+> export CONSUL_MGR_NETWORK_POLICY_CASDOOR_PORTS="443"
 > export CONSUL_MGR_NETWORK_POLICY_CONSUL_CIDRS="10.0.56.0/24,10.1.0.0/16"
 > export CONSUL_MGR_NETWORK_POLICY_DB_CIDRS="10.0.51.0/24,10.1.230.0/24"
 > ```

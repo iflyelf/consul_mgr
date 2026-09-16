@@ -302,7 +302,9 @@ networkPolicy:
     inCluster: {{ .Values.casdoorInCluster }}
     # 外置域名方式：域名对应 CIDR（留空则按端口放行任意目标）
     externalCidrs: {{ .Values.networkPolicyCasdoorCidrs | quote }}
-    # 集群内方式：命名空间 + Pod 标签
+    # 外置域名方式：端口列表（默认 443,80 标准端口）
+    externalPorts: {{ .Values.networkPolicyCasdoorPorts | quote }}
+    # 集群内方式：命名空间 + Pod 标签 + 端口
     namespace: {{ .Values.casdoorNamespace | quote }}
     podLabelKey: {{ .Values.casdoorPodLabelKey | quote }}
     podLabelValue: {{ .Values.casdoorPodLabelValue | quote }}
