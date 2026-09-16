@@ -6,43 +6,44 @@ package user
 
 import (
 	"net/http"
-	"strings"
+	"strconv"
 
 	"github.com/zeromicro/go-zero/rest/httpx"
 
+	"github.com/iflyelf/consul_mgr/internal/logic/user"
 	"github.com/iflyelf/consul_mgr/internal/svc"
 )
 
 // ListUsersHandler 用户列表（来自 Casdoor，支持关键字/分页）
+//
+// 查询参数:
+//   keyword   - 用户名 / 显示名 / 邮箱 模糊搜索
+//   page      - 页码（默认 1）
+//   page_size - 每页条数（默认 20）
+//
+// 说明:
+//   全量用户经 Redis 缓存后在内存过滤与分页，避免人员多时每次请求都打 Casdoor。
 func ListUsersHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		users, err := ctx.CasdoorClient.ListUsers()
+		page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+		pageSize, _ := strconv.Atoi(r.URL.Query().Get("page_size"))
+		keyword := r.URL.Query().Get("keyword")
+
+		l := user.NewUserLogic(r.Context(), ctx.CasdoorClient, ctx.Cache)
+		list, total, err := l.ListUsers(keyword, page, pageSize)
 		if err != nil {
 			httpx.WriteJson(w, http.StatusOK, map[string]interface{}{"code": 500, "message": err.Error()})
 			return
 		}
 
-		// 关键字过滤（用户名/显示名/邮箱）
-		keyword := strings.ToLower(r.URL.Query().Get("keyword"))
-		if keyword != "" {
-			filtered := make([]interface{}, 0, len(users))
-			for _, u := range users {
-				if strings.Contains(strings.ToLower(u.Name), keyword) ||
-					strings.Contains(strings.ToLower(u.DisplayName), keyword) ||
-					strings.Contains(strings.ToLower(u.Email), keyword) {
-					filtered = append(filtered, u)
-				}
-			}
-			httpx.WriteJson(w, http.StatusOK, map[string]interface{}{
-				"code": 200, "message": "success",
-				"data": map[string]interface{}{"list": filtered, "total": len(filtered)},
-			})
-			return
-		}
-
 		httpx.WriteJson(w, http.StatusOK, map[string]interface{}{
 			"code": 200, "message": "success",
-			"data": map[string]interface{}{"list": users, "total": len(users)},
+			"data": map[string]interface{}{
+				"list":      list,
+				"total":     total,
+				"page":      page,
+				"page_size": pageSize,
+			},
 		})
 	}
 }

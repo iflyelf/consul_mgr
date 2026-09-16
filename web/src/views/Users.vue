@@ -10,10 +10,10 @@
               placeholder="搜索用户名 / 姓名 / 邮箱"
               clearable
               style="width: 260px; margin-right: 10px"
-              @keyup.enter="loadData"
-              @clear="loadData"
+              @keyup.enter="handleSearch"
+              @clear="handleSearch"
             />
-            <el-button type="primary" @click="loadData" :loading="loading">搜索</el-button>
+            <el-button type="primary" @click="handleSearch" :loading="loading">搜索</el-button>
             <el-button @click="handleRefresh" :loading="loading">刷新</el-button>
           </div>
         </div>
@@ -52,7 +52,15 @@
       </el-table>
 
       <div class="pagination">
-        <span class="total">共 {{ users.length }} 个用户</span>
+        <el-pagination
+          v-model:current-page="currentPage"
+          v-model:page-size="pageSize"
+          :page-sizes="[10, 20, 50, 100]"
+          :total="total"
+          layout="total, sizes, prev, pager, next, jumper"
+          @size-change="handleSizeChange"
+          @current-change="handleCurrentChange"
+        />
       </div>
     </el-card>
   </div>
@@ -66,17 +74,42 @@ import { getUsers } from '@/api/org'
 const loading = ref(false)
 const keyword = ref('')
 const users = ref([])
+const total = ref(0)
+const currentPage = ref(1)
+const pageSize = ref(20)
 
 const loadData = async () => {
   loading.value = true
   try {
-    const res = await getUsers({ keyword: keyword.value })
+    const res = await getUsers({
+      keyword: keyword.value,
+      page: currentPage.value,
+      page_size: pageSize.value
+    })
     users.value = res.list || []
+    total.value = res.total || 0
   } catch (e) {
     ElMessage.error('获取用户列表失败')
   } finally {
     loading.value = false
   }
+}
+
+// 搜索：回到第一页
+const handleSearch = () => {
+  currentPage.value = 1
+  loadData()
+}
+
+const handleSizeChange = (val) => {
+  pageSize.value = val
+  currentPage.value = 1
+  loadData()
+}
+
+const handleCurrentChange = (val) => {
+  currentPage.value = val
+  loadData()
 }
 
 const handleRefresh = () => loadData()

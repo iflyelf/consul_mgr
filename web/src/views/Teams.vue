@@ -94,11 +94,16 @@
         <el-select
           v-model="selectedUser"
           filterable
-          placeholder="选择用户（来自 Casdoor）"
+          remote
+          reserve-keyword
+          :remote-method="searchUsers"
+          :loading="userSearchLoading"
+          placeholder="搜索用户（用户名 / 姓名 / 邮箱）"
           style="flex: 1"
+          @focus="searchUsers('')"
         >
           <el-option
-            v-for="u in availableUsers"
+            v-for="u in userOptions"
             :key="u.id"
             :label="`${u.displayName || u.name} (${u.name})`"
             :value="u.id"
@@ -222,7 +227,8 @@ const keyword = ref('')
 const teams = ref([])
 const groups = ref([])
 const roles = ref([])
-const allUsers = ref([])
+const userOptions = ref([])
+const userSearchLoading = ref(false)
 
 const dialogVisible = ref(false)
 const dialogTitle = ref('新建团队')
@@ -246,9 +252,19 @@ const permForm = reactive({ group_id: null, permissions: [], role_ids: [], servi
 const permAll = ref(false)
 const permServiceOptions = ref([])
 
-const availableUsers = computed(() =>
-  allUsers.value.filter(u => !members.value.some(m => m.user_id === u.id))
-)
+// 远程搜索用户（避免一次拉取全部用户）
+const searchUsers = async (kw) => {
+  userSearchLoading.value = true
+  try {
+    const res = await getUsers({ keyword: kw || '', page: 1, page_size: 50 })
+    const taken = new Set(members.value.map(m => m.user_id))
+    userOptions.value = (res.list || []).filter(u => !taken.has(u.id))
+  } catch (e) {
+    userOptions.value = []
+  } finally {
+    userSearchLoading.value = false
+  }
+}
 
 const roleName = (id) => roles.value.find(r => r.id === id)?.name || `#${id}`
 
@@ -266,10 +282,9 @@ const loadData = async () => {
 
 const loadRefData = async () => {
   try {
-    const [g, r, u] = await Promise.all([getGroups({ page: 1, page_size: 100 }), getRoles({}), getUsers({})])
+    const [g, r] = await Promise.all([getGroups({ page: 1, page_size: 100 }), getRoles({})])
     groups.value = g.list || []
     roles.value = r.list || []
-    allUsers.value = u.list || []
   } catch (e) { /* 忽略，页面仍可用 */ }
 }
 
@@ -348,7 +363,7 @@ const handleAddMember = async () => {
     ElMessage.warning('请选择用户')
     return
   }
-  const u = allUsers.value.find(x => x.id === selectedUser.value)
+  const u = userOptions.value.find(x => x.id === selectedUser.value) || {}
   try {
     await addTeamMember(currentTeam.value.id, {
       user_id: u.id, username: u.name, display_name: u.displayName || u.name
