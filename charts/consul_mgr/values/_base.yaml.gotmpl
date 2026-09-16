@@ -24,7 +24,7 @@ imageRepository: '{{ env "CONSUL_MGR_IMAGE_REPOSITORY" | default "iflyelf/consul
 # 镜像标签
 imageTag: '{{ env "CONSUL_MGR_IMAGE_TAG" | default "latest" }}'
 # 镜像拉取策略
-imagePullPolicy: '{{ env "CONSUL_MGR_IMAGE_PULL_POLICY" | default "IfNotPresent" }}'
+imagePullPolicy: '{{ env "CONSUL_MGR_IMAGE_PULL_POLICY" | default "Always" }}'
 
 # ==================== 服务端口配置 ====================
 # 服务端口
