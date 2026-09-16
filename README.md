@@ -90,6 +90,7 @@ go run ./cmd/api -c etc/config.yaml
 | `CASDOOR_CLIENT_ID` / `CASDOOR_CLIENT_SECRET` | Casdoor 凭据 | — |
 | `REDIS_ENABLED` / `REDIS_HOST` / `REDIS_PORT` / `REDIS_PASSWORD` | 缓存 | `true`/`localhost`/`6379`/空 |
 | `CONSUL_ADDRESS` / `CONSUL_TOKEN` / `CONSUL_DATACENTER` | 默认 Consul | — / 空 / `dc1` |
+| `CONSUL_MAX_CONCURRENCY` | 批量查询/操作并发上限 | `16` |
 
 完整清单见 [systemd 部署文档](docs/deployment/systemd.md#环境变量配置)。
 

@@ -44,7 +44,8 @@ type Config struct {
 		DefaultAddress    string `json:",optional,env=CONSUL_ADDRESS"`
 		DefaultToken      string `json:",optional,env=CONSUL_TOKEN"`
 		DefaultDatacenter string `json:",default=dc1,env=CONSUL_DATACENTER"`
-		Timeout           int    `json:",default=10,env=CONSUL_TIMEOUT"` // seconds
+		Timeout           int    `json:",default=10,env=CONSUL_TIMEOUT"`           // seconds
+		MaxConcurrency    int    `json:",default=16,env=CONSUL_MAX_CONCURRENCY"`   // 批量查询/操作并发上限
 	}
 
 	Web struct {

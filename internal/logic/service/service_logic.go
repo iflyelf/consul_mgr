@@ -8,7 +8,9 @@ import (
 	"strings"
 
 	"github.com/hashicorp/consul/api"
+	"github.com/iflyelf/consul_mgr/internal/logic/instance"
 	"github.com/iflyelf/consul_mgr/internal/pkg/consul"
+	"github.com/iflyelf/consul_mgr/internal/pkg/parallel"
 	"github.com/iflyelf/consul_mgr/internal/svc"
 	"github.com/iflyelf/consul_mgr/internal/types"
 )
@@ -56,20 +58,22 @@ func (l *ListServicesLogic) ListServices(groupID int64, keyword string) ([]types
 			return nil, fmt.Errorf("查询服务列表失败: %w", consul.FriendlyError(addr, err))
 		}
 
-		// 并行拉取各服务健康条目（服务多时避免串行累积变慢）
 		names := make([]string, 0, len(services))
 		for name := range services {
 			names = append(names, name)
 		}
 		sort.Strings(names)
 
-		healthMap := consul.FetchServiceHealth(client, names)
-		for _, name := range names {
-			entries, ok := healthMap[name]
-			if !ok || len(entries) == 0 {
+		// 并行按服务取实例：复用实例模块的按服务缓存，
+		// 用户先看过实例列表时此处可直接命中缓存，无需再次请求 Consul。
+		perService := parallel.Map(names, l.svcCtx.ConsulConcurrency(), func(name string) []types.ConsulInstanceInfo {
+			return instance.ListInstancesCached(l.ctx, l.svcCtx, client, groupID, name)
+		})
+		for i, list := range perService {
+			if len(list) == 0 {
 				continue
 			}
-			all = append(all, buildServiceInfo(name, entries))
+			all = append(all, buildServiceInfoFromInstances(names[i], list))
 		}
 
 		l.svcCtx.Cache.Set(l.ctx, cacheKey, all)
@@ -86,6 +90,42 @@ func (l *ListServicesLogic) ListServices(groupID int64, keyword string) ([]types
 		}
 	}
 	return result, nil
+}
+
+// buildServiceInfoFromInstances 由已获取的实例列表构建服务汇总信息
+func buildServiceInfoFromInstances(serviceName string, list []types.ConsulInstanceInfo) types.ConsulServiceInfo {
+	healthyCount := 0
+	unhealthyCount := 0
+	healthStatus := "passing"
+
+	for _, it := range list {
+		switch it.HealthStatus {
+		case "passing":
+			healthyCount++
+		case "critical":
+			unhealthyCount++
+			healthStatus = "critical"
+		default:
+			unhealthyCount++
+			if healthStatus != "critical" {
+				healthStatus = "warning"
+			}
+		}
+	}
+
+	first := list[0]
+	return types.ConsulServiceInfo{
+		ID:             first.ID,
+		Service:        serviceName,
+		Tags:           first.Tags,
+		Meta:           first.Meta,
+		Address:        first.Address,
+		Port:           first.Port,
+		HealthStatus:   healthStatus,
+		InstanceCount:  len(list),
+		HealthyCount:   healthyCount,
+		UnhealthyCount: unhealthyCount,
+	}
 }
 
 // buildServiceInfo 由 Consul 健康条目构建服务汇总信息
@@ -148,11 +188,16 @@ func (l *DeleteServiceLogic) DeleteService(groupID int64, serviceName string) er
 		return fmt.Errorf("查询服务实例失败: %w", err)
 	}
 
-	// 删除所有实例（支持集群跨节点注销）
+	// 并行删除所有实例（支持集群跨节点注销）
+	ids := make([]string, 0, len(entries))
 	for _, entry := range entries {
-		if err := consul.DeregisterService(client, entry.Service.ID); err != nil {
-			return fmt.Errorf("删除实例 %s 失败: %w", entry.Service.ID, err)
-		}
+		ids = append(ids, entry.Service.ID)
+	}
+	if errs := parallel.ForEach(ids, l.svcCtx.ConsulConcurrency(), func(_ int, id string) error {
+		return consul.DeregisterService(client, id)
+	}); len(errs) > 0 {
+		invalidateServiceCache(l.ctx, l.svcCtx, groupID)
+		return fmt.Errorf("删除服务 %s 时 %d 个实例失败: %v", serviceName, len(errs), errs)
 	}
 
 	invalidateServiceCache(l.ctx, l.svcCtx, groupID)
@@ -178,27 +223,58 @@ func (l *BatchDeleteServicesLogic) BatchDeleteServices(groupID int64, serviceNam
 		return err
 	}
 
+	if len(serviceNames) == 0 {
+		return errors.New("未选择任何服务")
+	}
+
+	concurrency := l.svcCtx.ConsulConcurrency()
+
+	// 第一步：并行收集各服务下的实例 ID（每个服务一次查询）
+	type svcEntries struct {
+		name string
+		ids  []string
+		err  error
+	}
+	perSvc := parallel.Map(serviceNames, concurrency, func(name string) svcEntries {
+		entries, _, e := client.Health().Service(name, "", false, nil)
+		if e != nil {
+			return svcEntries{name: name, err: e}
+		}
+		ids := make([]string, 0, len(entries))
+		for _, entry := range entries {
+			ids = append(ids, entry.Service.ID)
+		}
+		return svcEntries{name: name, ids: ids}
+	})
+
+	// 第二步：汇总所有实例，统一并行注销（单一并发池，避免嵌套并发导致 goroutine 爆炸）
 	var errs []string
-	for _, serviceName := range serviceNames {
-		entries, _, err := client.Health().Service(serviceName, "", false, nil)
-		if err != nil {
-			errs = append(errs, fmt.Sprintf("%s: %v", serviceName, err))
+	type target struct{ service, id string }
+	var targets []target
+	for _, s := range perSvc {
+		if s.err != nil {
+			errs = append(errs, fmt.Sprintf("%s: %v", s.name, s.err))
 			continue
 		}
-
-		for _, entry := range entries {
-			if err := consul.DeregisterService(client, entry.Service.ID); err != nil {
-				errs = append(errs, fmt.Sprintf("%s/%s: %v", serviceName, entry.Service.ID, err))
-			}
+		for _, id := range s.ids {
+			targets = append(targets, target{s.name, id})
 		}
 	}
 
-	if len(errs) > 0 {
-		invalidateServiceCache(l.ctx, l.svcCtx, groupID)
-		return errors.New("批量删除部分失败: " + fmt.Sprint(errs))
+	if derrs := parallel.ForEach(targets, concurrency, func(_ int, t target) error {
+		return consul.DeregisterService(client, t.id)
+	}); len(derrs) > 0 {
+		for i, de := range derrs {
+			errs = append(errs, fmt.Sprintf("%s/%s: %v", targets[i].service, targets[i].id, de))
+		}
 	}
 
 	invalidateServiceCache(l.ctx, l.svcCtx, groupID)
+
+	if len(errs) > 0 {
+		sort.Strings(errs)
+		return errors.New("批量删除部分失败: " + fmt.Sprint(errs))
+	}
 	return nil
 }
 

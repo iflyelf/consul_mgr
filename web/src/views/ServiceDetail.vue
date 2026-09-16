@@ -139,7 +139,20 @@
         </el-table-column>
       </el-table>
 
-      <el-empty v-if="!loading && instances.length === 0" description="暂无实例" />
+      <!-- 分页 -->
+      <div class="pagination" v-if="allInstances.length > 0">
+        <el-pagination
+          v-model:current-page="currentPage"
+          v-model:page-size="pageSize"
+          :page-sizes="[10, 20, 50, 100]"
+          :total="allInstances.length"
+          layout="total, sizes, prev, pager, next, jumper"
+          @size-change="handleSizeChange"
+          @current-change="handleCurrentChange"
+        />
+      </div>
+
+      <el-empty v-if="!loading && allInstances.length === 0" description="暂无实例" />
     </el-card>
 
     <!-- 注册/编辑实例对话框 -->
@@ -351,13 +364,31 @@ const keyword = ref('')
 const selectedInstances = ref([])
 
 const serviceDetail = ref(null)
-const instances = computed(() => serviceDetail.value?.instances || [])
+const allInstances = computed(() => serviceDetail.value?.instances || [])
+
+// 分页：服务详情下实例可能非常多（如 1600+），必须分页渲染
+const currentPage = ref(1)
+const pageSize = ref(20)
+const instances = computed(() => {
+  const list = allInstances.value
+  const start = (currentPage.value - 1) * pageSize.value
+  return list.slice(start, start + pageSize.value)
+})
+
 // 汇总所有实例的标签（去重）
 const serviceTags = computed(() => {
   const set = new Set()
-  instances.value.forEach(i => (i.tags || []).forEach(t => set.add(t)))
+  allInstances.value.forEach(i => (i.tags || []).forEach(t => set.add(t)))
   return Array.from(set)
 })
+
+const handleSizeChange = (val) => {
+  pageSize.value = val
+  currentPage.value = 1
+}
+const handleCurrentChange = (val) => {
+  currentPage.value = val
+}
 
 // 批量注册
 const batchRegVisible = ref(false)
@@ -426,13 +457,16 @@ const fetchServiceDetail = async () => {
 }
 
 // 搜索
+// 搜索
 const handleSearch = () => {
+  currentPage.value = 1
   fetchServiceDetail()
 }
 
 // 重置搜索
 const handleResetSearch = () => {
   keyword.value = ''
+  currentPage.value = 1
   fetchServiceDetail()
 }
 
@@ -804,6 +838,12 @@ onMounted(() => {
   color: #909399;
   font-size: 12px;
   margin-top: 4px;
+}
+
+.pagination {
+  margin-top: 16px;
+  display: flex;
+  justify-content: flex-end;
 }
 
 .preview-list {

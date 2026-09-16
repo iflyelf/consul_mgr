@@ -2,11 +2,13 @@ package instance
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/hashicorp/consul/api"
 	"github.com/zeromicro/go-zero/core/logx"
 
 	"github.com/iflyelf/consul_mgr/internal/pkg/consul"
+	"github.com/iflyelf/consul_mgr/internal/pkg/parallel"
 	"github.com/iflyelf/consul_mgr/internal/types"
 )
 
@@ -65,14 +67,21 @@ func dedupClusterRegistrations(client *api.Client, targets []types.RegisterInsta
 		}
 	}
 
-	var removed []string
+	nameList := make([]string, 0, len(names))
 	for name := range names {
+		nameList = append(nameList, name)
+	}
+
+	// 第一步：并行查询各服务的集群条目，汇总待清理的远端重复项
+	type found struct{ node, id string }
+	perSvc := parallel.Map(nameList, parallel.DefaultConcurrency, func(name string) []found {
 		entries, _, err := client.Catalog().Service(name, "", nil)
 		if err != nil {
 			// 查询失败不阻断注册，仅记录
 			logx.Errorf("[dedup] 查询集群服务失败 service=%s: %v", name, err)
-			continue
+			return nil
 		}
+		var local []found
 		for _, e := range entries {
 			if !wanted[e.ServiceID] {
 				continue
@@ -81,14 +90,29 @@ func dedupClusterRegistrations(client *api.Client, targets []types.RegisterInsta
 			if localNode != "" && e.Node == localNode {
 				continue
 			}
-			// 远端重复：按节点注销
-			if derr := consul.DeregisterRemote(client, e.Node, e.ServiceID); derr != nil {
-				logx.Errorf("[dedup] 清理远端重复失败 %s@%s: %v", e.ServiceID, e.Node, derr)
-				continue
-			}
-			removed = append(removed, fmt.Sprintf("%s@%s", e.ServiceID, e.Node))
+			local = append(local, found{e.Node, e.ServiceID})
 		}
+		return local
+	})
+
+	var dups []found
+	for _, list := range perSvc {
+		dups = append(dups, list...)
 	}
+
+	// 第二步：统一并行清理（单一并发池，避免嵌套并发）
+	var mu sync.Mutex
+	var removed []string
+	_ = parallel.ForEach(dups, parallel.DefaultConcurrency, func(_ int, f found) error {
+		if derr := consul.DeregisterRemote(client, f.node, f.id); derr != nil {
+			logx.Errorf("[dedup] 清理远端重复失败 %s@%s: %v", f.id, f.node, derr)
+			return nil
+		}
+		mu.Lock()
+		removed = append(removed, fmt.Sprintf("%s@%s", f.id, f.node))
+		mu.Unlock()
+		return nil
+	})
 
 	if len(removed) > 0 {
 		logx.Infof("[dedup] 已清理集群中 %d 个重复实例: %v", len(removed), removed)

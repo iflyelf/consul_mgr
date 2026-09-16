@@ -12,8 +12,10 @@ import (
 	"strings"
 
 	"github.com/hashicorp/consul/api"
+	"github.com/zeromicro/go-zero/core/logx"
 
 	"github.com/iflyelf/consul_mgr/internal/pkg/consul"
+	"github.com/iflyelf/consul_mgr/internal/pkg/parallel"
 	"github.com/iflyelf/consul_mgr/internal/svc"
 	"github.com/iflyelf/consul_mgr/internal/types"
 	"gopkg.in/yaml.v3"
@@ -45,8 +47,64 @@ func NewListInstancesLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Lis
 	}
 }
 
+// listInstancesByService 获取单个服务的实例（优先命中缓存，未命中则查 Consul）
+//
+// 说明:
+//   - 缓存的是「未过滤的原始实例」，状态过滤由上层完成；
+//   - 服务不存在时返回空切片（不视为错误）。
+func (l *ListInstancesLogic) listInstancesByService(client *api.Client, groupID int64, serviceName string) []types.ConsulInstanceInfo {
+	return ListInstancesCached(l.ctx, l.svcCtx, client, groupID, serviceName)
+}
+
+// ListInstancesCached 获取单个服务的实例（带缓存），供其他模块复用
+//
+// 参数:
+//   ctx, svcCtx - 上下文与服务上下文
+//   client      - Consul 客户端
+//   groupID     - 服务组 ID
+//   serviceName - 服务名
+func ListInstancesCached(ctx context.Context, svcCtx *svc.ServiceContext, client *api.Client, groupID int64, serviceName string) []types.ConsulInstanceInfo {
+	cacheKey := svcCtx.CacheKeyInstancesByService(groupID, serviceName)
+	var cached []types.ConsulInstanceInfo
+	if svcCtx.Cache.Get(ctx, cacheKey, &cached) {
+		return cached
+	}
+
+	entries, _, err := client.Health().Service(serviceName, "", false, nil)
+	if err != nil {
+		logx.Errorf("[instances] 查询服务 %s 实例失败，已跳过: %v", serviceName, err)
+		return nil
+	}
+
+	instances := make([]types.ConsulInstanceInfo, 0, len(entries))
+	for _, entry := range entries {
+		instances = append(instances, buildInstanceInfo(entry))
+	}
+
+	svcCtx.Cache.Set(ctx, cacheKey, instances)
+	return instances
+}
+
+// buildInstanceInfo 由 Consul 健康条目构建实例信息
+func buildInstanceInfo(entry *api.ServiceEntry) types.ConsulInstanceInfo {
+	service := entry.Service
+	node := entry.Node
+	return types.ConsulInstanceInfo{
+		ID:           service.ID,
+		Service:      service.Service,
+		Tags:         service.Tags,
+		Meta:         service.Meta,
+		Address:      service.Address,
+		Port:         service.Port,
+		Node:         node.Node,
+		NodeAddress:  node.Address,
+		HealthStatus: aggregateStatus(entry.Checks),
+		Checks:       convertChecks(entry.Checks),
+	}
+}
+
 func (l *ListInstancesLogic) ListInstances(groupID int64, serviceName, status string) ([]types.ConsulInstanceInfo, error) {
-	// 缓存键（超大规模实例列表，避免每次全量拉取 Consul）
+	// 命中「按条件」的聚合缓存则直接返回
 	cacheKey := l.svcCtx.CacheKeyInstances(groupID, serviceName, status)
 	var cached []types.ConsulInstanceInfo
 	if l.svcCtx.Cache.Get(l.ctx, cacheKey, &cached) {
@@ -73,42 +131,25 @@ func (l *ListInstancesLogic) ListInstances(groupID int64, serviceName, status st
 		sort.Strings(serviceNames)
 	}
 
-	// 并行拉取各服务健康条目（服务多时相比串行显著提速）
-	healthMap := consul.FetchServiceHealth(client, serviceNames)
+	// 并行按服务取实例：各服务独立缓存，未命中才会真正请求 Consul。
+	// 这样「先看 A 服务、再看 B 服务、再看全量」不会重复全量拉取。
+	concurrency := l.svcCtx.ConsulConcurrency()
+	perService := parallel.Map(serviceNames, concurrency, func(name string) []types.ConsulInstanceInfo {
+		return l.listInstancesByService(client, groupID, name)
+	})
 
 	instances := make([]types.ConsulInstanceInfo, 0)
-	for _, name := range serviceNames {
-		entries, ok := healthMap[name]
-		if !ok {
-			continue
-		}
-		for _, entry := range entries {
-			service := entry.Service
-			node := entry.Node
-			checks := entry.Checks
-			healthStatus := aggregateStatus(checks)
-
+	for _, list := range perService {
+		for _, it := range list {
 			// 状态过滤
-			if status != "" && healthStatus != status {
+			if status != "" && it.HealthStatus != status {
 				continue
 			}
-
-			instances = append(instances, types.ConsulInstanceInfo{
-				ID:           service.ID,
-				Service:      service.Service,
-				Tags:         service.Tags,
-				Meta:         service.Meta,
-				Address:      service.Address,
-				Port:         service.Port,
-				Node:         node.Node,
-				NodeAddress:  node.Address,
-				HealthStatus: healthStatus,
-				Checks:       convertChecks(checks),
-			})
+			instances = append(instances, it)
 		}
 	}
 
-	// 写入缓存
+	// 写入聚合缓存（按条件缓存，读路径直接命中）
 	l.svcCtx.Cache.Set(l.ctx, cacheKey, instances)
 
 	return instances, nil
@@ -344,19 +385,20 @@ func (l *BatchDeleteInstancesLogic) BatchDeleteInstances(groupID int64, instance
 		return 0, nil, errors.New("未选择任何实例")
 	}
 
-	success := 0
-	var failed []string
-	for _, instanceID := range instanceIDs {
-		if err := consul.DeregisterService(client, instanceID); err != nil {
-			failed = append(failed, instanceID)
-			continue
-		}
-		success++
-	}
+	// 并行注销（有界并发），避免逐个串行等待
+	errs := parallel.ForEach(instanceIDs, l.svcCtx.ConsulConcurrency(), func(_ int, id string) error {
+		return consul.DeregisterService(client, id)
+	})
 
 	invalidateInstanceCache(l.ctx, l.svcCtx, groupID)
 
-	if len(failed) > 0 {
+	success := len(instanceIDs) - len(errs)
+	if len(errs) > 0 {
+		failed := make([]string, 0, len(errs))
+		for i, e := range errs {
+			failed = append(failed, fmt.Sprintf("%s(%v)", instanceIDs[i], e))
+		}
+		sort.Strings(failed)
 		return success, failed, fmt.Errorf("部分删除失败（成功 %d，失败 %d）: %v（地址: %s）",
 			success, len(failed), failed, addr)
 	}
@@ -394,24 +436,26 @@ func (l *ExportInstancesLogic) ExportInstances(groupID int64, serviceName, forma
 		for name := range catalogServices {
 			serviceNames = append(serviceNames, name)
 		}
+		sort.Strings(serviceNames)
 	}
 
+	// 复用列表的按服务缓存 + 并行拉取，避免导出时再次全量串行请求
+	listLogic := NewListInstancesLogic(l.ctx, l.svcCtx)
+	perService := parallel.Map(serviceNames, l.svcCtx.ConsulConcurrency(), func(name string) []types.ConsulInstanceInfo {
+		return listLogic.listInstancesByService(client, groupID, name)
+	})
+
 	var instances []types.RegisterInstanceRequest
-	for _, name := range serviceNames {
-		entries, _, herr := client.Health().Service(name, "", false, nil)
-		if herr != nil {
-			return nil, fmt.Errorf("查询实例失败: %w", herr)
-		}
-		for _, entry := range entries {
-			service := entry.Service
+	for _, list := range perService {
+		for _, it := range list {
 			instances = append(instances, types.RegisterInstanceRequest{
 				GroupID: groupID,
-				ID:      service.ID,
-				Service: service.Service,
-				Tags:    service.Tags,
-				Meta:    service.Meta,
-				Address: service.Address,
-				Port:    service.Port,
+				ID:      it.ID,
+				Service: it.Service,
+				Tags:    it.Tags,
+				Meta:    it.Meta,
+				Address: it.Address,
+				Port:    it.Port,
 			})
 		}
 	}

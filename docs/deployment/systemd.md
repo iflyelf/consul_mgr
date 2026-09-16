@@ -59,6 +59,7 @@ journalctl -u consul_mgr -f
 | `CASDOOR_CLIENT_ID` / `CASDOOR_CLIENT_SECRET` | Casdoor 凭据（必填） | — |
 | `REDIS_ENABLED` / `REDIS_HOST` / `REDIS_PORT` / `REDIS_PASSWORD` | 缓存 | `true` / `localhost` / `6379` / 空 |
 | `CONSUL_ADDRESS` / `CONSUL_TOKEN` / `CONSUL_DATACENTER` | 默认 Consul | — / 空 / `dc1` |
+| `CONSUL_MAX_CONCURRENCY` | 批量查询/操作并发上限 | `16` |
 
 ### 使用 EnvironmentFile（推荐）
 

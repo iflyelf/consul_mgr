@@ -32,6 +32,22 @@ func (s *ServiceContext) CacheKeyInstances(groupID int64, serviceName, status st
 	return fmt.Sprintf("consul_mgr:instances:%d:%s:%s", groupID, serviceName, status)
 }
 
+// CacheKeyInstancesByService 单个服务的实例缓存键
+//
+// 说明：按服务维度缓存原始实例（不含状态过滤），
+// 全量列表由各服务缓存合并而来，避免切换筛选条件时全量重拉 Consul。
+func (s *ServiceContext) CacheKeyInstancesByService(groupID int64, serviceName string) string {
+	return fmt.Sprintf("consul_mgr:instances:%d:svc:%s", groupID, serviceName)
+}
+
+// ConsulConcurrency 返回 Consul 批量操作并发度
+func (s *ServiceContext) ConsulConcurrency() int {
+	if s.Config.Consul.MaxConcurrency > 0 {
+		return s.Config.Consul.MaxConcurrency
+	}
+	return 16
+}
+
 // CacheKeyServices 服务列表缓存键
 func (s *ServiceContext) CacheKeyServices(groupID int64) string {
 	return fmt.Sprintf("consul_mgr:services:%d", groupID)
