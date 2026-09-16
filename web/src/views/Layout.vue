@@ -20,8 +20,8 @@
           <span>{{ m.label }}</span>
         </router-link>
 
-        <!-- 人员组织（下拉子菜单） -->
-        <el-dropdown class="org-dropdown" @command="handleOrgNav">
+        <!-- 人员组织（下拉子菜单，仅管理员可见） -->
+        <el-dropdown v-if="userStore.isAdmin" class="org-dropdown" @command="handleOrgNav">
           <span class="tab" :class="{ active: isOrgActive }">
             <el-icon><OfficeBuilding /></el-icon>
             <span>人员组织</span>
@@ -82,7 +82,7 @@
     <!-- 移动端导航（横向滚动） -->
     <nav class="tabs mobile-tabs">
       <router-link
-        v-for="m in [...menus, ...orgMenus]"
+        v-for="m in mobileMenus"
         :key="m.path"
         :to="m.path"
         class="tab"
@@ -129,6 +129,9 @@ const orgMenus = [
 ]
 
 const isOrgActive = computed(() => orgMenus.some(o => router.currentRoute.value.path.startsWith(o.path)))
+
+// 移动端导航（普通用户隐藏「人员组织」子菜单）
+const mobileMenus = computed(() => (userStore.isAdmin ? [...menus, ...orgMenus] : menus))
 
 const handleOrgNav = (path) => {
   router.push(path)

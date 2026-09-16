@@ -73,7 +73,7 @@ export CONSUL_ADDRESS="http://localhost:8500"
 
 **认证**
 - [x] 未登录跳转登录页
-- [x] Casdoor 登录 / 回调 / 登出
+- [x] FlyIAM(Casdoor) 登录 / 回调 / 登出
 - [x] Token 过期处理
 
 **UI**
@@ -109,4 +109,4 @@ go build -o /tmp/consul_mgr ./cmd/api
 
 ## 7. 相关文档
 
-- [开发文档](../development/development.md) · [部署文档](../deployment/systemd.md)
+- [开发文档](../development/development.md) · [Kubernetes 部署](../deployment/kubernetes.md)

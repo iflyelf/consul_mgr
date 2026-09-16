@@ -8,7 +8,7 @@
 | Node.js | 18+（构建前端） |
 | PostgreSQL | 14+ |
 | Redis | 6+（可选，不可用时自动降级） |
-| Casdoor | 最新（认证服务） |
+| FlyIAM | 最新（提供 Casdoor 认证服务，本地开发需先启动） |
 
 ## 2. 本地开发
 
@@ -37,9 +37,14 @@ export JWT_SECRET="your-secret-at-least-32-chars"
 export ADMIN_USERNAME="admin"
 export ADMIN_PASSWORD="your-password"
 export CASDOOR_ENDPOINT="http://localhost:8000"
-export CASDOOR_CLIENT_ID="xxx"
-export CASDOOR_CLIENT_SECRET="xxx"
+export CASDOOR_ORGANIZATION="flyiam"
+export CASDOOR_APPLICATION="flyiam"
+export CASDOOR_CLIENT_ID="xxx"      # 从 FlyIAM 获取
+export CASDOOR_CLIENT_SECRET="xxx"  # 从 FlyIAM 获取
 ```
+
+> 认证依赖 FlyIAM：本地开发请先启动 FlyIAM（内置 Casdoor），并确保组织的回调白名单包含
+> `http://localhost:8080/callback`。详见 [FlyIAM 认证对接](../deployment/flyiam.md)。
 
 ### 2.3 启动
 
@@ -84,13 +89,13 @@ internal/handler/   HTTP 处理器（按资源分包）
 internal/logic/     业务逻辑（按资源分包）
 internal/middleware/ 中间件
 internal/pkg/       基础组件（consul/casdoor/cache/response）
-internal/svc/       服务上下文与建表迁移
+internal/svc/       服务上下文与自动建表
 internal/config/    配置与环境变量覆盖
 internal/types/     请求响应结构
 web/                Vue 3 前端
-deploy/             部署物料（systemd/docker/k8s/sql/config）
+charts/consul_mgr/  Helm Chart（Helmfile 多环境）
+deploy/             部署物料（systemd/docker/sql/config）
 docs/               文档（design/development/testing/deployment）
-tools/              运维辅助工具
 ```
 
 ## 6. 新增功能指引

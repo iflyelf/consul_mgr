@@ -81,8 +81,8 @@ type Config struct {
 		ClientId         string `json:",env=CASDOOR_CLIENT_ID"`
 		ClientSecret     string `json:",env=CASDOOR_CLIENT_SECRET"`
 		Certificate      string `json:",optional,env=CASDOOR_CERTIFICATE"`
-		OrganizationName string `json:",default=consul_mgr,env=CASDOOR_ORGANIZATION"`
-		ApplicationName  string `json:",default=consul_manager,env=CASDOOR_APPLICATION"`
+		OrganizationName string `json:",default=flyiam,env=CASDOOR_ORGANIZATION"`
+		ApplicationName  string `json:",default=flyiam,env=CASDOOR_APPLICATION"`
 	}
 
 	Permission struct {

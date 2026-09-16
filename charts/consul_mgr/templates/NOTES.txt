@@ -1,0 +1,56 @@
+╔════════════════════════════════════════════════════════════════╗
+║                                                                ║
+║     🎉 Consul Manager 已成功部署到 Kubernetes 集群！🎉          ║
+║                                                                ║
+║     多 Consul 集群服务与实例管理平台（认证复用 FlyIAM）          ║
+║                                                                ║
+╚════════════════════════════════════════════════════════════════╝
+
+部署信息
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Release:      {{ .Release.Name }}
+  Namespace:    {{ .Release.Namespace }}
+  Chart:        {{ .Chart.Name }}-{{ .Chart.Version }}
+  App Version:  {{ .Chart.AppVersion }}
+
+1. 查看部署状态
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  查看 Pod：
+    kubectl get pods -n {{ .Release.Namespace }}
+
+  查看日志：
+    kubectl logs -f deploy/{{ include "consul_mgr.fullname" . }} -n {{ .Release.Namespace }}
+
+2. 自动初始化说明（首次启动）
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ✅ 数据库表由程序自动创建（无需手工执行 SQL）
+  ✅ 认证复用外部 FlyIAM 提供的 Casdoor（org/app = {{ .Values.casdoorOrganization }}）
+
+3. 访问
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Consul Manager 控制台：
+    kubectl port-forward -n {{ .Release.Namespace }} svc/{{ include "consul_mgr.fullname" . }} {{ .Values.service.port }}:{{ .Values.service.port }}
+    浏览器访问 http://localhost:{{ .Values.service.port }}
+
+  ⚠️ 认证依赖 FlyIAM：请确保 FlyIAM 已部署且其 Casdoor Service 可从本命名空间访问，
+     并在 FlyIAM 中把本服务的回调地址加入白名单。
+
+4. 默认凭据
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  本地管理员：{{ .Values.adminUsername }}（主要用于审计记录，实际登录走 FlyIAM）
+
+5. 配置更新
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  helm upgrade {{ .Release.Name }} . -n {{ .Release.Namespace }} --reuse-values --set image.tag=new-version
+
+6. 更多文档
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  📖 https://github.com/iflyelf/consul_mgr
+     - 部署：docs/deployment/kubernetes.md
+     - 认证：docs/deployment/flyiam.md

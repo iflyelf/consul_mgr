@@ -1,0 +1,155 @@
+# ============================================
+# 公共环境变量（所有环境共享的默认值）
+# ============================================
+# 说明：helmfile 各环境（default/dev/staging/prod）不会自动继承彼此的值，
+# 因此将所有环境共享的配置集中在本文件，由每个环境通过 values 引用后再叠加各自覆盖项。
+# 修改公共默认值只需编辑本文件；环境差异（命名空间、副本数等）在 helmfile.yaml 的
+# environments.<env>.values 中覆盖。
+#
+# ★ 全量环境变量覆盖：本文件所有配置项均支持通过环境变量覆盖，
+#   格式统一为 {{`{{ env "ENV_NAME" | default "默认值" }}`}}。
+#   未设置环境变量时使用默认值，无需修改文件即可通过 export 覆盖任意配置。
+
+# ==================== 基础配置 ====================
+# 命名空间
+namespace: '{{ env "CONSUL_MGR_NAMESPACE" | default "consul-mgr" }}'
+# 环境标识（用于资源标签）
+environment: '{{ env "CONSUL_MGR_ENVIRONMENT" | default "production" }}'
+
+# ==================== 镜像配置 ====================
+# 镜像仓库地址
+imageRegistry: '{{ env "CONSUL_MGR_IMAGE_REGISTRY" | default "docker.io" }}'
+# 镜像仓库路径
+imageRepository: '{{ env "CONSUL_MGR_IMAGE_REPOSITORY" | default "iflyelf/consul-mgr" }}'
+# 镜像标签
+imageTag: '{{ env "CONSUL_MGR_IMAGE_TAG" | default "latest" }}'
+# 镜像拉取策略
+imagePullPolicy: '{{ env "CONSUL_MGR_IMAGE_PULL_POLICY" | default "IfNotPresent" }}'
+
+# ==================== 服务端口配置 ====================
+# 服务端口
+servicePort: {{ env "CONSUL_MGR_SERVICE_PORT" | default "8080" }}
+# 服务类型（ClusterIP / NodePort / LoadBalancer）
+serviceType: '{{ env "CONSUL_MGR_SERVICE_TYPE" | default "ClusterIP" }}'
+
+# ==================== 副本配置 ====================
+# 副本数（支持多副本高可用）
+replicas: {{ env "CONSUL_MGR_REPLICAS" | default "2" }}
+
+# ==================== 数据库配置（PostgreSQL - 外置）====================
+# 数据库地址
+dbHost: '{{ env "CONSUL_MGR_DB_HOST" | default "postgres.default.svc.cluster.local" }}'
+# 数据库端口
+dbPort: {{ env "CONSUL_MGR_DB_PORT" | default "5432" }}
+# 数据库名称
+dbName: '{{ env "CONSUL_MGR_DB_NAME" | default "consul_mgr" }}'
+# 数据库用户名
+dbUser: '{{ env "CONSUL_MGR_DB_USER" | default "consul_mgr" }}'
+# 数据库密码（优先从环境变量读取，生产环境建议使用 existingSecret）
+dbPassword: '{{ env "CONSUL_MGR_DB_PASSWORD" | default "change_me" }}'
+# 数据库 SSL 模式
+dbSslMode: '{{ env "CONSUL_MGR_DB_SSL_MODE" | default "disable" }}'
+# 完整连接串（设置后优先于上方分项）
+databaseUrl: '{{ env "CONSUL_MGR_DATABASE_URL" | default "" }}'
+# 数据库连接池配置
+dbMaxOpenConns: {{ env "CONSUL_MGR_DB_MAX_OPEN_CONNS" | default "100" }}
+dbMaxIdleConns: {{ env "CONSUL_MGR_DB_MAX_IDLE_CONNS" | default "10" }}
+dbConnMaxLifetime: {{ env "CONSUL_MGR_DB_CONN_MAX_LIFETIME" | default "3600" }}
+
+# ==================== Redis 配置（外置）====================
+# 是否启用 Redis 缓存（不可用时自动降级）
+redisEnabled: {{ env "CONSUL_MGR_REDIS_ENABLED" | default "true" }}
+# Redis 地址
+redisHost: '{{ env "CONSUL_MGR_REDIS_HOST" | default "redis.default.svc.cluster.local" }}'
+# Redis 端口
+redisPort: {{ env "CONSUL_MGR_REDIS_PORT" | default "6379" }}
+# Redis 密码
+redisPassword: '{{ env "CONSUL_MGR_REDIS_PASSWORD" | default "" }}'
+# Redis 数据库编号
+redisDb: {{ env "CONSUL_MGR_REDIS_DB" | default "0" }}
+# Redis 缓存 TTL（秒）
+redisCacheTtl: {{ env "CONSUL_MGR_REDIS_CACHE_TTL" | default "300" }}
+
+# ==================== JWT 配置 ====================
+# JWT 密钥（必填，建议 32 位以上随机字符串，生产环境必须使用 existingSecret）
+jwtSecret: '{{ env "CONSUL_MGR_JWT_SECRET" | default "change_me_to_a_random_secret_at_least_32_chars" }}'
+# JWT Access Token 过期时间（秒，默认 2 小时）
+jwtAccessExpire: {{ env "CONSUL_MGR_JWT_ACCESS_EXPIRE" | default "7200" }}
+# JWT Refresh Token 过期时间（秒，默认 7 天）
+jwtRefreshExpire: {{ env "CONSUL_MGR_JWT_REFRESH_EXPIRE" | default "604800" }}
+# JWT 签发者
+jwtIssuer: '{{ env "CONSUL_MGR_JWT_ISSUER" | default "consul_mgr" }}'
+
+# ==================== 管理员配置 ====================
+# 管理员用户名
+adminUsername: '{{ env "CONSUL_MGR_ADMIN_USERNAME" | default "admin" }}'
+# 管理员密码（生产环境必须使用 existingSecret）
+adminPassword: '{{ env "CONSUL_MGR_ADMIN_PASSWORD" | default "change_me" }}'
+# 管理员邮箱
+adminEmail: '{{ env "CONSUL_MGR_ADMIN_EMAIL" | default "admin@example.com" }}'
+
+# ==================== 默认 Consul 配置（可在页面另行配置服务组）====================
+# 默认 Consul 地址
+consulAddress: '{{ env "CONSUL_MGR_CONSUL_ADDRESS" | default "" }}'
+# 默认 Consul Token
+consulToken: '{{ env "CONSUL_MGR_CONSUL_TOKEN" | default "" }}'
+# 默认数据中心
+consulDatacenter: '{{ env "CONSUL_MGR_CONSUL_DATACENTER" | default "dc1" }}'
+# Consul 操作超时（秒）
+consulTimeout: {{ env "CONSUL_MGR_CONSUL_TIMEOUT" | default "10" }}
+# 批量查询/操作并发上限
+consulMaxConcurrency: {{ env "CONSUL_MGR_CONSUL_MAX_CONCURRENCY" | default "16" }}
+
+# ==================== 认证配置（复用外部 FlyIAM 提供的 Casdoor）====================
+# Casdoor 服务地址（Pod 内访问，指向 FlyIAM 内置 Casdoor 的 Service）
+casdoorEndpoint: '{{ env "CONSUL_MGR_CASDOOR_ENDPOINT" | default "http://casdoor:8000" }}'
+# Casdoor 公开地址（浏览器访问；跨域名部署时必填，留空则用访问域名）
+casdoorPublicEndpoint: '{{ env "CONSUL_MGR_CASDOOR_PUBLIC_ENDPOINT" | default "" }}'
+# 应用凭据（从 FlyIAM 获取）
+casdoorClientId: '{{ env "CONSUL_MGR_CASDOOR_CLIENT_ID" | default "" }}'
+casdoorClientSecret: '{{ env "CONSUL_MGR_CASDOOR_CLIENT_SECRET" | default "" }}'
+# 应用证书名（Casdoor 内置证书）
+casdoorCertificate: '{{ env "CONSUL_MGR_CASDOOR_CERTIFICATE" | default "cert-built-in" }}'
+# 组织名称（与 FlyIAM 保持一致）
+casdoorOrganization: '{{ env "CONSUL_MGR_CASDOOR_ORGANIZATION" | default "flyiam" }}'
+# 应用名称（与 FlyIAM 保持一致）
+casdoorApplication: '{{ env "CONSUL_MGR_CASDOOR_APPLICATION" | default "flyiam" }}'
+
+# ==================== 权限配置 ====================
+# 是否启用服务组级授权
+permissionEnableServiceGroupAuth: {{ env "CONSUL_MGR_PERMISSION_ENABLE_SERVICE_GROUP_AUTH" | default "true" }}
+# 默认权限
+permissionDefault: '{{ env "CONSUL_MGR_PERMISSION_DEFAULT" | default "read" }}'
+
+# ==================== 审计日志配置 ====================
+auditEnabled: {{ env "CONSUL_MGR_AUDIT_ENABLED" | default "true" }}
+auditRetentionDays: {{ env "CONSUL_MGR_AUDIT_RETENTION_DAYS" | default "90" }}
+
+# ==================== 日志配置 ====================
+logLevel: '{{ env "CONSUL_MGR_LOG_LEVEL" | default "info" }}'
+logFormat: '{{ env "CONSUL_MGR_LOG_FORMAT" | default "json" }}'
+
+# ==================== 资源限制配置 ====================
+resourcesRequestsCpu: '{{ env "CONSUL_MGR_RES_REQ_CPU" | default "100m" }}'
+resourcesRequestsMemory: '{{ env "CONSUL_MGR_RES_REQ_MEM" | default "128Mi" }}'
+resourcesLimitsCpu: '{{ env "CONSUL_MGR_RES_LIM_CPU" | default "1" }}'
+resourcesLimitsMemory: '{{ env "CONSUL_MGR_RES_LIM_MEM" | default "512Mi" }}'
+
+# ==================== HPA 自动扩缩容配置 ====================
+hpaEnabled: {{ env "CONSUL_MGR_HPA_ENABLED" | default "false" }}
+hpaMinReplicas: {{ env "CONSUL_MGR_HPA_MIN_REPLICAS" | default "2" }}
+hpaMaxReplicas: {{ env "CONSUL_MGR_HPA_MAX_REPLICAS" | default "10" }}
+hpaTargetCpuUtilization: {{ env "CONSUL_MGR_HPA_TARGET_CPU" | default "80" }}
+hpaTargetMemoryUtilization: {{ env "CONSUL_MGR_HPA_TARGET_MEMORY" | default "80" }}
+
+# ==================== 引用已存在的 Secret ====================
+# 如果设置，将从该 Secret 读取敏感信息，优先级高于上面的明文配置
+# Secret 必须包含以下 key:
+#   - DB_PASSWORD          # 数据库密码
+#   - REDIS_PASSWORD       # Redis 密码（可选）
+#   - JWT_SECRET           # JWT 密钥
+#   - ADMIN_PASSWORD       # 管理员密码
+#   - CASDOOR_CLIENT_ID    # Casdoor Client ID
+#   - CASDOOR_CLIENT_SECRET  # Casdoor Client Secret
+#   - CONSUL_TOKEN         # 默认 Consul Token（可选）
+existingSecret: '{{ env "CONSUL_MGR_EXISTING_SECRET" | default "" }}'

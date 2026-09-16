@@ -55,19 +55,19 @@ const routes = [
         path: 'users',
         name: 'Users',
         component: () => import('@/views/Users.vue'),
-        meta: { title: '用户管理' }
+        meta: { title: '用户管理', requiresAdmin: true }
       },
       {
         path: 'teams',
         name: 'Teams',
         component: () => import('@/views/Teams.vue'),
-        meta: { title: '团队管理' }
+        meta: { title: '团队管理', requiresAdmin: true }
       },
       {
         path: 'roles',
         name: 'Roles',
         component: () => import('@/views/Roles.vue'),
-        meta: { title: '角色管理' }
+        meta: { title: '角色管理', requiresAdmin: true }
       }
     ]
   }
@@ -79,7 +79,7 @@ const router = createRouter({
 })
 
 // 路由守卫
-router.beforeEach((to, from, next) => {
+router.beforeEach(async (to, from, next) => {
   // 设置页面标题
   document.title = to.meta.title ? `${to.meta.title} - Consul Manager` : 'Consul Manager'
   
@@ -92,6 +92,17 @@ router.beforeEach((to, from, next) => {
     if (!isLoggedIn) {
       // 未登录，跳转到登录页
       next('/login')
+      return
+    }
+
+    // 用户信息缺失管理员标记时，向后端刷新一次（兼容旧缓存）
+    if (userStore.userInfo?.is_admin === undefined) {
+      await userStore.fetchUserInfo()
+    }
+
+    // 需要管理员权限的页面，普通用户重定向到首页
+    if (to.meta.requiresAdmin && !userStore.isAdmin) {
+      next('/groups')
       return
     }
   }

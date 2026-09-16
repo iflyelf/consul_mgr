@@ -75,12 +75,12 @@ func (l *GroupLogic) CreateGroup(name, code, consulAddress, consulToken, datacen
 }
 
 // UpdateGroup 更新服务组
-func (l *GroupLogic) UpdateGroup(id int64, name, consulAddress, consulToken, datacenter, description string) (*Group, error) {
+func (l *GroupLogic) UpdateGroup(id int64, name, code, consulAddress, consulToken, datacenter, description string) (*Group, error) {
 	query := `
 		UPDATE service_groups 
-		SET name = $1, consul_address = $2, consul_token = $3, 
-		    consul_datacenter = $4, description = $5, updated_at = NOW()
-		WHERE id = $6
+		SET name = $1, code = $2, consul_address = $3, consul_token = $4, 
+		    consul_datacenter = $5, description = $6, updated_at = NOW()
+		WHERE id = $7
 		RETURNING id, name, code, consul_address, consul_token, consul_datacenter, description, status,
 		          TO_CHAR(created_at, 'YYYY-MM-DD HH24:MI:SS'),
 		          TO_CHAR(updated_at, 'YYYY-MM-DD HH24:MI:SS')
@@ -88,7 +88,7 @@ func (l *GroupLogic) UpdateGroup(id int64, name, consulAddress, consulToken, dat
 
 	var group Group
 	err := l.db.QueryRowCtx(l.ctx, &group, query,
-		name, consulAddress, consulToken, datacenter, description, id)
+		name, code, consulAddress, consulToken, datacenter, description, id)
 
 	if err != nil {
 		if err == sql.ErrNoRows {

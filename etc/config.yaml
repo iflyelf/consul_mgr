@@ -1,8 +1,12 @@
 # =============================================================================
 # Consul Manager 配置文件（开发环境）
 #
-# 所有参数均可通过环境变量覆盖，语法：default
+# 所有参数均可通过环境变量覆盖，语法：${VAR:default}
 # 代码中不硬编码任何地址、端口与凭据。
+#
+# 认证说明：
+#   本项目使用外部 FlyIAM 提供的 Casdoor 服务进行统一认证
+#   请确保 FlyIAM 服务已启动并配置正确的组织和应用
 # =============================================================================
 
 Name: consul_mgr
@@ -45,15 +49,16 @@ Consul:
   MaxConcurrency: 16
 
 Casdoor:
-  # 后端访问 Casdoor 的地址
+  # 后端访问 Casdoor 的地址（使用 FlyIAM 提供的服务）
   Endpoint: ""
   # 浏览器可达的 Casdoor 地址（跨域名/IP 部署必配，留空则用 Endpoint）
   PublicEndpoint: 
   ClientId: ""
   ClientSecret: ""
   Certificate: 
-  OrganizationName: consul_mgr
-  ApplicationName: consul_manager
+  # 使用 FlyIAM 的组织和应用（需与 FlyIAM 配置一致）
+  OrganizationName: flyiam
+  ApplicationName: flyiam
 
 Web:
   Embedded: true

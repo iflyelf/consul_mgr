@@ -1,0 +1,181 @@
+# Consul Manager Helmfile 配置
+# 作者: iflyelf
+# 说明: 本配置用于通过 helmfile 部署 Consul Manager（认证复用外部 FlyIAM）
+
+# ============================================
+# 环境变量定义（支持多环境配置）
+# ============================================
+environments:
+  # 默认环境配置
+  default:
+    values:
+      # 加载公共默认值（所有环境共享）
+      - values/_base.yaml.gotmpl
+      # 本环境覆盖项（无特殊覆盖，使用 _base.yaml.gotmpl 默认值）
+
+  # 开发环境配置（覆盖 _base.yaml.gotmpl 部分值）
+  dev:
+    values:
+      - values/_base.yaml.gotmpl
+      - namespace: consul-mgr-dev
+      - environment: development
+      - replicas: 1
+      - logLevel: debug
+
+  # 测试环境配置
+  staging:
+    values:
+      - values/_base.yaml.gotmpl
+      - namespace: consul-mgr-staging
+      - environment: staging
+      - replicas: 2
+      - logLevel: info
+
+  # 生产环境配置
+  prod:
+    values:
+      - values/_base.yaml.gotmpl
+      - namespace: consul-mgr
+      - environment: production
+      - replicas: 3
+      - logLevel: warn
+      - hpaEnabled: true
+      - hpaMinReplicas: 3
+      - hpaMaxReplicas: 10
+
+---
+# ============================================
+# Helm 仓库配置
+# ============================================
+repositories: []
+  # 注意：本项目使用本地 Chart（chart: .），无需添加远程仓库
+
+# ============================================
+# 模板锚点（避免 releases 中重复配置）
+# ============================================
+templates:
+  default: &default
+    createNamespace: true
+    wait: true
+    force: false
+    recreatePods: false
+    cleanupOnFail: true
+
+# ============================================
+# Releases 定义
+# ============================================
+releases:
+  # --------------------------------------------
+  # Consul Manager 主应用
+  # --------------------------------------------
+  - name: consul-mgr
+    <<: *default
+    chart: .
+    namespace: '{{ .Values.namespace }}'
+    missingFileHandler: Error
+    timeout: 600
+    values:
+      - values/consul_mgr.yaml.gotmpl
+      # 以下配置从 _base.yaml.gotmpl 注入
+      - namespace: {{ .Values.namespace | quote }}
+      - environment: {{ .Values.environment | quote }}
+      - imageRegistry: {{ .Values.imageRegistry | quote }}
+      - imageRepository: {{ .Values.imageRepository | quote }}
+      - imageTag: {{ .Values.imageTag | quote }}
+      - replicas: {{ .Values.replicas }}
+      - servicePort: {{ .Values.servicePort }}
+      - serviceType: {{ .Values.serviceType | quote }}
+      # 数据库配置
+      - dbHost: {{ .Values.dbHost | quote }}
+      - dbPort: {{ .Values.dbPort }}
+      - dbName: {{ .Values.dbName | quote }}
+      - dbUser: {{ .Values.dbUser | quote }}
+      - dbPassword: {{ .Values.dbPassword | quote }}
+      - databaseUrl: {{ .Values.databaseUrl | quote }}
+      # Redis 配置
+      - redisEnabled: {{ .Values.redisEnabled }}
+      - redisHost: {{ .Values.redisHost | quote }}
+      - redisPort: {{ .Values.redisPort }}
+      - redisPassword: {{ .Values.redisPassword | quote }}
+      # JWT 配置
+      - jwtSecret: {{ .Values.jwtSecret | quote }}
+      - jwtAccessExpire: {{ .Values.jwtAccessExpire }}
+      - jwtRefreshExpire: {{ .Values.jwtRefreshExpire }}
+      # 管理员配置
+      - adminUsername: {{ .Values.adminUsername | quote }}
+      - adminPassword: {{ .Values.adminPassword | quote }}
+      - adminEmail: {{ .Values.adminEmail | quote }}
+      # 默认 Consul 配置
+      - consulAddress: {{ .Values.consulAddress | quote }}
+      - consulToken: {{ .Values.consulToken | quote }}
+      # Casdoor 配置（外部 FlyIAM 提供）
+      - casdoorEndpoint: {{ .Values.casdoorEndpoint | quote }}
+      - casdoorPublicEndpoint: {{ .Values.casdoorPublicEndpoint | quote }}
+      - casdoorClientId: {{ .Values.casdoorClientId | quote }}
+      - casdoorClientSecret: {{ .Values.casdoorClientSecret | quote }}
+      - casdoorOrganization: {{ .Values.casdoorOrganization | quote }}
+      - casdoorApplication: {{ .Values.casdoorApplication | quote }}
+      # HPA 配置
+      - hpaEnabled: {{ .Values.hpaEnabled }}
+      - hpaMinReplicas: {{ .Values.hpaMinReplicas }}
+      - hpaMaxReplicas: {{ .Values.hpaMaxReplicas }}
+      # 资源配置
+      - resourcesRequestsCpu: {{ .Values.resourcesRequestsCpu | quote }}
+      - resourcesRequestsMemory: {{ .Values.resourcesRequestsMemory | quote }}
+      - resourcesLimitsCpu: {{ .Values.resourcesLimitsCpu | quote }}
+      - resourcesLimitsMemory: {{ .Values.resourcesLimitsMemory | quote }}
+      # 日志配置
+      - logLevel: {{ .Values.logLevel | quote }}
+      - logFormat: {{ .Values.logFormat | quote }}
+      # existingSecret
+      - existingSecret: {{ .Values.existingSecret | quote }}
+
+    # 钩子：部署前校验必需配置
+    hooks:
+      - events: ["presync"]
+        showlogs: true
+        command: "sh"
+        args:
+          - "-c"
+          - |
+            echo "🔍 检查 Consul Manager 部署前置条件..."
+
+            # 检查 JWT Secret
+            if [ -z "{{ .Values.jwtSecret }}" ] && [ -z "{{ .Values.existingSecret }}" ]; then
+              echo "❌ 错误: JWT_SECRET 或 existingSecret 必须设置其中之一"
+              exit 1
+            fi
+
+            # 检查数据库连接
+            if [ -z "{{ .Values.dbPassword }}" ] && [ -z "{{ .Values.databaseUrl }}" ] && [ -z "{{ .Values.existingSecret }}" ]; then
+              echo "❌ 错误: DB_PASSWORD / DATABASE_URL 或 existingSecret 必须设置其中之一"
+              exit 1
+            fi
+
+            # 检查 Casdoor 应用凭据（认证复用外部 FlyIAM）
+            if [ -z "{{ .Values.casdoorClientId }}" ] || [ -z "{{ .Values.casdoorClientSecret }}" ]; then
+              if [ -z "{{ .Values.existingSecret }}" ]; then
+                echo "❌ 错误: 必须提供 Casdoor ClientID/Secret（从 FlyIAM 获取）或 existingSecret"
+                exit 1
+              fi
+            fi
+
+            # 检查 Casdoor 地址
+            if [ -z "{{ .Values.casdoorEndpoint }}" ]; then
+              echo "❌ 错误: 必须提供 CASDOOR_ENDPOINT（FlyIAM 提供的 Casdoor 地址）"
+              exit 1
+            fi
+
+            echo "✅ 前置条件检查通过"
+
+      - events: ["postsync"]
+        showlogs: true
+        command: "sh"
+        args:
+          - "-c"
+          - |
+            echo "🎉 Consul Manager 部署完成！"
+            echo "📍 Namespace: {{ .Values.namespace }}"
+            echo "🏷️  Environment: {{ .Values.environment }}"
+            echo "📦 Replicas: {{ .Values.replicas }}"
+            echo "🔐 Auth: FlyIAM Casdoor ({{ .Values.casdoorEndpoint }})"

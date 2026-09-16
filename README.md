@@ -8,7 +8,7 @@
 ## 简介
 
 Consul Manager 面向多 Consul 集群的日常运维，提供「服务组 → 服务 → 实例」的完整生命周期管理，
-认证与权限复用 Casdoor，支持服务组级授权与操作审计。前端产物嵌入二进制，部署只需**一个进程、一个端口**。
+认证与权限由 [FlyIAM](https://github.com/iflyelf/flyiam) 统一提供（基于 Casdoor），支持服务组级授权与操作审计。前端产物嵌入二进制，部署只需**一个进程、一个端口**。
 
 ## 功能特性
 
@@ -35,7 +35,7 @@ Consul Manager 面向多 Consul 集群的日常运维，提供「服务组 → �
 - Redis 缓存（不可用时自动降级）
 
 **认证与安全**
-- Casdoor OAuth2 登录，支持跨域名/IP 部署
+- 使用 FlyIAM 提供的 OAuth2 登录（基于 Casdoor），支持跨域名/IP 部署
 - 服务组级 RBAC、全局管理员
 - 操作审计日志
 
@@ -57,18 +57,27 @@ wget -q -c --no-check-certificate -O config.yaml \
 vi config.yaml && docker compose up -d
 ```
 
+### Kubernetes（Helm）
+
+见 [部署文档 - Kubernetes](docs/deployment/kubernetes.md)（`charts/consul_mgr`）。
+
 ### systemd
 
 见 [部署文档 - systemd](docs/deployment/systemd.md)。
 
 ### 本地开发
 
+**前置要求**：确保 [FlyIAM](https://github.com/iflyelf/flyiam) 服务已启动（提供 Casdoor 认证服务）
+
 ```bash
 cd web && npm install && npm run build && cd ..
 export DATABASE_URL="postgresql://user:pass@host:5432/consul_mgr?sslmode=disable"
 export JWT_SECRET="your-secret-at-least-32-chars"
 export ADMIN_USERNAME=admin ADMIN_PASSWORD=your-password
+# 使用 FlyIAM 提供的 Casdoor 服务
 export CASDOOR_ENDPOINT=http://localhost:8000 \
+       CASDOOR_ORGANIZATION=flyiam \
+       CASDOOR_APPLICATION=flyiam \
        CASDOOR_CLIENT_ID=xxx CASDOOR_CLIENT_SECRET=xxx
 go run ./cmd/api -c etc/config.yaml
 ```
@@ -86,8 +95,9 @@ go run ./cmd/api -c etc/config.yaml
 | `DATABASE_URL` | PostgreSQL 连接串（必填） | — |
 | `JWT_SECRET` | JWT 密钥（必填） | — |
 | `ADMIN_USERNAME` / `ADMIN_PASSWORD` | 管理员（必填） | — |
-| `CASDOOR_ENDPOINT` / `CASDOOR_PUBLIC_ENDPOINT` | Casdoor 地址 | — |
-| `CASDOOR_CLIENT_ID` / `CASDOOR_CLIENT_SECRET` | Casdoor 凭据 | — |
+| `CASDOOR_ENDPOINT` / `CASDOOR_PUBLIC_ENDPOINT` | Casdoor 地址（FlyIAM 提供） | — |
+| `CASDOOR_ORGANIZATION` / `CASDOOR_APPLICATION` | Casdoor 组织/应用（使用 FlyIAM） | `flyiam` / `flyiam` |
+| `CASDOOR_CLIENT_ID` / `CASDOOR_CLIENT_SECRET` | Casdoor 凭据（从 FlyIAM 获取） | — |
 | `REDIS_ENABLED` / `REDIS_HOST` / `REDIS_PORT` / `REDIS_PASSWORD` | 缓存 | `true`/`localhost`/`6379`/空 |
 | `CONSUL_ADDRESS` / `CONSUL_TOKEN` / `CONSUL_DATACENTER` | 默认 Consul | — / 空 / `dc1` |
 | `CONSUL_MAX_CONCURRENCY` | 批量查询/操作并发上限 | `16` |
@@ -101,7 +111,7 @@ go run ./cmd/api -c etc/config.yaml
 | **设计** | [架构设计](docs/design/architecture.md) · [数据库设计](docs/design/database.md) · [API 设计](docs/design/api.md) |
 | **开发** | [开发文档](docs/development/development.md) |
 | **测试** | [测试文档](docs/testing/testing.md) |
-| **部署** | [systemd](docs/deployment/systemd.md) · [Docker](docs/deployment/docker.md) · [Kubernetes](docs/deployment/kubernetes.md) · [Casdoor](docs/deployment/casdoor.md) · [CI/CD](docs/deployment/github-secrets.md) |
+| **部署** | [systemd](docs/deployment/systemd.md) · [Docker](docs/deployment/docker.md) · [Kubernetes](docs/deployment/kubernetes.md) · [FlyIAM 认证](docs/deployment/flyiam.md) · [CI/CD](docs/deployment/github-secrets.md) |
 
 ## 技术栈
 
@@ -110,7 +120,7 @@ go run ./cmd/api -c etc/config.yaml
 | 后端 | Go 1.26 · go-zero · hashicorp/consul/api |
 | 前端 | Vue 3 · Element Plus · Pinia · Vite |
 | 存储 | PostgreSQL（业务） · Redis（缓存） |
-| 认证 | Casdoor（OAuth2 / RBAC） |
+| 认证 | FlyIAM（Casdoor OAuth2 / RBAC） |
 
 ## 目录结构
 
@@ -118,9 +128,9 @@ go run ./cmd/api -c etc/config.yaml
 cmd/api/            程序入口
 internal/           后端源码（handler/logic/middleware/pkg/svc/config/types）
 web/                Vue 3 前端（构建产物嵌入二进制）
-deploy/             部署物料（systemd / docker / k8s / sql / config）
+charts/consul_mgr/  Helm Chart（Helmfile 多环境）
+deploy/             部署物料（systemd / docker / sql / config）
 docs/               文档（design / development / testing / deployment）
-tools/              运维辅助工具
 ```
 
 ## 许可证

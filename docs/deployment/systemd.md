@@ -5,7 +5,7 @@
 ## 前置条件
 
 - Linux（Debian / Ubuntu 推荐）
-- PostgreSQL 14+、Redis 6+（可选）、Casdoor（认证服务）
+- PostgreSQL 14+、Redis 6+（可选）、FlyIAM（提供 Casdoor 认证服务）
 
 ## 部署步骤
 
@@ -25,7 +25,7 @@ wget -q -c --no-check-certificate -O /tmp/config.yaml \
 mkdir -p /etc/consul_mgr
 mv -f /tmp/config.yaml /etc/consul_mgr/config.yaml
 
-# 4. 编辑配置（务必修改数据库、管理员密码与 Casdoor 凭据）
+# 4. 编辑配置（务必修改数据库、管理员密码与 FlyIAM/Casdoor 凭据）
 vi /etc/consul_mgr/config.yaml
 
 # 5. 下载 systemd 单元到 /tmp 再替换
@@ -54,9 +54,10 @@ journalctl -u consul_mgr -f
 | `DATABASE_URL` | PostgreSQL 连接串（必填） | — |
 | `JWT_SECRET` | JWT 密钥（必填，建议 32+ 位） | — |
 | `ADMIN_USERNAME` / `ADMIN_PASSWORD` | 管理员账号（必填） | — |
-| `CASDOOR_ENDPOINT` | Casdoor 后端地址（必填） | — |
+| `CASDOOR_ENDPOINT` | Casdoor 后端地址（FlyIAM 提供，必填） | — |
 | `CASDOOR_PUBLIC_ENDPOINT` | 浏览器可达地址（跨域名部署必填） | 同 Endpoint |
-| `CASDOOR_CLIENT_ID` / `CASDOOR_CLIENT_SECRET` | Casdoor 凭据（必填） | — |
+| `CASDOOR_ORGANIZATION` / `CASDOOR_APPLICATION` | 组织 / 应用 | `flyiam` / `flyiam` |
+| `CASDOOR_CLIENT_ID` / `CASDOOR_CLIENT_SECRET` | Casdoor 凭据（从 FlyIAM 获取，必填） | — |
 | `REDIS_ENABLED` / `REDIS_HOST` / `REDIS_PORT` / `REDIS_PASSWORD` | 缓存 | `true` / `localhost` / `6379` / 空 |
 | `CONSUL_ADDRESS` / `CONSUL_TOKEN` / `CONSUL_DATACENTER` | 默认 Consul | — / 空 / `dc1` |
 | `CONSUL_MAX_CONCURRENCY` | 批量查询/操作并发上限 | `16` |
@@ -72,6 +73,8 @@ ADMIN_USERNAME=admin
 ADMIN_PASSWORD=change_me
 CASDOOR_ENDPOINT=http://127.0.0.1:8000
 CASDOOR_PUBLIC_ENDPOINT=http://your-domain:8000
+CASDOOR_ORGANIZATION=flyiam
+CASDOOR_APPLICATION=flyiam
 CASDOOR_CLIENT_ID=xxx
 CASDOOR_CLIENT_SECRET=xxx
 REDIS_ENABLED=true
@@ -116,8 +119,8 @@ systemctl daemon-reload
 | 启动即失败 | `journalctl -u consul_mgr -n 50` 查看配置/数据库连接错误 |
 | 无法读取配置文件 | 确认 `ReadWritePaths` 已包含 `/etc/consul_mgr`（单元文件已含） |
 | 端口被占用 | 修改 `SERVER_PORT` 或 `ss -tlnp \| grep 8080` |
-| 登录跳转失败 | 检查 `CASDOOR_PUBLIC_ENDPOINT` 是否为浏览器可达地址 |
+| 登录跳转失败 | 检查 `CASDOOR_PUBLIC_ENDPOINT` 是否为浏览器可达地址；确认回调已在 FlyIAM/Casdoor 白名单 |
 
 ## 相关文档
 
-- [Docker 部署](docker.md) · [Kubernetes 部署](kubernetes.md) · [Casdoor 配置](casdoor.md)
+- [Docker 部署](docker.md) · [Kubernetes 部署](kubernetes.md) · [FlyIAM 认证对接](flyiam.md)

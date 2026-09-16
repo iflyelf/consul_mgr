@@ -27,6 +27,7 @@ type CreateGroupRequest struct {
 // UpdateGroupRequest 更新服务组请求
 type UpdateGroupRequest struct {
 	Name             string `json:"name,optional"`
+	Code             string `json:"code,optional"`
 	ConsulAddress    string `json:"consul_address,optional"`
 	ConsulToken      string `json:"consul_token,optional"`
 	Datacenter       string `json:"datacenter,optional"`
@@ -218,6 +219,9 @@ func UpdateGroupHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 		if req.Name == "" {
 			req.Name = original.Name
 		}
+		if req.Code == "" {
+			req.Code = original.Code
+		}
 		if req.ConsulAddress == "" {
 			req.ConsulAddress = original.ConsulAddress
 		}
@@ -239,6 +243,7 @@ func UpdateGroupHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 		result, err := logic.UpdateGroup(
 			id,
 			req.Name,
+			req.Code,
 			req.ConsulAddress,
 			req.ConsulToken,
 			reqDatacenter,

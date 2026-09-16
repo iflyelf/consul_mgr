@@ -64,6 +64,26 @@ export const useUserStore = defineStore('user', () => {
   }
 
   /**
+   * 从后端刷新当前用户信息（用于校正管理员标记等）
+   */
+  const fetchUserInfo = async () => {
+    if (!token.value) return null
+    try {
+      const resp = await fetch('/api/auth/userinfo', {
+        headers: { 'Authorization': `Bearer ${token.value}` }
+      })
+      const result = await resp.json()
+      if (result.code === 200 && result.data) {
+        setUser(result.data)
+        return result.data
+      }
+    } catch (error) {
+      console.error('获取用户信息失败:', error)
+    }
+    return null
+  }
+
+  /**
    * 登出
    */
   const logout = async () => {
@@ -104,6 +124,7 @@ export const useUserStore = defineStore('user', () => {
     clearAuth,
     hasRole,
     hasAnyRole,
+    fetchUserInfo,
     logout
   }
 })

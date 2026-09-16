@@ -25,6 +25,8 @@
 |------|------|------|
 | GET | `/api/auth/config` | 下发前端运行时配置（Casdoor 地址、client_id、回调路径） |
 | GET | `/api/auth/login` | 生成 Casdoor 登录地址并 302 跳转（`?format=json` 返回 JSON） |
+
+> 认证由外部 FlyIAM 提供的 Casdoor 完成，详见 [FlyIAM 认证对接](../deployment/flyiam.md)。
 | GET | `/api/auth/callback` | OAuth 回调，换取 Token 并返回用户信息 |
 | GET | `/api/auth/userinfo` | 获取当前登录用户信息 |
 | POST | `/api/auth/refresh` | 刷新 Token |
@@ -86,19 +88,41 @@
 | GET / POST / DELETE | `/api/permissions/users` | 用户授权（查询/授予/撤销） |
 | GET / POST / DELETE | `/api/permissions/roles` | 角色授权（查询/授予/撤销） |
 
-## 7. 审计 `/api/audit-logs`
+## 7. 人员组织（管理员）
+
+> 以下接口均需管理员权限（`RequireAdmin`），普通用户访问返回 403。
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/users` | 用户列表（分页 + 缓存，数据源为 FlyIAM/Casdoor） |
+| GET | `/api/roles` | 角色列表 |
+| POST | `/api/roles` | 创建角色 |
+| PUT | `/api/roles/:id` | 更新角色 |
+| DELETE | `/api/roles/:id` | 删除角色 |
+| GET | `/api/teams` | 团队列表 |
+| POST | `/api/teams` | 创建团队 |
+| PUT | `/api/teams/:id` | 更新团队 |
+| DELETE | `/api/teams/:id` | 删除团队 |
+| GET | `/api/teams/:id/members` | 团队成员列表 |
+| POST | `/api/teams/:id/members` | 添加成员 |
+| DELETE | `/api/teams/:id/members` | 移除成员 |
+| GET | `/api/teams/:id/permissions` | 团队-服务组授权列表 |
+| POST | `/api/teams/:id/permissions` | 授予服务组权限 |
+| DELETE | `/api/teams/:id/permissions` | 撤销服务组权限 |
+
+## 8. 审计 `/api/audit-logs`
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
 | GET | `/api/audit-logs` | 审计日志列表 |
 | GET | `/api/audit-logs/export` | 导出审计日志 |
 
-## 8. 健康检查
+## 9. 健康检查
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
 | GET | `/health` | 返回 `{"status":"ok",...}`，供容器/K8s 探针使用 |
 
-## 9. 相关文档
+## 10. 相关文档
 
-- [架构设计](architecture.md) · [数据库设计](database.md)
+- [架构设计](architecture.md) · [数据库设计](database.md) · [FlyIAM 认证对接](../deployment/flyiam.md)

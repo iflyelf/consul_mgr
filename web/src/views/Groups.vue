@@ -67,7 +67,7 @@
         </el-form-item>
         
         <el-form-item label="代码" prop="code">
-          <el-input v-model="formData.code" placeholder="请输入服务组代码" :disabled="isEdit" />
+          <el-input v-model="formData.code" placeholder="请输入服务组代码" />
         </el-form-item>
         
         <el-form-item label="描述" prop="description">
@@ -249,6 +249,7 @@ const handleSubmit = async () => {
       if (isEdit.value) {
         // 编辑时只发送修改的字段（数据中心由后端自动探测）
         const updateData = {
+          code: formData.code,
           description: formData.description
         }
         if (formData.name !== '') updateData.name = formData.name

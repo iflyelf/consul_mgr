@@ -29,8 +29,9 @@ Consul Manager 是一个 Consul 服务与实例管理平台，采用 **单二进
         │  服务组/审计    │              │ (多集群/多 DC)  │
         └────────────────┘              └────────────────┘
                 │
-        ┌───────▼────────┐
-        │    Casdoor     │
+        ┌────────────────┐
+        │ FlyIAM         │
+        │ (内置 Casdoor)  │
         │ 认证 / RBAC     │
         └────────────────┘
 ```
@@ -42,9 +43,9 @@ Consul Manager 是一个 Consul 服务与实例管理平台，采用 **单二进
 | `cmd/api/` | 程序入口：加载配置、注册路由、启动服务、SPA 静态资源处理 |
 | `internal/handler/` | HTTP 层：参数解析、响应封装 |
 | `internal/logic/` | 业务逻辑层：服务组、实例、服务、权限、审计 |
-| `internal/middleware/` | 中间件：Casdoor 认证、权限校验、审计、CORS |
-| `internal/pkg/` | 基础组件：Consul 客户端、Casdoor 客户端、Redis 缓存、统一响应 |
-| `internal/svc/` | 服务上下文：DB 连接、建表迁移、组件初始化 |
+| `internal/middleware/` | 中间件：Casdoor 认证（FlyIAM）、权限校验、审计、CORS |
+| `internal/pkg/` | 基础组件：Consul 客户端、Casdoor 客户端（对接 FlyIAM）、Redis 缓存、统一响应 |
+| `internal/svc/` | 服务上下文：DB 连接、自动建表（幂等）、组件初始化 |
 | `internal/config/` | 配置结构体与环境变量覆盖 |
 | `internal/types/` | 请求/响应数据结构 |
 | `web/` | Vue 3 前端（构建产物嵌入二进制） |
@@ -52,7 +53,8 @@ Consul Manager 是一个 Consul 服务与实例管理平台，采用 **单二进
 ## 3. 关键设计
 
 ### 3.1 认证与授权
-- **认证**：完全委托 Casdoor（OAuth2 授权码模式）。后端不保存用户密码。
+- **认证**：完全委托外部 [FlyIAM](https://github.com/iflyelf/flyiam)（内置 Casdoor，OAuth2 授权码模式）。
+  本项目不内置 Casdoor，也不保存用户密码。
   - 登录：前端跳转 `/api/auth/login` → 后端按当前访问域名动态生成 Casdoor 地址并 302。
   - 回调：`/api/auth/callback` 换取 Token，解析 JWT 载荷得到用户信息。
 - **授权**：中间件 `casdoor_auth` 校验 Token；`permission` 校验服务组级权限
@@ -118,4 +120,4 @@ Consul Manager 是一个 Consul 服务与实例管理平台，采用 **单二进
 - [API 设计](api.md)
 - [开发文档](../development/development.md)
 - [测试文档](../testing/testing.md)
-- [部署文档](../deployment/systemd.md)
+- [Kubernetes 部署](../deployment/kubernetes.md) · [FlyIAM 认证对接](../deployment/flyiam.md)

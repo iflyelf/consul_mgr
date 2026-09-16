@@ -3,9 +3,9 @@
 ## 1. 概述
 
 - **数据库**：PostgreSQL
-- **建表方式**：应用启动时自动执行 `CREATE TABLE IF NOT EXISTS`（幂等，见 `internal/svc/service_context.go`）
-- **认证**：用户/角色/权限由 Casdoor 管理，本项目不创建 `users/roles/permissions` 表
-- **权威参考**：`deploy/sql/schema.sql`（与运行时结构一致的结构快照）
+- **建表方式**：应用启动时自动执行 `CREATE TABLE IF NOT EXISTS`（幂等，见 `internal/svc/service_context.go`），无需手工执行 SQL
+- **认证**：用户体系由外部 [FlyIAM](https://github.com/iflyelf/flyiam)（内置 Casdoor）管理，本项目不创建用户密码表
+- **参考快照**：`deploy/sql/schema.sql`（人工建库/审计参考，运行时以内嵌 SQL 为准）
 
 ## 2. 表结构
 
@@ -32,7 +32,7 @@
 |------|------|------|
 | id | BIGSERIAL PK | 主键 |
 | group_id | BIGINT FK | 关联 service_groups，级联删除 |
-| user_id | VARCHAR(100) | Casdoor 用户 ID |
+| user_id | VARCHAR(100) | FlyIAM(Casdoor) 用户 ID |
 | permissions | TEXT[] | 权限列表（read/write/delete） |
 | created_at | TIMESTAMP | 创建时间 |
 
@@ -44,13 +44,66 @@
 |------|------|------|
 | id | BIGSERIAL PK | 主键 |
 | group_id | BIGINT FK | 关联 service_groups，级联删除 |
-| role_name | VARCHAR(100) | Casdoor 角色名 |
+| role_name | VARCHAR(100) | FlyIAM(Casdoor) 角色名 |
 | permissions | TEXT[] | 权限列表 |
 | created_at | TIMESTAMP | 创建时间 |
 
 唯一约束：`(group_id, role_name)`
 
-### 2.4 consul_instances（实例持久化）
+### 2.4 roles（角色）
+
+角色 = 可复用的权限集合，用于团队授权时引用。
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | BIGSERIAL PK | 主键 |
+| name | VARCHAR(100) UNIQUE | 角色名称 |
+| code | VARCHAR(100) | 角色代码 |
+| description | TEXT | 描述 |
+| permissions | TEXT[] | 权限集合（read/write/delete） |
+| created_at / updated_at | TIMESTAMP | 时间戳 |
+
+### 2.5 teams（团队）
+
+团队是权限分配的主体。
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | BIGSERIAL PK | 主键 |
+| name | VARCHAR(100) UNIQUE | 团队名称 |
+| code | VARCHAR(100) | 团队代码 |
+| description | TEXT | 描述 |
+| status | SMALLINT | 1 启用 / 0 停用 |
+| created_by | VARCHAR(100) | 创建人 |
+| created_at / updated_at | TIMESTAMP | 时间戳 |
+
+### 2.6 team_members（团队成员）
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | BIGSERIAL PK | 主键 |
+| team_id | BIGINT FK | 关联 teams，级联删除 |
+| user_id | VARCHAR(100) | FlyIAM(Casdoor) 用户 ID |
+| username / display_name | VARCHAR | 用户名 / 显示名 |
+| created_at | TIMESTAMP | 创建时间 |
+
+唯一约束：`(team_id, user_id)`
+
+### 2.7 team_group_permissions（团队-服务组授权）
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | BIGSERIAL PK | 主键 |
+| team_id | BIGINT FK | 关联 teams，级联删除 |
+| group_id | BIGINT FK | 关联 service_groups，级联删除 |
+| permissions | TEXT[] | 直接权限 |
+| role_ids | BIGINT[] | 引用角色的权限（取并集） |
+| services | TEXT[] | 授权的服务名（空=无权限；包含 `*`=全部） |
+| created_at / updated_at | TIMESTAMP | 时间戳 |
+
+唯一约束：`(team_id, group_id)`
+
+### 2.8 consul_instances（实例持久化）
 
 用于批量导入/导出与本地参考，**列表展示以 Consul 实时数据为准**。
 
@@ -72,7 +125,7 @@
 
 唯一约束：`(group_id, instance_id)`
 
-### 2.5 audit_logs（审计日志）
+### 2.9 audit_logs（审计日志）
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -101,4 +154,4 @@
 
 ## 5. 相关文档
 
-- [架构设计](architecture.md) · [部署文档](../deployment/systemd.md)
+- [架构设计](architecture.md) · [Kubernetes 部署](../deployment/kubernetes.md)

@@ -17,7 +17,7 @@ wget -q -c --no-check-certificate -O /tmp/config.yaml \
   "https://down.xiaonuo.live?url=https://raw.githubusercontent.com/iflyelf/consul_mgr/main/deploy/config/config.yaml"
 mv -f /tmp/config.yaml ./config.yaml
 
-# 3. 修改配置与凭据（端口、数据库、Casdoor 等）
+# 3. 修改配置与凭据（端口、数据库、FlyIAM/Casdoor 等）
 vi ./config.yaml
 vi ./docker-compose.yml
 
@@ -44,6 +44,8 @@ docker run -d \
   -e ADMIN_PASSWORD="change_me" \
   -e CASDOOR_ENDPOINT="http://127.0.0.1:8000" \
   -e CASDOOR_PUBLIC_ENDPOINT="http://your-domain:8000" \
+  -e CASDOOR_ORGANIZATION="flyiam" \
+  -e CASDOOR_APPLICATION="flyiam" \
   -e CASDOOR_CLIENT_ID="xxx" \
   -e CASDOOR_CLIENT_SECRET="xxx" \
   -e REDIS_ENABLED="true" \
@@ -66,13 +68,14 @@ docker run -d \
 | `DATABASE_URL` | PostgreSQL 连接串（必填） | — |
 | `JWT_SECRET` | JWT 密钥（必填） | — |
 | `ADMIN_USERNAME` / `ADMIN_PASSWORD` | 管理员（必填） | — |
-| `CASDOOR_ENDPOINT` / `CASDOOR_PUBLIC_ENDPOINT` | Casdoor 地址 | — |
-| `CASDOOR_CLIENT_ID` / `CASDOOR_CLIENT_SECRET` | Casdoor 凭据 | — |
+| `CASDOOR_ENDPOINT` / `CASDOOR_PUBLIC_ENDPOINT` | Casdoor 地址（FlyIAM 提供） | — |
+| `CASDOOR_ORGANIZATION` / `CASDOOR_APPLICATION` | 组织 / 应用 | `flyiam` / `flyiam` |
+| `CASDOOR_CLIENT_ID` / `CASDOOR_CLIENT_SECRET` | Casdoor 凭据（从 FlyIAM 获取） | — |
 | `REDIS_*` | 缓存配置 | `true` / `localhost` / `6379` |
 
 ## 网络模式说明
 
-compose 示例使用 `network_mode: host`，便于直连宿主机的 PostgreSQL / Redis / Casdoor。
+compose 示例使用 `network_mode: host`，便于直连宿主机的 PostgreSQL / Redis / FlyIAM(Casdoor)。
 若需使用容器网络，请：
 1. 删除 `network_mode: host`
 2. 增加 `ports: ["8080:8080"]`
@@ -95,4 +98,4 @@ docker compose down
 
 ## 相关文档
 
-- [systemd 部署](systemd.md) · [Kubernetes 部署](kubernetes.md) · [Casdoor 配置](casdoor.md)
+- [systemd 部署](systemd.md) · [Kubernetes 部署](kubernetes.md) · [FlyIAM 认证对接](flyiam.md)
