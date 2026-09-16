@@ -14,6 +14,7 @@ import (
 	"github.com/iflyelf/consul_mgr/internal/pkg/cache"
 	"github.com/iflyelf/consul_mgr/internal/pkg/casdoor"
 	"github.com/iflyelf/consul_mgr/internal/pkg/consul"
+	"github.com/iflyelf/consul_mgr/internal/pkg/perm"
 )
 
 // ServiceContext 服务上下文
@@ -24,6 +25,7 @@ type ServiceContext struct {
 	ConsulManager *consul.Manager
 	CasdoorClient *casdoor.Client
 	Cache         *cache.Cache
+	Perm          *perm.Checker
 }
 
 // CacheKeyInstances 实例列表缓存键
@@ -165,6 +167,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		ConsulManager: consulManager,
 		CasdoorClient: casdoorClient,
 		Cache:         cacheClient,
+		Perm:          perm.New(db),
 	}
 }
 
@@ -341,19 +344,24 @@ func createServiceGroupTables(db *sql.DB) error {
 		UNIQUE(team_id, user_id)
 	);
 
-	-- 团队-服务组授权：permissions 为直接权限，role_ids 为引用角色的权限（取并集）
+	-- 团队-服务组授权：permissions 为直接权限，role_ids 为引用角色的权限（取并集），
+	-- services 为授权的服务名（空 = 无权限；包含 "*" = 该服务组下全部服务）
 	CREATE TABLE IF NOT EXISTS team_group_permissions (
 		id BIGSERIAL PRIMARY KEY,
 		team_id BIGINT NOT NULL,
 		group_id BIGINT NOT NULL,
 		permissions TEXT[] DEFAULT '{}',
 		role_ids BIGINT[] DEFAULT '{}',
+		services TEXT[] DEFAULT '{}',
 		created_at TIMESTAMP DEFAULT NOW(),
 		updated_at TIMESTAMP DEFAULT NOW(),
 		FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE CASCADE,
 		FOREIGN KEY (group_id) REFERENCES service_groups(id) ON DELETE CASCADE,
 		UNIQUE(team_id, group_id)
 	);
+
+	-- 兼容旧库：补齐 services 列
+	ALTER TABLE team_group_permissions ADD COLUMN IF NOT EXISTS services TEXT[] DEFAULT '{}';
 
 	-- Consul 实例持久化表
 	CREATE TABLE IF NOT EXISTS consul_instances (

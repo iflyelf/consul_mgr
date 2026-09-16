@@ -35,10 +35,13 @@ type AddMemberRequest struct {
 }
 
 // GrantPermissionRequest 授予服务组权限请求
+//
+// Services：授权的服务名；["*"] 表示该服务组下全部服务；为空表示无权限
 type GrantPermissionRequest struct {
 	GroupID     int64    `json:"group_id" validate:"required"`
 	Permissions []string `json:"permissions,optional"`
 	RoleIDs     []int64  `json:"role_ids,optional"`
+	Services    []string `json:"services,optional"`
 }
 
 func teamID(r *http.Request) (int64, error) {
@@ -220,7 +223,7 @@ func GrantGroupPermissionHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 			return
 		}
 		l := team.NewTeamLogic(r.Context(), ctx.RawDB)
-		if err := l.GrantGroupPermission(id, req.GroupID, req.Permissions, req.RoleIDs); err != nil {
+		if err := l.GrantGroupPermission(id, req.GroupID, req.Permissions, req.RoleIDs, req.Services); err != nil {
 			httpx.WriteJson(w, http.StatusOK, map[string]interface{}{"code": 500, "message": err.Error()})
 			return
 		}

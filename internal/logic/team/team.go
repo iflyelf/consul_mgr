@@ -58,6 +58,7 @@ type GroupPermission struct {
 	GroupName   string   `db:"group_name" json:"group_name"`
 	Permissions []string `db:"permissions" json:"permissions"`
 	RoleIDs     []int64  `db:"role_ids" json:"role_ids"`
+	Services    []string `db:"services" json:"services"`
 	CreatedAt   string   `db:"created_at" json:"created_at"`
 }
 
@@ -223,6 +224,7 @@ func (l *TeamLogic) ListGroupPermissions(teamID int64) ([]*GroupPermission, erro
 		       COALESCE(g.name,'') AS group_name,
 		       gp.permissions,
 		       COALESCE(gp.role_ids, '{}') AS role_ids,
+		       COALESCE(gp.services, '{}') AS services,
 		       TO_CHAR(gp.created_at,'YYYY-MM-DD HH24:MI:SS')
 		FROM team_group_permissions gp
 		LEFT JOIN service_groups g ON g.id = gp.group_id
@@ -238,19 +240,24 @@ func (l *TeamLogic) ListGroupPermissions(teamID int64) ([]*GroupPermission, erro
 		var gp GroupPermission
 		var perms []string
 		var rids []int64
+		var svcs []string
 		if err := rows.Scan(&gp.ID, &gp.TeamID, &gp.GroupID, &gp.GroupName,
-			pq.Array(&perms), pq.Array(&rids), &gp.CreatedAt); err != nil {
+			pq.Array(&perms), pq.Array(&rids), pq.Array(&svcs), &gp.CreatedAt); err != nil {
 			return nil, err
 		}
 		gp.Permissions = perms
 		gp.RoleIDs = rids
+		gp.Services = svcs
 		list = append(list, &gp)
 	}
 	return list, rows.Err()
 }
 
-// GrantGroupPermission 授予团队对服务组的权限
-func (l *TeamLogic) GrantGroupPermission(teamID, groupID int64, permissions []string, roleIDs []int64) error {
+// GrantGroupPermission 授予团队对服务组（及其中指定服务）的权限
+//
+// 参数:
+//   services - 授权的服务名；空 = 无权限；["*"] = 该组全部服务
+func (l *TeamLogic) GrantGroupPermission(teamID, groupID int64, permissions []string, roleIDs []int64, services []string) error {
 	if permissions == nil {
 		permissions = []string{}
 	}
@@ -263,13 +270,28 @@ func (l *TeamLogic) GrantGroupPermission(teamID, groupID int64, permissions []st
 	if roleIDs == nil {
 		roleIDs = []int64{}
 	}
+	if services == nil {
+		services = []string{}
+	}
+	if len(services) == 0 {
+		return fmt.Errorf("请至少选择一个 Service（或勾选“全部服务”）")
+	}
+	// 归一化：若同时存在 "*" 与具体服务，保留 "*"
+	for _, s := range services {
+		if s == "*" {
+			services = []string{"*"}
+			break
+		}
+	}
 	query := `
-		INSERT INTO team_group_permissions (team_id, group_id, permissions, role_ids, created_at, updated_at)
-		VALUES ($1,$2,$3,$4,NOW(),NOW())
+		INSERT INTO team_group_permissions (team_id, group_id, permissions, role_ids, services, created_at, updated_at)
+		VALUES ($1,$2,$3,$4,$5,NOW(),NOW())
 		ON CONFLICT (team_id, group_id) DO UPDATE
-		SET permissions=EXCLUDED.permissions, role_ids=EXCLUDED.role_ids, updated_at=NOW()
+		SET permissions=EXCLUDED.permissions, role_ids=EXCLUDED.role_ids,
+		    services=EXCLUDED.services, updated_at=NOW()
 	`
-	if _, err := l.db.ExecContext(l.ctx, query, teamID, groupID, pq.Array(permissions), pq.Array(roleIDs)); err != nil {
+	if _, err := l.db.ExecContext(l.ctx, query, teamID, groupID,
+		pq.Array(permissions), pq.Array(roleIDs), pq.Array(services)); err != nil {
 		return fmt.Errorf("授予团队权限失败: %w", err)
 	}
 	return nil

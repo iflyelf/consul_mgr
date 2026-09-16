@@ -124,16 +124,35 @@
     </el-dialog>
 
     <!-- 服务组授权 -->
-    <el-dialog v-model="permVisible" :title="`服务组授权 - ${currentTeam?.name || ''}`" width="760px">
+    <el-dialog v-model="permVisible" :title="`服务组授权 - ${currentTeam?.name || ''}`" width="820px">
       <div class="add-row">
-        <el-select v-model="permForm.group_id" filterable placeholder="选择服务组" style="width: 240px">
+        <el-select v-model="permForm.group_id" filterable placeholder="选择服务组" style="width: 200px" @change="handlePermGroupChange">
           <el-option v-for="g in groups" :key="g.id" :label="g.name" :value="g.id" />
         </el-select>
-        <el-select v-model="permForm.role_ids" multiple placeholder="引用角色（可选）" style="width: 220px; margin-left: 10px">
+        <el-select v-model="permForm.role_ids" multiple placeholder="引用角色（可选）" style="width: 200px; margin-left: 10px">
           <el-option v-for="r in roles" :key="r.id" :label="r.name" :value="r.id" />
         </el-select>
         <el-button type="primary" style="margin-left: 10px" @click="handleGrant">授权 / 更新</el-button>
       </div>
+
+      <div class="add-row" style="margin-top: 10px">
+        <span class="label">Services：</span>
+        <el-select
+          v-model="permForm.services"
+          multiple
+          filterable
+          collapse-tags
+          collapse-tags-tooltip
+          :disabled="permAll"
+          placeholder="选择要授权的 Service（必选）"
+          style="width: 340px"
+        >
+          <el-option v-for="s in permServiceOptions" :key="s" :label="s" :value="s" />
+        </el-select>
+        <el-checkbox v-model="permAll" style="margin-left: 12px" @change="handlePermAllChange">全部服务</el-checkbox>
+        <el-button link type="primary" style="margin-left: 8px" @click="loadPermServices">刷新服务列表</el-button>
+      </div>
+
       <div class="add-row" style="margin-top: 10px">
         <span class="label">直接权限：</span>
         <el-checkbox-group v-model="permForm.permissions">
@@ -144,14 +163,29 @@
       </div>
 
       <el-table :data="permissions" v-loading="permLoading" stripe border style="margin-top: 14px">
-        <el-table-column prop="group_name" label="服务组" min-width="150" />
-        <el-table-column label="直接权限" min-width="170">
+        <el-table-column prop="group_name" label="服务组" min-width="130" />
+        <el-table-column label="Services" min-width="220">
+          <template #default="{ row }">
+            <el-tag v-if="isAllServices(row.services)" type="success" size="small">全部服务</el-tag>
+            <template v-else>
+              <el-tag
+                v-for="s in row.services"
+                :key="s"
+                size="small"
+                type="info"
+                style="margin: 2px"
+              >{{ s }}</el-tag>
+              <span v-if="!row.services || row.services.length === 0" class="text-muted">-</span>
+            </template>
+          </template>
+        </el-table-column>
+        <el-table-column label="直接权限" min-width="150">
           <template #default="{ row }">
             <el-tag v-for="p in row.permissions" :key="p" size="small" style="margin-right: 6px">{{ p }}</el-tag>
             <span v-if="!row.permissions || row.permissions.length === 0" class="text-muted">-</span>
           </template>
         </el-table-column>
-        <el-table-column label="引用角色" min-width="170">
+        <el-table-column label="引用角色" min-width="150">
           <template #default="{ row }">
             <el-tag v-for="rid in row.role_ids" :key="rid" size="small" type="warning" style="margin-right: 6px">
               {{ roleName(rid) }}
@@ -180,6 +214,7 @@ import {
   getUsers, getRoles
 } from '@/api/org'
 import { getGroups } from '@/api/group'
+import { getServices } from '@/api/service'
 
 const loading = ref(false)
 const submitLoading = ref(false)
@@ -207,7 +242,9 @@ const currentTeam = ref(null)
 const permVisible = ref(false)
 const permLoading = ref(false)
 const permissions = ref([])
-const permForm = reactive({ group_id: null, permissions: [], role_ids: [] })
+const permForm = reactive({ group_id: null, permissions: [], role_ids: [], services: [] })
+const permAll = ref(false)
+const permServiceOptions = ref([])
 
 const availableUsers = computed(() =>
   allUsers.value.filter(u => !members.value.some(m => m.user_id === u.id))
@@ -340,9 +377,45 @@ const handleRemoveMember = async (row) => {
 const openPermissions = async (row) => {
   currentTeam.value = row
   permVisible.value = true
-  Object.assign(permForm, { group_id: null, permissions: [], role_ids: [] })
+  Object.assign(permForm, { group_id: null, permissions: [], role_ids: [], services: [] })
+  permAll.value = false
+  permServiceOptions.value = []
   await loadPermissions(row.id)
 }
+
+// 服务组切换：加载该组的 Service 列表
+const handlePermGroupChange = async (gid) => {
+  permForm.services = []
+  permAll.value = false
+  await loadPermServices(gid)
+}
+
+// 加载选中服务组的 Service 列表
+const loadPermServices = async (gid) => {
+  const groupId = gid || permForm.group_id
+  if (!groupId) {
+    ElMessage.warning('请先选择服务组')
+    return
+  }
+  try {
+    const res = await getServices({ group_id: groupId })
+    permServiceOptions.value = (res.list || []).map(x => x.service)
+  } catch (e) {
+    permServiceOptions.value = []
+    ElMessage.error('获取 Service 列表失败')
+  }
+}
+
+// “全部服务”切换
+const handlePermAllChange = (val) => {
+  if (val) {
+    permForm.services = ['*']
+  } else {
+    permForm.services = []
+  }
+}
+
+const isAllServices = (services) => Array.isArray(services) && services.includes('*')
 
 const loadPermissions = async (id) => {
   permLoading.value = true
@@ -365,14 +438,20 @@ const handleGrant = async () => {
     ElMessage.warning('请至少选择直接权限或引用角色')
     return
   }
+  if (!permForm.services || permForm.services.length === 0) {
+    ElMessage.warning('请选择要授权的 Service（或勾选“全部服务”）')
+    return
+  }
   try {
     await grantTeamPermission(currentTeam.value.id, {
       group_id: permForm.group_id,
       permissions: permForm.permissions,
-      role_ids: permForm.role_ids
+      role_ids: permForm.role_ids,
+      services: permForm.services
     })
     ElMessage.success('授权成功')
-    Object.assign(permForm, { group_id: null, permissions: [], role_ids: [] })
+    Object.assign(permForm, { group_id: null, permissions: [], role_ids: [], services: [] })
+    permAll.value = false
     await loadPermissions(currentTeam.value.id)
     loadData()
   } catch (e) {

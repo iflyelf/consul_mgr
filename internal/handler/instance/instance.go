@@ -14,7 +14,9 @@ import (
 	"github.com/zeromicro/go-zero/rest/httpx"
 	"github.com/zeromicro/go-zero/rest/pathvar"
 
+	"github.com/iflyelf/consul_mgr/internal/handler/access"
 	"github.com/iflyelf/consul_mgr/internal/logic/instance"
+	"github.com/iflyelf/consul_mgr/internal/middleware"
 	"github.com/iflyelf/consul_mgr/internal/svc"
 	"github.com/iflyelf/consul_mgr/internal/types"
 )
@@ -28,6 +30,20 @@ func instanceID(r *http.Request) string {
 		return v
 	}
 	return r.URL.Query().Get("id")
+}
+
+// checkInstanceAccess 解析实例所属服务并校验权限
+func checkInstanceAccess(ctx *svc.ServiceContext, w http.ResponseWriter, r *http.Request, groupID int64, instanceID, action string) bool {
+	if middleware.IsGlobalAdminFromContext(r.Context()) || middleware.IsAdminFromContext(r.Context()) {
+		return true
+	}
+	l := instance.NewListInstancesLogic(r.Context(), ctx)
+	detail, err := l.GetInstance(groupID, instanceID)
+	if err != nil || detail == nil {
+		// 无法解析时交由后续逻辑处理，避免掩盖真实错误
+		return true
+	}
+	return access.CheckService(ctx, w, r, groupID, detail.Service, action)
 }
 
 // groupIDFrom 解析 group_id
@@ -84,6 +100,17 @@ func ListInstancesHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 					strings.Contains(strings.ToLower(it.Service), kw) ||
 					strings.Contains(strings.ToLower(it.Address), kw) ||
 					strings.Contains(strings.ToLower(it.Node), kw) {
+					filtered = append(filtered, it)
+				}
+			}
+			list = filtered
+		}
+
+		// 按授权范围过滤（团队仅被授权部分 Service 时，只返回这些服务）
+		if set := access.AllowedSet(ctx, r, groupID); set != nil {
+			filtered := make([]types.ConsulInstanceInfo, 0, len(list))
+			for _, it := range list {
+				if access.ContainsFold(set, it.Service) {
 					filtered = append(filtered, it)
 				}
 			}
@@ -151,6 +178,11 @@ func RegisterInstanceHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 			return
 		}
 
+		// 服务级权限校验（写操作）
+		if !access.CheckService(ctx, w, r, req.GroupID, req.Service, "write") {
+			return
+		}
+
 		l := instance.NewRegisterInstanceLogic(r.Context(), ctx)
 		if err := l.RegisterInstance(req.GroupID, &req); err != nil {
 			httpx.WriteJson(w, http.StatusOK, map[string]interface{}{
@@ -189,6 +221,11 @@ func UpdateInstanceHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 			groupID, _ = strconv.ParseInt(r.Header.Get("X-Group-Id"), 10, 64)
 		}
 
+		// 解析实例所属服务并做服务级权限校验
+		if !checkInstanceAccess(ctx, w, r, groupID, id, "write") {
+			return
+		}
+
 		l := instance.NewUpdateInstanceLogic(r.Context(), ctx)
 		if err := l.UpdateInstance(groupID, id, &req); err != nil {
 			httpx.WriteJson(w, http.StatusOK, map[string]interface{}{
@@ -215,6 +252,12 @@ func DeregisterInstanceHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 		}
 
 		groupID := groupIDFrom(r)
+
+		// 解析实例所属服务并做服务级权限校验
+		if !checkInstanceAccess(ctx, w, r, groupID, id, "delete") {
+			return
+		}
+
 		l := instance.NewDeleteInstanceLogic(r.Context(), ctx)
 		if err := l.DeleteInstance(groupID, id); err != nil {
 			httpx.WriteJson(w, http.StatusOK, map[string]interface{}{
@@ -238,6 +281,33 @@ func BatchDeleteHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 				"code": 400, "message": "参数错误: " + err.Error(),
 			})
 			return
+		}
+
+		// 服务级权限校验：仅保留已授权的实例
+		if set := access.AllowedSet(ctx, r, req.GroupID); set != nil {
+			ll := instance.NewListInstancesLogic(r.Context(), ctx)
+			all, _ := ll.ListInstances(req.GroupID, "", "")
+			svcOf := make(map[string]string, len(all))
+			for _, it := range all {
+				svcOf[it.ID] = it.Service
+			}
+			kept := make([]string, 0, len(req.IDs))
+			denied := false
+			for _, id := range req.IDs {
+				if svc, ok := svcOf[id]; ok && !access.ContainsFold(set, svc) {
+					denied = true
+					continue
+				}
+				kept = append(kept, id)
+			}
+			if denied && len(kept) == 0 {
+				httpx.WriteJson(w, http.StatusForbidden, map[string]interface{}{
+					"code":    403,
+					"message": "没有权限删除所选实例（需管理员在「人员组织 → 团队管理」中授权）",
+				})
+				return
+			}
+			req.IDs = kept
 		}
 
 		l := instance.NewBatchDeleteInstancesLogic(r.Context(), ctx)
@@ -269,6 +339,11 @@ func BatchRegisterHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 			httpx.WriteJson(w, http.StatusOK, map[string]interface{}{
 				"code": 400, "message": "参数错误: " + err.Error(),
 			})
+			return
+		}
+
+		// 服务级权限校验（写操作）
+		if !access.CheckService(ctx, w, r, req.GroupID, req.Service, "write") {
 			return
 		}
 
@@ -305,6 +380,10 @@ func PreviewBatchRegisterHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 			httpx.WriteJson(w, http.StatusOK, map[string]interface{}{
 				"code": 400, "message": "参数错误: " + err.Error(),
 			})
+			return
+		}
+
+		if !access.CheckService(ctx, w, r, req.GroupID, req.Service, "write") {
 			return
 		}
 
