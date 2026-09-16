@@ -101,13 +101,16 @@ consulTimeout: {{ env "CONSUL_MGR_CONSUL_TIMEOUT" | default "10" }}
 consulMaxConcurrency: {{ env "CONSUL_MGR_CONSUL_MAX_CONCURRENCY" | default "16" }}
 
 # ==================== 认证配置（复用外部 FlyIAM 提供的 Casdoor）====================
-# Casdoor 服务地址（Pod 内访问，指向 FlyIAM 内置 Casdoor 的 Service）
-#   跨命名空间部署时使用 FQDN，例如：
-#     http://casdoor.flyiam.svc.cluster.local:8000
-#   或启用下方 casdoorExternalService 后继续使用短名 http://casdoor:8000
-casdoorEndpoint: '{{ env "CONSUL_MGR_CASDOOR_ENDPOINT" | default "http://casdoor:8000" }}'
-# Casdoor 公开地址（浏览器访问；跨域名部署时必填，留空则用访问域名）
+# 默认：外置域名方式
+#   后端通过外置域名访问 Casdoor，例如 https://casdoor.example.com
+#   （即 Casdoor 已通过 Ingress / 网关以域名对外暴露）
+casdoorEndpoint: '{{ env "CONSUL_MGR_CASDOOR_ENDPOINT" | default "http://casdoor.example.com:8000" }}'
+# Casdoor 公开地址（浏览器访问；留空则回退为 casdoorEndpoint）
 casdoorPublicEndpoint: '{{ env "CONSUL_MGR_CASDOOR_PUBLIC_ENDPOINT" | default "" }}'
+# Casdoor 是否位于集群内（走 Service/DNS）
+#   false（默认）：外置域名方式，NetworkPolicy 按域名/CIDR 放行出站
+#   true：集群内方式，NetworkPolicy 使用 namespaceSelector + podSelector 精确放行
+casdoorInCluster: {{ env "CONSUL_MGR_CASDOOR_IN_CLUSTER" | default "false" }}
 # 应用凭据（从 FlyIAM 获取）
 casdoorClientId: '{{ env "CONSUL_MGR_CASDOOR_CLIENT_ID" | default "" }}'
 casdoorClientSecret: '{{ env "CONSUL_MGR_CASDOOR_CLIENT_SECRET" | default "" }}'
@@ -118,18 +121,18 @@ casdoorOrganization: '{{ env "CONSUL_MGR_CASDOOR_ORGANIZATION" | default "flyiam
 # 应用名称（与 FlyIAM 保持一致）
 casdoorApplication: '{{ env "CONSUL_MGR_CASDOOR_APPLICATION" | default "flyiam" }}'
 
-# ==================== Casdoor 跨命名空间引用（FlyIAM 与本应用不在同一命名空间）====================
+# ==================== Casdoor 集群内引用（可选，casdoorInCluster=true 时使用）====================
 # FlyIAM（内置 Casdoor）所在命名空间
 casdoorNamespace: '{{ env "CONSUL_MGR_CASDOOR_NAMESPACE" | default "flyiam" }}'
 # FlyIAM 中 Casdoor Service 的名称与端口（远端真实 Service）
 casdoorServiceName: '{{ env "CONSUL_MGR_CASDOOR_SERVICE_NAME" | default "casdoor" }}'
 casdoorServicePort: {{ env "CONSUL_MGR_CASDOOR_SERVICE_PORT" | default "8000" }}
-# Casdoor Pod 标签（用于 NetworkPolicy 精确放行；与 FlyIAM Chart 的 selector 一致）
+# Casdoor Pod 标签（casdoorInCluster=true 时用于 NetworkPolicy 精确放行；与 FlyIAM Chart 的 selector 一致）
 casdoorPodLabelKey: '{{ env "CONSUL_MGR_CASDOOR_POD_LABEL_KEY" | default "app.kubernetes.io/component" }}'
 casdoorPodLabelValue: '{{ env "CONSUL_MGR_CASDOOR_POD_LABEL_VALUE" | default "casdoor" }}'
-# 是否在本命名空间创建 ExternalName Service（把跨命名空间 Casdoor 映射为别名，便于使用短名）
-#   默认开启：跨命名空间部署时可用短名 http://casdoor:8000 访问 FlyIAM 的 Casdoor
-casdoorExternalServiceEnabled: {{ env "CONSUL_MGR_CASDOOR_EXTERNAL_SERVICE_ENABLED" | default "true" }}
+# 是否在本命名空间创建 ExternalName Service（把集群内 Casdoor 映射为别名，便于使用短名）
+#   默认关闭（默认外置域名方式，无需集群内别名）
+casdoorExternalServiceEnabled: {{ env "CONSUL_MGR_CASDOOR_EXTERNAL_SERVICE_ENABLED" | default "false" }}
 # 别名 Service 名称（默认与远端同名，指向 casdoor.<namespace>.svc.cluster.local）
 casdoorExternalServiceName: '{{ env "CONSUL_MGR_CASDOOR_EXTERNAL_SERVICE_NAME" | default "casdoor" }}'
 
@@ -147,6 +150,10 @@ networkPolicyDbCidrs: '{{ env "CONSUL_MGR_NETWORK_POLICY_DB_CIDRS" | default "" 
 #   ⚠️ Consul 集群地址/端口在运行时按「服务组」配置，无法预先穷举；
 #      留空时出站对 Consul 不限制（等价放开出站），填写后可真正收紧。
 networkPolicyConsulCidrs: '{{ env "CONSUL_MGR_NETWORK_POLICY_CONSUL_CIDRS" | default "" }}'
+# 出站：外置 Casdoor 域名对应的 CIDR 列表（逗号分隔；casdoorInCluster=false 时生效）
+#   留空：按端口放行到任意目标（外置域名通常解析为公网 IP，无法预先穷举）
+#   填写：仅放行这些网段，推荐在生产环境填写
+networkPolicyCasdoorCidrs: '{{ env "CONSUL_MGR_NETWORK_POLICY_CASDOOR_CIDRS" | default "" }}'
 # 出站：是否放行全部出站（调试用；生产建议 false 并依赖下方精确规则）
 networkPolicyAllowAllEgress: {{ env "CONSUL_MGR_NETWORK_POLICY_ALLOW_ALL_EGRESS" | default "false" }}
 

@@ -27,6 +27,7 @@
 
   ✅ 数据库表由程序自动创建（无需手工执行 SQL）
   ✅ 认证复用外部 FlyIAM 提供的 Casdoor（org/app = {{ .Values.casdoorOrganization }}）
+     部署形态：{{ if .Values.casdoorInCluster }}集群内（{{ .Values.casdoorNamespace }}）{{ else }}外置域名（{{ .Values.casdoorEndpoint }}）{{ end }}
 
 3. 访问
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -35,7 +36,10 @@
     kubectl port-forward -n {{ .Release.Namespace }} svc/{{ include "consul_mgr.fullname" . }} {{ .Values.service.port }}:{{ .Values.service.port }}
     浏览器访问 http://localhost:{{ .Values.service.port }}
 
-  ⚠️ 认证依赖 FlyIAM：请确保 FlyIAM 已部署且其 Casdoor Service 可从本命名空间访问，
+  ⚠️ 认证依赖 FlyIAM：请确保 Casdoor 可从集群内访问（当前：
+     {{- if .Values.casdoorInCluster }} 集群内 {{ .Values.casdoorNamespace }} 命名空间
+     {{- else }} 外置域名 {{ .Values.casdoorEndpoint }}
+     {{- end }}），
      并在 FlyIAM 中把本服务的回调地址加入白名单。
 
 4. 默认凭据

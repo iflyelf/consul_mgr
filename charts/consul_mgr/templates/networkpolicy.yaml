@@ -3,8 +3,10 @@
 # NetworkPolicy 网络策略
 #
 # 说明：
-#   - 仅放行必要流量，适用于 FlyIAM(Casdoor)、数据库、Redis 均在不同位置的场景；
-#   - 跨命名空间 Casdoor 通过 namespaceSelector + podSelector 精确放行；
+#   - 仅放行必要流量，适用于 Casdoor、数据库、Redis 均在不同位置的场景；
+#   - Casdoor 放行规则随部署形态自动切换：
+#       外置域名（默认）：按端口/CIDR 放行；
+#       集群内：namespaceSelector + podSelector 精确放行；
 #   - 需要集群 CNI 支持 NetworkPolicy（Calico / Cilium / Antrea 等），
 #     不支持的 CNI 会忽略本对象；
 #   - 生产环境建议保持 allowAllEgress=false，并按 dbCidrs 收紧数据库出站。
@@ -65,8 +67,9 @@ spec:
         - protocol: TCP
           port: 53
 
-    # 跨命名空间 Casdoor（FlyIAM 内置）
-    #   仅放行 FlyIAM 命名空间中带指定标签的 Casdoor Pod
+    # Casdoor 认证服务（FlyIAM 内置）
+    {{- if .Values.networkPolicy.casdoor.inCluster }}
+    # 集群内方式：仅放行指定命名空间中带指定标签的 Casdoor Pod
     - to:
         - namespaceSelector:
             matchLabels:
@@ -77,6 +80,28 @@ spec:
       ports:
         - protocol: TCP
           port: {{ .Values.networkPolicy.casdoor.port }}
+    {{- else }}
+    # 外置域名方式
+    {{- if .Values.networkPolicy.casdoor.externalCidrs }}
+    # 仅放行外置 Casdoor 域名对应的网段
+    - to:
+        {{- range $item := splitList "," .Values.networkPolicy.casdoor.externalCidrs }}
+        {{- $cidr := trim $item }}
+        {{- if $cidr }}
+        - ipBlock:
+            cidr: {{ $cidr | quote }}
+        {{- end }}
+        {{- end }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.networkPolicy.casdoor.port }}
+    {{- else }}
+    # 外置域名解析为公网 IP，无法预先穷举：按端口放行到任意目标
+    - ports:
+        - protocol: TCP
+          port: {{ .Values.networkPolicy.casdoor.port }}
+    {{- end }}
+    {{- end }}
 
     # Consul 集群（核心功能，地址/端口在运行时按服务组配置）
     #   consulCidrs 非空：仅放行指定网段（全部端口）；

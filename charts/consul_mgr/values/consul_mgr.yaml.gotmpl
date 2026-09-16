@@ -270,7 +270,7 @@ secret:
   {{- end }}
 
 # ============================================
-# Casdoor 跨命名空间引用（ExternalName Service）
+# Casdoor 集群内引用（ExternalName Service，casdoorInCluster=true 时使用）
 # 把 FlyIAM 命名空间中的 Casdoor Service 映射为本命名空间别名，
 # 从而可继续使用短名 http://<name>:<port> 访问。
 # ============================================
@@ -296,8 +296,13 @@ networkPolicy:
   dbPort: {{ .Values.dbPort }}
   redisEnabled: {{ .Values.redisEnabled }}
   redisPort: {{ .Values.redisPort }}
-  # 跨命名空间 Casdoor 放行规则
+  # Casdoor 放行规则
   casdoor:
+    # false=外置域名方式（CIDR/端口放行）；true=集群内方式（命名空间+Pod 标签放行）
+    inCluster: {{ .Values.casdoorInCluster }}
+    # 外置域名方式：域名对应 CIDR（留空则按端口放行任意目标）
+    externalCidrs: {{ .Values.networkPolicyCasdoorCidrs | quote }}
+    # 集群内方式：命名空间 + Pod 标签
     namespace: {{ .Values.casdoorNamespace | quote }}
     podLabelKey: {{ .Values.casdoorPodLabelKey | quote }}
     podLabelValue: {{ .Values.casdoorPodLabelValue | quote }}

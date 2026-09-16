@@ -53,12 +53,14 @@ export CASDOOR_APPLICATION="flyiam"
 
 Kubernetes 部署请对应设置 `CONSUL_MGR_CASDOOR_*`（见 [Kubernetes 部署](kubernetes.md)）。
 
-> **跨命名空间**：FlyIAM 通常部署在独立命名空间（如 `flyiam`），本应用在 `consul-mgr`。
-> 后端访问 Casdoor 可使用跨命名空间 FQDN：
-> `http://casdoor.flyiam.svc.cluster.local:8000`；
-> 或启用 Chart 的 ExternalName 别名（默认开启），继续使用短名 `http://casdoor:8000`。
-> 若同时启用 NetworkPolicy，Chart 已按 `namespaceSelector=flyiam` +
-> `podSelector=component=casdoor` 精确放行 8000 端口。
+> **Kubernetes 接入方式**：默认采用**外置域名方式**（`casdoorInCluster=false`）——
+> 将 `CONSUL_MGR_CASDOOR_ENDPOINT` / `CONSUL_MGR_CASDOOR_PUBLIC_ENDPOINT`
+> 设为 Casdoor 对外域名（如 `https://casdoor.example.com`），后端与浏览器均通过该域名访问。
+> 若 Casdoor 仅在集群内可达，设置 `CONSUL_MGR_CASDOOR_IN_CLUSTER=true`，并使用
+> 跨命名空间 FQDN `http://casdoor.flyiam.svc.cluster.local:8000`，
+> 或启用 Chart 的 ExternalName 别名使用短名。
+> NetworkPolicy 会随形态自动调整：外置按端口/CIDR 放行，集群内按
+> `namespaceSelector` + `podSelector` 精确放行。
 
 ## 4. 回调白名单维护
 
