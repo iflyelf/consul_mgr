@@ -70,18 +70,17 @@ affinity:
               operator: In
               values:
                 - linux
-  # Pod 反亲和性（避免多副本调度到同一节点）
+  # Pod 反亲和性（硬性打散：多副本不调度到同一节点）
+  # ⚠️ 硬性要求：带 nodeLabel 标签的节点数需 ≥ 副本数，否则 Pod 会 Pending
   podAntiAffinity:
-    preferredDuringSchedulingIgnoredDuringExecution:
-      - weight: 100
-        podAffinityTerm:
-          labelSelector:
-            matchExpressions:
-              - key: app.kubernetes.io/name
-                operator: In
-                values:
-                  - consul_mgr
-          topologyKey: kubernetes.io/hostname
+    requiredDuringSchedulingIgnoredDuringExecution:
+      - labelSelector:
+          matchExpressions:
+            - key: app.kubernetes.io/name
+              operator: In
+              values:
+                - consul_mgr
+        topologyKey: kubernetes.io/hostname
 
 tolerations: []
 

@@ -89,6 +89,10 @@ charts/consul_mgr/
 | staging | consul-mgr-staging | 2 | 否 |
 | prod | consul-mgr | 3 | 是（3~10） |
 
+> ⚠️ Pod 反亲和为**硬性打散**（`required`），带 `consul_mgr=true` 标签的节点数需
+> **≥ 应用副本数**；启用 HPA 时上限同样受节点数限制
+> （`CONSUL_MGR_HPA_MAX_REPLICAS` 过大将出现 Pending）。
+
 ## 关键配置
 
 `values/_base.yaml.gotmpl` 集中管理（全部支持环境变量覆盖）：
@@ -146,11 +150,15 @@ affinity:
               operator: In
               values:
                 - linux
-  podAntiAffinity:            # 多副本尽量分散到不同节点
-    preferredDuringSchedulingIgnoredDuringExecution:
-      - weight: 100
-        podAffinityTerm:
-          topologyKey: kubernetes.io/hostname
+  podAntiAffinity:            # 硬性打散：多副本不共节点
+    requiredDuringSchedulingIgnoredDuringExecution:
+      - labelSelector:
+          matchExpressions:
+            - key: app.kubernetes.io/name
+              operator: In
+              values:
+                - consul_mgr
+        topologyKey: kubernetes.io/hostname
 ```
 
 标签由 `CONSUL_MGR_NODE_LABEL` / `CONSUL_MGR_NODE_LABEL_VALUE` 控制（默认
@@ -161,8 +169,11 @@ export CONSUL_MGR_NODE_LABEL="consul_mgr"
 export CONSUL_MGR_NODE_LABEL_VALUE="true"
 ```
 
-> ⚠️ 硬性亲和性不满足时 Pod 会一直 `Pending`，可用
+> ⚠️ **硬性调度**：节点数不满足时 Pod 会一直 `Pending`，可用
 > `kubectl describe pod -n consul-mgr <pod>` 查看调度事件。
+>
+> 打散为硬性（`required`），**带 `consul_mgr=true` 标签的节点数需 ≥ 副本数**
+> （默认 2，可用 `CONSUL_MGR_REPLICAS` 调整）。
 
 ## 安装后验证
 

@@ -100,6 +100,15 @@ affinity:
               operator: In
               values:
                 - linux
+  podAntiAffinity:                 # 硬性打散：多副本不共节点
+    requiredDuringSchedulingIgnoredDuringExecution:
+      - labelSelector:
+          matchExpressions:
+            - key: app.kubernetes.io/name
+              operator: In
+              values:
+                - consul_mgr
+        topologyKey: kubernetes.io/hostname
 ```
 
 标签可通过环境变量覆盖：
@@ -109,7 +118,8 @@ export CONSUL_MGR_NODE_LABEL="consul_mgr"
 export CONSUL_MGR_NODE_LABEL_VALUE="true"
 ```
 
-> 硬性亲和性不满足时 Pod 会一直 `Pending`，用 `kubectl describe pod` 查看调度事件。
+> **硬性调度**：不满足时 Pod 会一直 `Pending`，用 `kubectl describe pod` 查看调度事件。
+> 打散为硬性（`required`），**带 `consul_mgr=true` 标签的节点数需 ≥ 副本数**（默认 2）。
 
 ## 4. 对接 FlyIAM（认证）说明
 
@@ -252,6 +262,9 @@ egress:
 | dev | consul-mgr-dev | 1 | 否 |
 | staging | consul-mgr-staging | 2 | 否 |
 | prod | consul-mgr | 3 | 是（3~10） |
+
+> ⚠️ Pod 反亲和为**硬性打散**（`required`），带 `consul_mgr=true` 标签的节点数需
+> ≥ 副本数；启用 HPA 时上限同样受节点数限制，`maxReplicas` 过大将出现 Pending。
 
 ## 6. 配置项（节选）
 
