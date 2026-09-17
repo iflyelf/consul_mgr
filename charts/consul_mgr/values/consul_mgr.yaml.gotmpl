@@ -234,6 +234,8 @@ env:
     value: {{ .Values.casdoorOrganization | quote }}
   - name: CASDOOR_APPLICATION
     value: {{ .Values.casdoorApplication | quote }}
+  - name: CASDOOR_DEFAULT_PASSWORD
+    value: {{ .Values.casdoorDefaultPassword | quote }}
 
   # 权限配置
   - name: PERMISSION_ENABLE_SERVICE_GROUP_AUTH

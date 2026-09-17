@@ -1,8 +1,28 @@
 import request from '@/utils/request'
 
-// ==================== 用户（来自 Casdoor，只读） ====================
+// ==================== 用户（来自 Casdoor，与 FlyIAM 对齐） ====================
 export function getUsers(params) {
   return request({ url: '/users', method: 'get', params })
+}
+
+export function createUser(data) {
+  return request({ url: '/users', method: 'post', data })
+}
+
+export function updateUser(name, data) {
+  return request({ url: `/users/${encodeURIComponent(name)}`, method: 'put', data })
+}
+
+export function deleteUser(name) {
+  return request({ url: `/users/${encodeURIComponent(name)}`, method: 'delete' })
+}
+
+export function resetUserPassword(name, password = '') {
+  return request({ url: `/users/${encodeURIComponent(name)}/reset-password`, method: 'post', data: { password } })
+}
+
+export function setUserAdmin(name, isAdmin) {
+  return request({ url: `/users/${encodeURIComponent(name)}/admin`, method: 'post', data: { isAdmin } })
 }
 
 // ==================== 角色 ====================

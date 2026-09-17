@@ -89,6 +89,53 @@ func (l *UserLogic) ListUsers(keyword string, page, pageSize int) ([]casdoor.Cas
 	return all[start:end], total, nil
 }
 
+// 以下为用户管理（与 FlyIAM 对齐：新增/编辑/删除/重置密码/管理员标记）。
+// 用户唯一存储于 Casdoor；写操作后清理列表缓存，保证下次读取为新数据。
+
+// CreateUser 新增用户
+func (l *UserLogic) CreateUser(in casdoor.UserUpsert, defaultPassword string) error {
+	if err := l.client.CreateUser(in, defaultPassword); err != nil {
+		return err
+	}
+	l.cache.Del(l.ctx, usersCacheKey)
+	return nil
+}
+
+// UpdateUser 更新用户
+func (l *UserLogic) UpdateUser(in casdoor.UserUpsert) error {
+	if err := l.client.UpdateUser(in); err != nil {
+		return err
+	}
+	l.cache.Del(l.ctx, usersCacheKey)
+	return nil
+}
+
+// DeleteUser 删除用户
+func (l *UserLogic) DeleteUser(name string) error {
+	if err := l.client.DeleteUser(name); err != nil {
+		return err
+	}
+	l.cache.Del(l.ctx, usersCacheKey)
+	return nil
+}
+
+// ResetPassword 重置用户密码
+func (l *UserLogic) ResetPassword(name, password string) error {
+	if err := l.client.ResetPassword(name, password); err != nil {
+		return err
+	}
+	return nil
+}
+
+// SetUserAdmin 设置/取消管理员
+func (l *UserLogic) SetUserAdmin(name string, isAdmin bool) error {
+	if err := l.client.SetUserAdmin(name, isAdmin); err != nil {
+		return err
+	}
+	l.cache.Del(l.ctx, usersCacheKey)
+	return nil
+}
+
 // allUsers 获取全量用户（优先命中 Redis 缓存）
 func (l *UserLogic) allUsers() ([]casdoor.CasdoorUser, error) {
 	var cached []casdoor.CasdoorUser

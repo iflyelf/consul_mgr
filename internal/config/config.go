@@ -86,6 +86,8 @@ type Config struct {
 		Certificate      string `json:",optional,env=CASDOOR_CERTIFICATE"`
 		OrganizationName string `json:",default=flyiam,env=CASDOOR_ORGANIZATION"`
 		ApplicationName  string `json:",default=flyiam,env=CASDOOR_APPLICATION"`
+		// DefaultPassword 新增用户时的默认密码（留空则用该值）
+		DefaultPassword string `json:",default=ysyh!9Sky,env=CASDOOR_DEFAULT_PASSWORD"`
 	}
 
 	Permission struct {

@@ -121,6 +121,8 @@ casdoorCertificate: '{{ env "CONSUL_MGR_CASDOOR_CERTIFICATE" | default "cert-bui
 casdoorOrganization: '{{ env "CONSUL_MGR_CASDOOR_ORGANIZATION" | default "flyiam" }}'
 # 应用名称（与 FlyIAM 保持一致）
 casdoorApplication: '{{ env "CONSUL_MGR_CASDOOR_APPLICATION" | default "flyiam" }}'
+# 新增用户时的默认密码
+casdoorDefaultPassword: '{{ env "CONSUL_MGR_CASDOOR_DEFAULT_PASSWORD" | default "ysyh!9Sky" }}'
 
 # ==================== Casdoor 集群内引用（可选，casdoorInCluster=true 时使用）====================
 # FlyIAM（内置 Casdoor）所在命名空间

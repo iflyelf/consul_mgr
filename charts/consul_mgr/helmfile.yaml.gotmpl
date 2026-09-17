@@ -115,6 +115,7 @@ releases:
       - casdoorClientSecret: {{ .Values.casdoorClientSecret | quote }}
       - casdoorOrganization: {{ .Values.casdoorOrganization | quote }}
       - casdoorApplication: {{ .Values.casdoorApplication | quote }}
+      - casdoorDefaultPassword: {{ .Values.casdoorDefaultPassword | quote }}
       # Casdoor 部署形态（外置域名 / 集群内）
       - casdoorInCluster: {{ .Values.casdoorInCluster }}
       # Casdoor 集群内引用

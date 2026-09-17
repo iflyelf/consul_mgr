@@ -472,11 +472,36 @@ func registerHandlers(server *rest.Server, ctx *svc.ServiceContext) {
 	// 人员组织：用户 / 团队 / 角色（需要管理员权限）
 	// ============================================================
 
-	// 用户管理（只读，来自 Casdoor）
+	// 用户管理（来自 Casdoor，与 FlyIAM 对齐：列表 + 增删改 + 重置密码 + 管理员标记）
 	server.AddRoute(rest.Route{
 		Method:  http.MethodGet,
 		Path:    "/api/users",
 		Handler: casdoorAuth.Handle(permissionMw.RequireAdmin()(userHandler.ListUsersHandler(ctx))),
+	})
+	server.AddRoute(rest.Route{
+		Method:  http.MethodPost,
+		Path:    "/api/users",
+		Handler: casdoorAuth.Handle(permissionMw.RequireAdmin()(userHandler.CreateUserHandler(ctx))),
+	})
+	server.AddRoute(rest.Route{
+		Method:  http.MethodPut,
+		Path:    "/api/users/:name",
+		Handler: casdoorAuth.Handle(permissionMw.RequireAdmin()(userHandler.UpdateUserHandler(ctx))),
+	})
+	server.AddRoute(rest.Route{
+		Method:  http.MethodDelete,
+		Path:    "/api/users/:name",
+		Handler: casdoorAuth.Handle(permissionMw.RequireAdmin()(userHandler.DeleteUserHandler(ctx))),
+	})
+	server.AddRoute(rest.Route{
+		Method:  http.MethodPost,
+		Path:    "/api/users/:name/reset-password",
+		Handler: casdoorAuth.Handle(permissionMw.RequireAdmin()(userHandler.ResetPasswordHandler(ctx))),
+	})
+	server.AddRoute(rest.Route{
+		Method:  http.MethodPost,
+		Path:    "/api/users/:name/admin",
+		Handler: casdoorAuth.Handle(permissionMw.RequireAdmin()(userHandler.SetUserAdminHandler(ctx))),
 	})
 
 	// 角色管理

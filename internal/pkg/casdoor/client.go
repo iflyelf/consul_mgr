@@ -494,23 +494,26 @@ func (c *Client) GetConfig() *Config {
 	return c.config
 }
 
-// CasdoorUser 用于列表展示的 Casdoor 用户精简信息
+// CasdoorUser 用于列表展示的 Casdoor 用户信息
 type CasdoorUser struct {
-	Id          string `json:"id"`
-	Owner       string `json:"owner"`
-	Name        string `json:"name"`
-	DisplayName string `json:"displayName"`
-	Email       string `json:"email"`
-	Phone       string `json:"phone"`
-	Avatar      string `json:"avatar"`
-	IsAdmin     bool   `json:"isAdmin"`
-	SignupApp   string `json:"signupApplication"`
-	CreatedTime string `json:"createdTime"`
+	Id          string            `json:"id"`
+	Owner       string            `json:"owner"`
+	Name        string            `json:"name"`
+	DisplayName string            `json:"displayName"`
+	Email       string            `json:"email"`
+	Phone       string            `json:"phone"`
+	Avatar      string            `json:"avatar"`
+	IsAdmin     bool              `json:"isAdmin"`
+	IsForbidden bool              `json:"isForbidden"`
+	SignupApp   string            `json:"signupApplication"`
+	CreatedTime string            `json:"createdTime"`
+	Properties  map[string]string `json:"properties"`
 }
 
 // ListUsers 获取 Casdoor 用户列表
 //
 // 说明：用于「人员组织 → 用户管理」展示；用户体系仍由 Casdoor 维护。
+// 同时返回 Properties（自定义字段），供页面展示人事信息。
 func (c *Client) ListUsers() ([]CasdoorUser, error) {
 	users, err := c.sdk.GetUsers()
 	if err != nil {
@@ -518,6 +521,10 @@ func (c *Client) ListUsers() ([]CasdoorUser, error) {
 	}
 	list := make([]CasdoorUser, 0, len(users))
 	for _, u := range users {
+		props := u.Properties
+		if props == nil {
+			props = map[string]string{}
+		}
 		list = append(list, CasdoorUser{
 			Id:          u.Id,
 			Owner:       u.Owner,
@@ -527,11 +534,115 @@ func (c *Client) ListUsers() ([]CasdoorUser, error) {
 			Phone:       u.Phone,
 			Avatar:      u.Avatar,
 			IsAdmin:     u.IsAdmin,
+			IsForbidden: u.IsForbidden,
 			SignupApp:   u.SignupApplication,
 			CreatedTime: u.CreatedTime,
+			Properties:  props,
 		})
 	}
 	return list, nil
+}
+
+// UserUpsert 用户新增/更新入参
+type UserUpsert struct {
+	Name        string            `json:"name"`        // 域账号（唯一，创建后不可改）
+	DisplayName string            `json:"displayName"` // 姓名
+	Email       string            `json:"email"`
+	Phone       string            `json:"phone"`
+	Password    string            `json:"password"`   // 仅创建时使用，留空用默认密码
+	Properties  map[string]string `json:"properties"` // 自定义/人事字段
+}
+
+// CreateUser 在 Casdoor 创建用户
+func (c *Client) CreateUser(in UserUpsert, defaultPassword string) error {
+	if strings.TrimSpace(in.Name) == "" {
+		return fmt.Errorf("域账号不能为空")
+	}
+	password := in.Password
+	if password == "" {
+		password = defaultPassword
+	}
+	props := in.Properties
+	if props == nil {
+		props = map[string]string{}
+	}
+	user := &casdoorsdk.User{
+		Owner:             c.config.OrganizationName,
+		Name:              in.Name,
+		DisplayName:       in.DisplayName,
+		Email:             in.Email,
+		Phone:             in.Phone,
+		Password:          password,
+		Type:              "normal-user",
+		Language:          "zh",
+		Tag:               "manual",
+		Address:           []string{},
+		Properties:        props,
+		SignupApplication: c.config.ApplicationName,
+	}
+	if _, err := c.sdk.AddUser(user); err != nil {
+		return fmt.Errorf("创建用户失败: %w", err)
+	}
+	return nil
+}
+
+// UpdateUser 更新用户基础信息与属性（域账号不可改）
+func (c *Client) UpdateUser(in UserUpsert) error {
+	user, err := c.sdk.GetUser(in.Name)
+	if err != nil || user == nil {
+		return fmt.Errorf("用户不存在: %s", in.Name)
+	}
+	if in.DisplayName != "" {
+		user.DisplayName = in.DisplayName
+	}
+	user.Email = in.Email
+	user.Phone = in.Phone
+	if user.Properties == nil {
+		user.Properties = map[string]string{}
+	}
+	for k, v := range in.Properties {
+		if k == "" {
+			continue
+		}
+		user.Properties[k] = v
+	}
+	if _, err := c.sdk.UpdateUser(user); err != nil {
+		return fmt.Errorf("更新用户失败: %w", err)
+	}
+	return nil
+}
+
+// DeleteUser 删除用户
+func (c *Client) DeleteUser(name string) error {
+	user := &casdoorsdk.User{
+		Owner: c.config.OrganizationName,
+		Name:  name,
+	}
+	if _, err := c.sdk.DeleteUser(user); err != nil {
+		return fmt.Errorf("删除用户失败: %w", err)
+	}
+	return nil
+}
+
+// ResetPassword 重置用户密码（oldPassword 为空表示管理员重置）
+func (c *Client) ResetPassword(name, newPassword string) error {
+	if _, err := c.sdk.SetPassword(c.config.OrganizationName, name, "", newPassword); err != nil {
+		return fmt.Errorf("重置密码失败: %w", err)
+	}
+	return nil
+}
+
+// SetUserAdmin 设置/取消用户管理员标记
+func (c *Client) SetUserAdmin(name string, isAdmin bool) error {
+	user, err := c.sdk.GetUser(name)
+	if err != nil || user == nil {
+		return fmt.Errorf("用户不存在: %s", name)
+	}
+	user.IsAdmin = isAdmin
+	if _, err := c.sdk.UpdateUser(user); err != nil {
+		return fmt.Errorf("更新管理员标记失败: %w", err)
+	}
+	return nil
 }
 
 // CasdoorRole 用于列表展示的 Casdoor 角色信息

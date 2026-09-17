@@ -59,6 +59,8 @@ Casdoor:
   # 使用 FlyIAM 的组织和应用（需与 FlyIAM 配置一致）
   OrganizationName: flyiam
   ApplicationName: flyiam
+  # 新增用户时的默认密码（环境变量: CASDOOR_DEFAULT_PASSWORD）
+  DefaultPassword: "ysyh!9Sky"
 
 Web:
   Embedded: true
