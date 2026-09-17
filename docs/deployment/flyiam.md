@@ -95,6 +95,7 @@ curl -s -o /dev/null -w "%{redirect_url}\n" http://localhost:8080/api/auth/login
 | `Casdoor client_id 不能为空` | 未配置 `CASDOOR_CLIENT_ID/SECRET`，见第 2、3 节 |
 | 登录后回到登录页 | 检查 `/api/auth/callback` 返回；查看后端日志 |
 | `invalid key: Key must be a PEM...` | 后端已改为不验证签名直接解析载荷，若仍出现请升级镜像 |
+| 启动报 `invalid character '<' looking for beginning of value` | `CASDOOR_ENDPOINT` 指向的不是 Casdoor API（返回了 HTML，如前端页面/Ingress 首页）。用 `curl -sS -i "$CASDOOR_ENDPOINT/api/health"` 确认应返回 JSON `{"status":"ok"}`；集群内正确值通常为 `http://casdoor.flyiam.svc.cluster.local:8000` |
 
 ## 7. 从内置 Casdoor 迁移
 

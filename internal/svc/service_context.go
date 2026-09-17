@@ -231,6 +231,12 @@ func initCasdoorClient(c config.Config) (*casdoor.Client, error) {
 		ApplicationName:  c.Casdoor.ApplicationName,
 	}
 	
+	// 端点自检：确认 Endpoint 指向的是 Casdoor API 而非前端页面/其他服务，
+	// 否则后续调用会以 "invalid character '<' looking for beginning of value" 失败，难以定位。
+	if err := casdoor.ProbeAPI(casdoorConfig.Endpoint); err != nil {
+		return nil, fmt.Errorf("Casdoor 端点自检失败: %w", err)
+	}
+
 	// 创建 Casdoor 客户端
 	client, err := casdoor.NewClient(casdoorConfig)
 	if err != nil {
