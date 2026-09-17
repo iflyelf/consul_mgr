@@ -253,6 +253,12 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
         -o /usr/local/bin/consul_mgr ./cmd/api && \
     /usr/local/bin/consul_mgr --version
 
+# ***** 内置默认配置 *****
+# 仓库中的 etc/config.yaml 已完全脱敏，作为镜像默认配置，保证开箱即用；
+# 运行时可用环境变量覆盖任意项，或挂载卷替换 /etc/consul_mgr/config.yaml
+RUN mkdir -p /etc/consul_mgr
+COPY etc/config.yaml /etc/consul_mgr/config.yaml
+
 # ***** 运行配置 *****
 WORKDIR /
 EXPOSE 8080
