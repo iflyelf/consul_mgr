@@ -18,9 +18,9 @@ environment: '{{ env "CONSUL_MGR_ENVIRONMENT" | default "production" }}'
 
 # ==================== 镜像配置 ====================
 # 镜像仓库地址
-imageRegistry: '{{ env "CONSUL_MGR_IMAGE_REGISTRY" | default "docker.io" }}'
+imageRegistry: '{{ env "CONSUL_MGR_IMAGE_REGISTRY" | default "swr.cn-east-3.myhuaweicloud.com" }}'
 # 镜像仓库路径
-imageRepository: '{{ env "CONSUL_MGR_IMAGE_REPOSITORY" | default "iflyelf/consul-mgr" }}'
+imageRepository: '{{ env "CONSUL_MGR_IMAGE_REPOSITORY" | default "danxiaonuo/consul-mgr" }}'
 # 镜像标签
 imageTag: '{{ env "CONSUL_MGR_IMAGE_TAG" | default "latest" }}'
 # 镜像拉取策略
