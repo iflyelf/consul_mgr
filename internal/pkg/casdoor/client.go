@@ -2,7 +2,9 @@
 package casdoor
 
 import (
+	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -10,16 +12,35 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/casdoor/casdoor-go-sdk/casdoorsdk"
 	"github.com/golang-jwt/jwt/v5"
 )
 
+// 令牌校验缓存参数。
+// Casdoor 的 get-account 会校验令牌存在于数据库、未过期、用户未被禁用/删除，
+// 是权威校验；加短 TTL 缓存避免每个请求都回源。
+const (
+	tokenCacheTTL      = 60 * time.Second
+	tokenValidateLimit = 8 * time.Second
+)
+
+// tokenCacheEntry 已校验令牌的缓存项
+type tokenCacheEntry struct {
+	user      *UserInfo
+	expiresAt time.Time
+}
+
 // Client Casdoor 客户端封装
 type Client struct {
 	config *Config
 	sdk    *casdoorsdk.Client
+
+	// tokenCache 缓存已通过 Casdoor 权威校验的令牌（键为令牌 SHA256）
+	tokenMu    sync.RWMutex
+	tokenCache map[string]tokenCacheEntry
 }
 
 // NewClient 创建 Casdoor 客户端
@@ -59,9 +80,142 @@ func NewClient(config *Config) (*Client, error) {
 	)
 
 	return &Client{
-		config: config,
-		sdk:    sdk,
+		config:     config,
+		sdk:        sdk,
+		tokenCache: make(map[string]tokenCacheEntry),
 	}, nil
+}
+
+// ValidateToken 权威校验访问令牌并返回当前用户。
+//
+// 安全说明（重要）：
+// 令牌来自浏览器，**不可直接信任其载荷**。此方法先做本地快速失败（结构/过期），
+// 再调用 Casdoor 的 /api/get-account 做权威校验：Casdoor 会校验令牌存在于数据库、
+// 未过期、且用户未被禁用或删除，并返回最新的 isAdmin / isForbidden。
+//
+// 校验结果按令牌哈希缓存 tokenCacheTTL，避免每请求回源。
+func (c *Client) ValidateToken(token string) (*UserInfo, error) {
+	if token == "" {
+		return nil, fmt.Errorf("令牌为空")
+	}
+
+	key := tokenCacheKey(token)
+	if u, ok := c.getCachedToken(key); ok {
+		return u, nil
+	}
+
+	// 本地快速失败：解析载荷检查 exp（不验签，仅用于提前拒绝明显过期的令牌）
+	if exp, ok := tokenExpiry(token); ok && exp > 0 && time.Now().Unix() >= exp {
+		return nil, fmt.Errorf("令牌已过期")
+	}
+
+	// 权威校验：回源 Casdoor
+	ctx, cancel := context.WithTimeout(context.Background(), tokenValidateLimit)
+	defer cancel()
+
+	type result struct {
+		user *casdoorsdk.User
+		err  error
+	}
+	ch := make(chan result, 1)
+	go func() {
+		u, err := c.sdk.WithAccessToken(token).GetAccount()
+		ch <- result{user: u, err: err}
+	}()
+
+	var res result
+	select {
+	case res = <-ch:
+	case <-ctx.Done():
+		return nil, fmt.Errorf("校验令牌超时")
+	}
+	if res.err != nil {
+		return nil, fmt.Errorf("令牌无效: %w", res.err)
+	}
+	if res.user == nil {
+		return nil, fmt.Errorf("令牌无效：未获取到用户")
+	}
+	if res.user.IsForbidden || res.user.IsDeleted {
+		return nil, fmt.Errorf("账号已被禁用")
+	}
+
+	user := &UserInfo{
+		Owner:       res.user.Owner,
+		Name:        res.user.Name,
+		Id:          res.user.Id,
+		DisplayName: res.user.DisplayName,
+		Email:       res.user.Email,
+		Phone:       res.user.Phone,
+		Avatar:      res.user.Avatar,
+		IsAdmin:     res.user.IsAdmin,
+		// 业务约定：FlyIAM 组织（owner=flyiam）的管理员即本系统管理员，
+		// 故 IsGlobalAdmin 与 IsAdmin 等价（与历史行为一致）。
+		IsGlobalAdmin:     res.user.IsAdmin,
+		IsForbidden:       res.user.IsForbidden,
+		IsDeleted:         res.user.IsDeleted,
+		SignupApplication: res.user.SignupApplication,
+		Properties:        res.user.Properties,
+	}
+	for _, r := range res.user.Roles {
+		user.Roles = append(user.Roles, &Role{
+			Owner:       r.Owner,
+			Name:        r.Name,
+			CreatedTime: r.CreatedTime,
+			DisplayName: r.DisplayName,
+			Description: r.Description,
+			IsEnabled:   r.IsEnabled,
+		})
+	}
+	c.setCachedToken(key, user)
+	return user, nil
+}
+
+// tokenCacheKey 令牌哈希（避免在内存中留存原始令牌）
+func tokenCacheKey(token string) string {
+	sum := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(sum[:])
+}
+
+func (c *Client) getCachedToken(key string) (*UserInfo, bool) {
+	c.tokenMu.RLock()
+	entry, ok := c.tokenCache[key]
+	c.tokenMu.RUnlock()
+	if !ok {
+		return nil, false
+	}
+	if time.Now().After(entry.expiresAt) {
+		c.tokenMu.Lock()
+		delete(c.tokenCache, key)
+		c.tokenMu.Unlock()
+		return nil, false
+	}
+	return entry.user, true
+}
+
+func (c *Client) setCachedToken(key string, user *UserInfo) {
+	c.tokenMu.Lock()
+	// 简单容量保护：超过 10000 条时清空，避免无界增长
+	if len(c.tokenCache) > 10000 {
+		c.tokenCache = make(map[string]tokenCacheEntry)
+	}
+	c.tokenCache[key] = tokenCacheEntry{user: user, expiresAt: time.Now().Add(tokenCacheTTL)}
+	c.tokenMu.Unlock()
+}
+
+// tokenExpiry 解析载荷中的 exp（不验签，仅用于本地快速失败）
+func tokenExpiry(token string) (int64, bool) {
+	parsed, _, err := jwt.NewParser().ParseUnverified(token, jwt.MapClaims{})
+	if err != nil || parsed == nil {
+		return 0, false
+	}
+	claims, ok := parsed.Claims.(jwt.MapClaims)
+	if !ok {
+		return 0, false
+	}
+	if v, ok := claims["exp"].(float64); ok {
+		return int64(v), true
+	}
+	return 0, false
 }
 
 // browserEndpoint 返回浏览器可达的 Casdoor 地址

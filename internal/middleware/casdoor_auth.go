@@ -64,20 +64,21 @@ func (m *CasdoorAuthMiddleware) Handle(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
-		// 2. 解析和验证 Token
-		claims, err := m.client.ParseToken(token)
+		// 2. 权威校验 Token（Casdoor get-account：查库 + 过期 + 用户状态）
+		//
+		// 安全说明：绝不直接信任令牌载荷（可被伪造）。此处回源 Casdoor 校验令牌
+		// 有效性并获取最新用户信息（含 isAdmin / isForbidden），结果带短 TTL 缓存。
+		user, err := m.client.ValidateToken(token)
 		if err != nil {
-			logx.Errorf("Token 验证失败: %v", err)
+			logx.Errorf("Token 校验失败: %v", err)
 			httpx.WriteJson(w, http.StatusUnauthorized, map[string]interface{}{
 				"code":    401,
 				"message": "认证令牌无效或已过期，请重新登录",
 			})
 			return
 		}
-
-		// 3. 检查用户信息
-		if claims.User == nil {
-			logx.Error("Token 中没有用户信息")
+		if user == nil {
+			logx.Error("Token 校验后无用户信息")
 			httpx.WriteJson(w, http.StatusUnauthorized, map[string]interface{}{
 				"code":    401,
 				"message": "用户信息无效",
@@ -85,43 +86,33 @@ func (m *CasdoorAuthMiddleware) Handle(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
-		// 4. 检查用户是否被禁用
-		if claims.User.IsForbidden {
-			logx.Errorf("用户已被禁用: %s", claims.User.Name)
-			httpx.WriteJson(w, http.StatusForbidden, map[string]interface{}{
-				"code":    403,
-				"message": "您的账号已被禁用，请联系管理员",
-			})
-			return
-		}
-
-		// 5. 将用户信息存入 Context
+		// 3. 将权威校验后的用户信息存入 Context
 		ctx := r.Context()
-		ctx = context.WithValue(ctx, "userId", claims.User.Id)
-		ctx = context.WithValue(ctx, "username", claims.User.Name)
-		ctx = context.WithValue(ctx, "userEmail", claims.User.Email)
-		ctx = context.WithValue(ctx, "userDisplayName", claims.User.DisplayName)
-		ctx = context.WithValue(ctx, "userAvatar", claims.User.Avatar)
-		ctx = context.WithValue(ctx, "isAdmin", claims.User.IsAdmin)
-		ctx = context.WithValue(ctx, "isGlobalAdmin", claims.User.IsGlobalAdmin)
+		ctx = context.WithValue(ctx, "userId", user.Id)
+		ctx = context.WithValue(ctx, "username", user.Name)
+		ctx = context.WithValue(ctx, "userEmail", user.Email)
+		ctx = context.WithValue(ctx, "userDisplayName", user.DisplayName)
+		ctx = context.WithValue(ctx, "userAvatar", user.Avatar)
+		ctx = context.WithValue(ctx, "isAdmin", user.IsAdmin)
+		ctx = context.WithValue(ctx, "isGlobalAdmin", user.IsGlobalAdmin)
 		ctx = context.WithValue(ctx, "token", token)
-		
-		// 存储角色列表
-		if len(claims.User.Roles) > 0 {
-			roleNames := make([]string, 0, len(claims.User.Roles))
-			for _, role := range claims.User.Roles {
+
+		// 存储角色列表（供角色校验使用）
+		if len(user.Roles) > 0 {
+			roleNames := make([]string, 0, len(user.Roles))
+			for _, role := range user.Roles {
 				roleNames = append(roleNames, role.Name)
 			}
 			ctx = context.WithValue(ctx, "userRoles", roleNames)
 		}
 
-		// 存储完整的 Claims 信息（供后续使用）
-		ctx = context.WithValue(ctx, "claims", claims)
+		// 兼容：存储重建的 Claims（仅供内部辅助函数读取）
+		ctx = context.WithValue(ctx, "claims", &casdoor.Claims{User: user})
 
-		// 6. 记录日志
-		logx.Infof("用户认证成功: %s (%s)", claims.User.Name, claims.User.Id)
+		// 4. 记录日志
+		logx.Infof("用户认证成功: %s (%s)", user.Name, user.Id)
 
-		// 7. 调用下一个处理器
+		// 5. 调用下一个处理器
 		next.ServeHTTP(w, r.WithContext(ctx))
 	}
 }

@@ -67,44 +67,49 @@ func (l *OAuthLogic) HandleCallback(req *types.CallbackRequest) (*types.Callback
 		return nil, fmt.Errorf("获取 Token 失败: %w", err)
 	}
 
-	// 3. 解析 Token 获取用户信息
-	claims, err := l.client.ParseToken(accessToken)
+	// 3. 权威校验 Token 并获取最新用户信息
+	//
+	// 安全说明：不使用未验签的载荷判定身份与管理员标记。
+	// 回源 Casdoor（get-account）校验令牌存在、未过期、用户未禁用/删除。
+	user, err := l.client.ValidateToken(accessToken)
 	if err != nil {
-		l.Errorf("解析 Token 失败: %v", err)
-		return nil, fmt.Errorf("解析 Token 失败: %w", err)
+		l.Errorf("校验 Token 失败: %v", err)
+		return nil, fmt.Errorf("校验 Token 失败: %w", err)
 	}
-
-	if claims.User == nil {
+	if user == nil {
 		return nil, fmt.Errorf("Token 中没有用户信息")
 	}
 
+	// 令牌元数据（刷新令牌/有效期）仅用于返回给前端，非安全判定依据
+	meta, _ := l.client.ParseToken(accessToken)
+
 	// 4. 提取角色列表
 	roles := make([]string, 0)
-	if len(claims.User.Roles) > 0 {
-		for _, role := range claims.User.Roles {
-			roles = append(roles, role.Name)
-		}
+	for _, role := range user.Roles {
+		roles = append(roles, role.Name)
 	}
 
 	// 5. 构造响应
 	response := &types.CallbackResponse{
-		AccessToken:  accessToken,
-		RefreshToken: claims.RefreshToken,
-		ExpiresIn:    claims.Exp - claims.Iat,
-		TokenType:    "Bearer",
+		AccessToken: accessToken,
+		TokenType:   "Bearer",
 		UserInfo: &types.UserInfo{
-			Id:          claims.User.Id,
-			Name:        claims.User.Name,
-			DisplayName: claims.User.DisplayName,
-			Email:       claims.User.Email,
-			Phone:       claims.User.Phone,
-			Avatar:      claims.User.Avatar,
-			IsAdmin:     claims.User.IsAdmin,
+			Id:          user.Id,
+			Name:        user.Name,
+			DisplayName: user.DisplayName,
+			Email:       user.Email,
+			Phone:       user.Phone,
+			Avatar:      user.Avatar,
+			IsAdmin:     user.IsAdmin,
 			Roles:       roles,
 		},
 	}
+	if meta != nil {
+		response.RefreshToken = meta.RefreshToken
+		response.ExpiresIn = meta.Exp - meta.Iat
+	}
 
-	l.Infof("用户登录成功: %s (%s)", claims.User.Name, claims.User.Id)
+	l.Infof("用户登录成功: %s (%s)", user.Name, user.Id)
 
 	return response, nil
 }
