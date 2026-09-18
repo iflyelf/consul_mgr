@@ -69,6 +69,17 @@ func NewClient(config *Config) (*Client, error) {
 		return nil, fmt.Errorf("Casdoor application_name 不能为空")
 	}
 
+	// 为 SDK 注入带超时的 HTTP 客户端（SDK 默认使用无超时的 &http.Client{}，
+	// Casdoor/反向代理 hang 住会导致请求协程与连接堆积）
+	casdoorsdk.SetHttpClient(&http.Client{
+		Timeout: 30 * time.Second,
+		Transport: &http.Transport{
+			MaxIdleConns:        100,
+			MaxIdleConnsPerHost: 20,
+			IdleConnTimeout:     90 * time.Second,
+		},
+	})
+
 	// 创建 Casdoor SDK 客户端
 	sdk := casdoorsdk.NewClient(
 		config.Endpoint,
