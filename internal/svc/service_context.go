@@ -259,6 +259,9 @@ func initSchema(db *sql.DB, c config.Config) error {
 	if err := createUserFieldDefsTable(db); err != nil {
 		return err
 	}
+	if err := createUserFieldSyncTables(db); err != nil {
+		return err
+	}
 	if err := userfield.NewLogic(sqlx.NewSqlConnFromDB(db)).SeedBuiltin(context.Background()); err != nil {
 		log.Printf("⚠️ 初始化内置用户字段失败: %v", err)
 	}
@@ -289,6 +292,39 @@ func createUserFieldDefsTable(db *sql.DB) error {
 		created_at TIMESTAMPTZ DEFAULT NOW(),
 		updated_at TIMESTAMPTZ DEFAULT NOW()
 	);
+	`
+	_, err := db.Exec(schema)
+	return err
+}
+
+// createUserFieldSyncTables 创建用户字段自动同步的配置表与日志表
+func createUserFieldSyncTables(db *sql.DB) error {
+	schema := `
+	-- 自动同步配置（单例，页面可配置）
+	CREATE TABLE IF NOT EXISTS userfield_sync_config (
+		id SMALLINT PRIMARY KEY,
+		enabled BOOLEAN NOT NULL DEFAULT FALSE,
+		interval VARCHAR(20) NOT NULL DEFAULT '6h',
+		sync_on_startup BOOLEAN NOT NULL DEFAULT FALSE,
+		last_run_at TIMESTAMPTZ,
+		last_status VARCHAR(20) DEFAULT '',
+		last_message TEXT DEFAULT '',
+		updated_at TIMESTAMPTZ DEFAULT NOW()
+	);
+	-- 同步日志（历史查询）
+	CREATE TABLE IF NOT EXISTS userfield_sync_logs (
+		id BIGSERIAL PRIMARY KEY,
+		status VARCHAR(20) NOT NULL DEFAULT 'running',
+		trigger_type VARCHAR(20) NOT NULL DEFAULT 'manual',
+		total INT NOT NULL DEFAULT 0,
+		added INT NOT NULL DEFAULT 0,
+		updated INT NOT NULL DEFAULT 0,
+		message TEXT DEFAULT '',
+		started_at TIMESTAMPTZ DEFAULT NOW(),
+		completed_at TIMESTAMPTZ
+	);
+	CREATE INDEX IF NOT EXISTS idx_userfield_sync_logs_started
+		ON userfield_sync_logs(started_at DESC);
 	`
 	_, err := db.Exec(schema)
 	return err

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"log"
@@ -22,6 +23,7 @@ import (
 	teamHandler "github.com/iflyelf/consul_mgr/internal/handler/team"
 	userHandler "github.com/iflyelf/consul_mgr/internal/handler/user"
 	userFieldHandler "github.com/iflyelf/consul_mgr/internal/handler/userfield"
+	userfieldLogic "github.com/iflyelf/consul_mgr/internal/logic/userfield"
 	"github.com/iflyelf/consul_mgr/internal/middleware"
 	"github.com/iflyelf/consul_mgr/internal/svc"
 )
@@ -91,6 +93,16 @@ func main() {
 
 	// 注册路由
 	registerHandlers(server, ctx)
+
+	// 启动用户字段自动同步调度器（启动时同步一次 + 定时检查，配置以页面/DB 为准）
+	schedCtx, cancelScheduler := context.WithCancel(context.Background())
+	defer cancelScheduler()
+	// 首次启动写入配置种子（已存在则不覆盖）
+	if err := userfieldLogic.NewLogic(ctx.DB).SeedSyncConfig(schedCtx,
+		c.FlyIAM.SyncEnabled, c.FlyIAM.SyncOnStartup, c.FlyIAM.SyncInterval); err != nil {
+		logx.Errorf("写入同步配置种子失败: %v", err)
+	}
+	userfieldLogic.StartScheduler(schedCtx, ctx.DB, c.FlyIAM.Endpoint, c.FlyIAM.ServiceToken)
 
 	// 启动信息
 	fmt.Printf("🚀 Starting Consul Manager Server\n")
@@ -567,6 +579,27 @@ func registerHandlers(server *rest.Server, ctx *svc.ServiceContext) {
 		Method:  http.MethodPost,
 		Path:    "/api/user-fields/sync",
 		Handler: casdoorAuth.Handle(permissionMw.RequireAdmin()(userFieldHandler.SyncUserFieldsHandler(ctx))),
+	})
+	// 自动同步配置 / 进度 / 日志
+	server.AddRoute(rest.Route{
+		Method:  http.MethodGet,
+		Path:    "/api/user-fields/sync/config",
+		Handler: casdoorAuth.Handle(permissionMw.RequireAdmin()(userFieldHandler.GetSyncConfigHandler(ctx))),
+	})
+	server.AddRoute(rest.Route{
+		Method:  http.MethodPut,
+		Path:    "/api/user-fields/sync/config",
+		Handler: casdoorAuth.Handle(permissionMw.RequireAdmin()(userFieldHandler.UpdateSyncConfigHandler(ctx))),
+	})
+	server.AddRoute(rest.Route{
+		Method:  http.MethodGet,
+		Path:    "/api/user-fields/sync/progress",
+		Handler: casdoorAuth.Handle(permissionMw.RequireAdmin()(userFieldHandler.GetSyncProgressHandler(ctx))),
+	})
+	server.AddRoute(rest.Route{
+		Method:  http.MethodGet,
+		Path:    "/api/user-fields/sync/logs",
+		Handler: casdoorAuth.Handle(permissionMw.RequireAdmin()(userFieldHandler.ListSyncLogsHandler(ctx))),
 	})
 
 	// 角色管理

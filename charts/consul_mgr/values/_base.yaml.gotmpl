@@ -166,8 +166,12 @@ networkPolicyAllowAllEgress: {{ env "CONSUL_MGR_NETWORK_POLICY_ALLOW_ALL_EGRESS"
 # ==================== FlyIAM 服务对接 ====================
 # FlyIAM 业务 API 地址（用于同步用户字段定义）；留空则禁用同步
 flyiamApiEndpoint: '{{ env "CONSUL_MGR_FLYIAM_API_ENDPOINT" | default "" }}'
-# 服务间调用凭证（需与 FlyIAM 的 SERVICE_TOKEN 一致）
+# 服务间调用凭证（需与 FlyIAM 的 SERVICE_TOKEN 一致，经 Secret 注入）
 flyiamServiceToken: '{{ env "CONSUL_MGR_FLYIAM_SERVICE_TOKEN" | default "" }}'
+# 首次启动写入 DB 的自动同步种子（之后以页面配置为准）
+flyiamSyncEnabled: {{ env "CONSUL_MGR_FLYIAM_SYNC_ENABLED" | default "false" }}
+flyiamSyncOnStartup: {{ env "CONSUL_MGR_FLYIAM_SYNC_ON_STARTUP" | default "true" }}
+flyiamSyncInterval: '{{ env "CONSUL_MGR_FLYIAM_SYNC_INTERVAL" | default "6h" }}'
 
 # ==================== 安全与跨域配置 ====================
 # 登录 Cookie 的 SameSite 策略：lax / strict / none

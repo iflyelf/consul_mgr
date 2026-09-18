@@ -110,6 +110,11 @@ type Config struct {
 		Endpoint string `json:",optional,env=CONSUL_MGR_FLYIAM_API_ENDPOINT"`
 		// ServiceToken 服务间凭证，需与 FlyIAM 的 SERVICE_TOKEN 一致
 		ServiceToken string `json:",optional,env=CONSUL_MGR_FLYIAM_SERVICE_TOKEN"`
+		// 以下三项仅作为「首次启动写入数据库」的种子值；
+		// 运行时可随时在「用户字段」页面修改（以数据库配置为准）。
+		SyncEnabled   bool   `json:",default=false,env=CONSUL_MGR_FLYIAM_SYNC_ENABLED"`
+		SyncOnStartup bool   `json:",default=true,env=CONSUL_MGR_FLYIAM_SYNC_ON_STARTUP"`
+		SyncInterval  string `json:",default=6h,env=CONSUL_MGR_FLYIAM_SYNC_INTERVAL"`
 	}
 
 	// Security 登录凭证与跨域相关配置

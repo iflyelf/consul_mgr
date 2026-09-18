@@ -90,16 +90,16 @@ func DeleteUserFieldHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 	}
 }
 
-// SyncUserFieldsHandler 从 FlyIAM 同步字段定义（数据源字段变化时无需改代码）
+// SyncUserFieldsHandler 立即从 FlyIAM 同步字段定义（手动触发）
 func SyncUserFieldsHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		cfg := ctx.Config.FlyIAM
 		if cfg.Endpoint == "" || cfg.ServiceToken == "" {
-			response.BadRequest(w, "未配置 FlyIAM 地址或服务令牌（FLYIAM_API_ENDPOINT / FLYIAM_SERVICE_TOKEN）")
+			response.BadRequest(w, "未配置 FlyIAM 地址或服务令牌（CONSUL_MGR_FLYIAM_API_ENDPOINT / _SERVICE_TOKEN）")
 			return
 		}
 		l := userfield.NewLogic(ctx.DB)
-		added, updated, total, err := l.SyncFromFlyIAM(r.Context(), cfg.Endpoint, cfg.ServiceToken)
+		added, updated, total, err := l.RunSync(r.Context(), cfg.Endpoint, cfg.ServiceToken, "manual")
 		if err != nil {
 			response.Error(w, 502, "同步失败: "+err.Error())
 			return
@@ -109,5 +109,61 @@ func SyncUserFieldsHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 			"updated": updated,
 			"total":   total,
 		})
+	}
+}
+
+// GetSyncConfigHandler 获取自动同步配置
+func GetSyncConfigHandler(ctx *svc.ServiceContext) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		l := userfield.NewLogic(ctx.DB)
+		cfg, err := l.GetSyncConfig(r.Context())
+		if err != nil {
+			response.Error(w, 500, err.Error())
+			return
+		}
+		// 附带服务端是否已配置 FlyIAM 对接，供前端提示
+		response.Success(w, map[string]interface{}{
+			"config":           cfg,
+			"flyiamConfigured": ctx.Config.FlyIAM.Endpoint != "" && ctx.Config.FlyIAM.ServiceToken != "",
+		})
+	}
+}
+
+// UpdateSyncConfigHandler 更新自动同步配置
+func UpdateSyncConfigHandler(ctx *svc.ServiceContext) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var cfg model.UserFieldSyncConfig
+		if err := httpx.Parse(r, &cfg); err != nil {
+			response.BadRequest(w, "参数错误: "+err.Error())
+			return
+		}
+		l := userfield.NewLogic(ctx.DB)
+		if err := l.UpdateSyncConfig(r.Context(), &cfg); err != nil {
+			response.BadRequest(w, err.Error())
+			return
+		}
+		response.Success(w, nil)
+	}
+}
+
+// GetSyncProgressHandler 获取同步进度（供前端轮询）
+func GetSyncProgressHandler(ctx *svc.ServiceContext) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		l := userfield.NewLogic(ctx.DB)
+		response.Success(w, l.GetProgress())
+	}
+}
+
+// ListSyncLogsHandler 获取同步日志
+func ListSyncLogsHandler(ctx *svc.ServiceContext) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+		l := userfield.NewLogic(ctx.DB)
+		list, err := l.ListSyncLogs(r.Context(), limit)
+		if err != nil {
+			response.Error(w, 500, err.Error())
+			return
+		}
+		response.Success(w, map[string]interface{}{"list": list})
 	}
 }
