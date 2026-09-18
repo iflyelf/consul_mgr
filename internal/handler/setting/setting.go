@@ -38,9 +38,19 @@ func UpdateSettingsHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 			}
 			toApply[k] = v
 		}
-		if err := ctx.Settings.Apply(r.Context(), toApply); err != nil {
+		applied, err := ctx.Settings.Apply(r.Context(), toApply)
+		if err != nil {
 			response.Error(w, 500, err.Error())
 			return
+		}
+
+		// 若修改了 Casdoor 连接配置，热重载客户端（免重启）
+		if setting.NeedsCasdoorReload(applied) {
+			if err := ctx.ReloadCasdoor(r.Context()); err != nil {
+				// 保存已成功，但重建失败：提示用户（旧客户端仍可用）
+				response.Error(w, 502, "配置已保存，但 Casdoor 客户端重建失败: "+err.Error())
+				return
+			}
 		}
 		response.Success(w, nil)
 	}

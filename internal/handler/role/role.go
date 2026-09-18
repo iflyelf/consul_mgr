@@ -108,7 +108,7 @@ func DeleteRoleHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 // ListCasdoorRolesHandler 展示 Casdoor 角色（只读）
 func ListCasdoorRolesHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		list, err := ctx.CasdoorClient.ListCasdoorRoles()
+		list, err := ctx.Casdoor().ListCasdoorRoles()
 		if err != nil {
 			httpx.WriteJson(w, http.StatusOK, map[string]interface{}{"code": 500, "message": err.Error()})
 			return

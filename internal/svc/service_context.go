@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	_ "github.com/lib/pq"
@@ -28,9 +29,30 @@ type ServiceContext struct {
 	DB            sqlx.SqlConn
 	RawDB         *sql.DB // 原生连接：PostgreSQL 数组(TEXT[])需 pq.Array 扫描
 	ConsulManager *consul.Manager
-	CasdoorClient *casdoor.Client
-	Cache         *cache.Cache
-	Perm          *perm.Checker
+	// casdoorRef 原子指针：页面修改 Casdoor 连接配置后可热重载（免重启）
+	casdoorRef atomic.Pointer[casdoor.Client]
+	Cache      *cache.Cache
+	Perm       *perm.Checker
+}
+
+// Casdoor 返回当前 Casdoor 客户端（可能已被热重载替换）。
+func (s *ServiceContext) Casdoor() *casdoor.Client {
+	return s.casdoorRef.Load()
+}
+
+// ReloadCasdoor 按当前配置重建 Casdoor 客户端并原子替换（免重启）。
+//
+// 触发时机：页面修改 casdoor.* 设置后。重建失败时保留旧客户端，
+// 返回错误供调用方提示用户。
+func (s *ServiceContext) ReloadCasdoor(ctx context.Context) error {
+	client, err := initCasdoorClient(*s.Config)
+	if err != nil {
+		return err
+	}
+	s.casdoorRef.Store(client)
+	log.Printf("🔄 Casdoor 客户端已热重载（endpoint=%s，organization=%s）",
+		s.Config.Casdoor.Endpoint, s.Config.Casdoor.OrganizationName)
+	return nil
 }
 
 // CacheKeyInstances 实例列表缓存键
@@ -171,16 +193,17 @@ func NewServiceContext(c *config.Config) *ServiceContext {
 		TTL:      c.Redis.TTL,
 	})
 
-	return &ServiceContext{
+	svcCtx := &ServiceContext{
 		Config:        c,
 		Settings:      settings,
 		DB:            sqlx.NewSqlConnFromDB(db),
 		RawDB:         db,
 		ConsulManager: consulManager,
-		CasdoorClient: casdoorClient,
 		Cache:         cacheClient,
 		Perm:          perm.New(db),
 	}
+	svcCtx.casdoorRef.Store(casdoorClient)
+	return svcCtx
 }
 
 // initDB 初始化数据库连接

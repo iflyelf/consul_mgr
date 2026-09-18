@@ -125,6 +125,9 @@ charts/consul_mgr/
 > Consul 默认等均已改为「页面配置」——存于数据库（**DB 优先 / env 兜底**），
 > 在「人员组织 → 系统设置」（或「用户字段」页的自动同步配置）中修改，**保存即生效，
 > 无需改 Chart 或环境变量**。上表同名环境变量仍可用作 CI 首次种子，但非必需。
+>
+> 其中 **Casdoor 连接**（地址 / 组织 / 应用 / 凭据等）修改后会**原子热重载**客户端，
+> **无需重启 Pod**；若重建失败（如地址不可达），配置已保存但旧客户端仍继续服务并提示错误。
 
 > ⚠️ 生产环境请通过环境变量或 `existingSecret` 覆盖 `CONSUL_MGR_DB_PASSWORD`、
 > `CONSUL_MGR_JWT_SECRET`、`CONSUL_MGR_ADMIN_PASSWORD`、

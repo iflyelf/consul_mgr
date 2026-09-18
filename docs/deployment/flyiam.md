@@ -116,6 +116,20 @@ export CONSUL_MGR_CORS_ALLOWED_ORIGINS="https://consul.example.com"
 - **令牌校验**：访问令牌经 Casdoor 权威校验（查库存在、未过期、用户未禁用/删除），
   校验结果缓存 60s，不再信任未验签的 JWT 载荷。
 
+## 5.2 配置热重载（免重启）
+
+Casdoor 连接配置（`casdoor.endpoint` / `public_endpoint` / `organization` /
+`application` / `certificate` / `client_id` / `client_secret` 等）已支持
+**页面修改后即时生效**，无需重启 Pod：
+
+- 在「人员组织 → 系统设置 → Casdoor 连接」修改并保存；
+- 服务端检测到 `casdoor.*` 变更后，用最新配置**原子重建** Casdoor 客户端；
+- 登录、令牌校验、用户/角色管理等后续请求自动使用新客户端。
+
+> 内部实现：`ServiceContext` 持有 `atomic.Pointer[casdoor.Client]`，通过
+> `Casdoor()` 访问器读取、`ReloadCasdoor()` 重建替换，切换过程对并发请求安全。
+> 若重建失败（如地址不可达），配置已保存但**旧客户端仍继续服务**，页面会提示错误。
+
 ## 6. 常见问题
 
 | 现象 | 原因与处理 |

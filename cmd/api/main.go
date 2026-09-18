@@ -126,8 +126,8 @@ func main() {
 // registerHandlers 注册所有路由
 func registerHandlers(server *rest.Server, ctx *svc.ServiceContext) {
 	// 创建中间件
-	casdoorAuth := middleware.NewCasdoorAuthMiddleware(ctx.CasdoorClient)
-	permissionMw := middleware.NewPermissionMiddleware(ctx.CasdoorClient, ctx.RawDB)
+	casdoorAuth := middleware.NewCasdoorAuthMiddleware(ctx.Casdoor)
+	permissionMw := middleware.NewPermissionMiddleware(ctx.Casdoor, ctx.RawDB)
 	auditMw := middleware.NewAuditMiddleware(ctx)
 	
 	// ============================================================
@@ -149,12 +149,12 @@ func registerHandlers(server *rest.Server, ctx *svc.ServiceContext) {
 		{
 			Method:  http.MethodGet,
 			Path:    "/api/auth/login",
-			Handler: authHandler.LoginHandler(ctx.CasdoorClient, ctx.Config),
+			Handler: authHandler.LoginHandler(ctx.Casdoor, ctx.Config),
 		},
 		{
 			Method:  http.MethodGet,
 			Path:    "/api/auth/callback",
-			Handler: authHandler.CallbackHandler(ctx.CasdoorClient, ctx.Config),
+			Handler: authHandler.CallbackHandler(ctx.Casdoor, ctx.Config),
 		},
 	})
 	
@@ -166,13 +166,13 @@ func registerHandlers(server *rest.Server, ctx *svc.ServiceContext) {
 	server.AddRoute(rest.Route{
 		Method:  http.MethodGet,
 		Path:    "/api/auth/userinfo",
-		Handler: casdoorAuth.Handle(authHandler.GetUserInfoHandler(ctx.CasdoorClient)),
+		Handler: casdoorAuth.Handle(authHandler.GetUserInfoHandler(ctx.Casdoor)),
 	})
 	
 	server.AddRoute(rest.Route{
 		Method:  http.MethodPost,
 		Path:    "/api/auth/refresh",
-		Handler: casdoorAuth.Handle(authHandler.RefreshTokenHandler(ctx.CasdoorClient)),
+		Handler: casdoorAuth.Handle(authHandler.RefreshTokenHandler(ctx.Casdoor)),
 	})
 	
 	server.AddRoute(rest.Route{

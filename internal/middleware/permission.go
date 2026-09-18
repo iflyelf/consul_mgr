@@ -50,24 +50,25 @@ func peekBodyGroupID(r *http.Request) int64 {
 //   - 检查服务组级别权限（用户直授 + 团队授权 + 角色）
 //   - 支持三层权限模型
 type PermissionMiddleware struct {
-	client *casdoor.Client
-	db     *sql.DB
-	perm   *perm.Checker
+	// casdoorFn 运行时获取当前 Casdoor 客户端（支持热重载后自动用新客户端）
+	casdoorFn func() *casdoor.Client
+	db        *sql.DB
+	perm      *perm.Checker
 }
 
 // NewPermissionMiddleware 创建权限检查中间件
 //
 // 参数:
-//   client - Casdoor 客户端实例
-//   db     - 原生数据库连接（PostgreSQL TEXT[] 需 pq.Array 扫描）
+//   casdoorFn - 返回当前 Casdoor 客户端的函数（每次请求时调用，支持热重载）
+//   db        - 原生数据库连接（PostgreSQL TEXT[] 需 pq.Array 扫描）
 //
 // 返回:
 //   *PermissionMiddleware - 中间件实例
-func NewPermissionMiddleware(client *casdoor.Client, db *sql.DB) *PermissionMiddleware {
+func NewPermissionMiddleware(casdoorFn func() *casdoor.Client, db *sql.DB) *PermissionMiddleware {
 	return &PermissionMiddleware{
-		client: client,
-		db:     db,
-		perm:   perm.New(db),
+		casdoorFn: casdoorFn,
+		db:        db,
+		perm:      perm.New(db),
 	}
 }
 
@@ -109,7 +110,7 @@ func (m *PermissionMiddleware) RequirePermission(resource, action string) func(h
 
 			// 3. 检查 Casdoor 权限
 			token, _ := GetTokenFromContext(ctx)
-			hasPermission, err := m.client.CheckPermissionByToken(token, resource, action)
+			hasPermission, err := m.casdoorFn().CheckPermissionByToken(token, resource, action)
 			if err != nil {
 				logx.Errorf("权限检查失败: %v", err)
 				httpx.WriteJson(w, http.StatusInternalServerError, map[string]interface{}{
@@ -196,7 +197,7 @@ func (m *PermissionMiddleware) RequireServiceGroupAccess(action string) func(htt
 			// 如果没有 group_id，检查全局权限
 			if groupIdStr == "" {
 				token, _ := GetTokenFromContext(ctx)
-				hasPermission, err := m.client.CheckPermissionByToken(token, "consul_service", action)
+				hasPermission, err := m.casdoorFn().CheckPermissionByToken(token, "consul_service", action)
 				if err != nil || !hasPermission {
 					httpx.WriteJson(w, http.StatusForbidden, map[string]interface{}{
 						"code":    403,
@@ -230,7 +231,7 @@ func (m *PermissionMiddleware) RequireServiceGroupAccess(action string) func(htt
 
 			// 4. 检查全局 consul_service 权限
 			token, _ := GetTokenFromContext(ctx)
-			hasGlobalPerm, err := m.client.CheckPermissionByToken(token, "consul_service", action)
+			hasGlobalPerm, err := m.casdoorFn().CheckPermissionByToken(token, "consul_service", action)
 			if err == nil && hasGlobalPerm {
 				logx.Infof("用户 %s 拥有全局 consul_service:%s 权限", username, action)
 				next.ServeHTTP(w, r)
@@ -363,7 +364,7 @@ func (m *PermissionMiddleware) RequireRole(roles ...string) func(http.HandlerFun
 // 使用场景：
 //   某些接口对登录用户和未登录用户有不同的行为
 func (m *PermissionMiddleware) OptionalAuth(next http.HandlerFunc) http.HandlerFunc {
-	authMiddleware := NewCasdoorAuthMiddleware(m.client)
+	authMiddleware := NewCasdoorAuthMiddleware(m.casdoorFn)
 	
 	return func(w http.ResponseWriter, r *http.Request) {
 		// 尝试提取 Token

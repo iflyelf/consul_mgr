@@ -81,7 +81,7 @@ func ConfigHandler(c *config.Config) http.HandlerFunc {
 //
 // 参数:
 //   format=json  返回 JSON（不跳转），便于接口调试
-func LoginHandler(casdoorClient *casdoor.Client, c *config.Config) http.HandlerFunc {
+func LoginHandler(casdoorFn func() *casdoor.Client, c *config.Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// 回调地址基于当前请求动态推导，避免写死
 		redirectUri := requestBaseURL(r) + "/callback"
@@ -91,7 +91,7 @@ func LoginHandler(casdoorClient *casdoor.Client, c *config.Config) http.HandlerF
 		http.SetCookie(w, c.CookieConfig().NewCookie(oauthStateCookie, state, 600, r))
 
 		// 调用 Logic 层
-		logic := auth.NewOAuthLogic(r.Context(), casdoorClient)
+		logic := auth.NewOAuthLogic(r.Context(), casdoorFn())
 		resp, err := logic.GetLoginUrl(redirectUri, state)
 		if err != nil {
 			httpx.WriteJson(w, http.StatusInternalServerError, map[string]interface{}{
@@ -122,7 +122,7 @@ func LoginHandler(casdoorClient *casdoor.Client, c *config.Config) http.HandlerF
 //
 // 请求方式：GET
 // 路径：/api/auth/callback
-func CallbackHandler(casdoorClient *casdoor.Client, c *config.Config) http.HandlerFunc {
+func CallbackHandler(casdoorFn func() *casdoor.Client, c *config.Config) http.HandlerFunc {
 	cookieCfg := c.CookieConfig()
 	return func(w http.ResponseWriter, r *http.Request) {
 		// 解析请求参数
@@ -152,7 +152,7 @@ func CallbackHandler(casdoorClient *casdoor.Client, c *config.Config) http.Handl
 		http.SetCookie(w, cookieCfg.ClearCookie(oauthStateCookie))
 
 		// 调用 Logic 层
-		logic := auth.NewOAuthLogic(r.Context(), casdoorClient)
+		logic := auth.NewOAuthLogic(r.Context(), casdoorFn())
 		resp, err := logic.HandleCallback(&req)
 		if err != nil {
 			httpx.WriteJson(w, http.StatusInternalServerError, map[string]interface{}{
@@ -182,7 +182,7 @@ func CallbackHandler(casdoorClient *casdoor.Client, c *config.Config) http.Handl
 //
 // 请求方式：POST
 // 路径：/api/auth/refresh
-func RefreshTokenHandler(casdoorClient *casdoor.Client) http.HandlerFunc {
+func RefreshTokenHandler(casdoorFn func() *casdoor.Client) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// 解析请求体
 		var req types.RefreshTokenRequest
@@ -196,7 +196,7 @@ func RefreshTokenHandler(casdoorClient *casdoor.Client) http.HandlerFunc {
 		}
 
 		// 调用 Logic 层
-		logic := auth.NewOAuthLogic(r.Context(), casdoorClient)
+		logic := auth.NewOAuthLogic(r.Context(), casdoorFn())
 		resp, err := logic.RefreshToken(&req)
 		if err != nil {
 			httpx.WriteJson(w, http.StatusInternalServerError, map[string]interface{}{
@@ -222,7 +222,7 @@ func RefreshTokenHandler(casdoorClient *casdoor.Client) http.HandlerFunc {
 // 请求方式：GET
 // 路径：/api/auth/userinfo
 // 需要认证：是
-func GetUserInfoHandler(casdoorClient *casdoor.Client) http.HandlerFunc {
+func GetUserInfoHandler(casdoorFn func() *casdoor.Client) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 
@@ -237,7 +237,7 @@ func GetUserInfoHandler(casdoorClient *casdoor.Client) http.HandlerFunc {
 		}
 
 		// 调用 Logic 层
-		logic := auth.NewOAuthLogic(ctx, casdoorClient)
+		logic := auth.NewOAuthLogic(ctx, casdoorFn())
 		userInfo, err := logic.GetCurrentUser(token)
 		if err != nil {
 			httpx.WriteJson(w, http.StatusInternalServerError, map[string]interface{}{

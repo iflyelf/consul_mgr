@@ -110,6 +110,10 @@ go run ./cmd/api -c etc/config.yaml
 | `CONSUL_ADDRESS` / `CONSUL_TOKEN` / `CONSUL_DATACENTER` | 默认 Consul | — / 空 / `dc1` |
 | `CONSUL_MAX_CONCURRENCY` | 批量查询/操作并发上限 | `16` |
 
+> **页面可配置（推荐）**：安全/跨域、审计、权限、日志、JWT、Casdoor 连接、Consul 默认、
+> FlyIAM 集成等均已支持在「人员组织 → 系统设置」页面配置（存于数据库，**DB 优先 / env 兜底**），
+> **保存即生效**。其中 **Casdoor 连接**修改后会**原子热重载**客户端，**无需重启**。
+
 完整清单见 [systemd 部署文档](docs/deployment/systemd.md#环境变量配置)。
 
 ## 文档

@@ -20,19 +20,20 @@ import (
 //   - 提取用户信息到 Context
 //   - 处理认证错误
 type CasdoorAuthMiddleware struct {
-	client *casdoor.Client
+	// casdoorFn 运行时获取当前 Casdoor 客户端（支持热重载后自动用新客户端）
+	casdoorFn func() *casdoor.Client
 }
 
 // NewCasdoorAuthMiddleware 创建认证中间件
 //
 // 参数:
-//   client - Casdoor 客户端实例
+//   casdoorFn - 返回当前 Casdoor 客户端的函数（每次请求时调用，支持热重载）
 //
 // 返回:
 //   *CasdoorAuthMiddleware - 中间件实例
-func NewCasdoorAuthMiddleware(client *casdoor.Client) *CasdoorAuthMiddleware {
+func NewCasdoorAuthMiddleware(casdoorFn func() *casdoor.Client) *CasdoorAuthMiddleware {
 	return &CasdoorAuthMiddleware{
-		client: client,
+		casdoorFn: casdoorFn,
 	}
 }
 
@@ -68,7 +69,7 @@ func (m *CasdoorAuthMiddleware) Handle(next http.HandlerFunc) http.HandlerFunc {
 		//
 		// 安全说明：绝不直接信任令牌载荷（可被伪造）。此处回源 Casdoor 校验令牌
 		// 有效性并获取最新用户信息（含 isAdmin / isForbidden），结果带短 TTL 缓存。
-		user, err := m.client.ValidateToken(token)
+		user, err := m.casdoorFn().ValidateToken(token)
 		if err != nil {
 			logx.Errorf("Token 校验失败: %v", err)
 			httpx.WriteJson(w, http.StatusUnauthorized, map[string]interface{}{
