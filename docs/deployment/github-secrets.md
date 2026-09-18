@@ -4,12 +4,10 @@
 
 ## 1. 工作流
 
-`.github/workflows/publish.yml` 在推送到 `main` 时触发：
-
-| Job | 产出 |
-|-----|------|
-| `二进制文件` | Linux/macOS(amd64,arm64)、Windows(amd64) 二进制 + 校验和，发布到 Release `latest` |
-| `Docker镜像` | 多架构镜像推送到 Docker Hub 与华为云 SWR |
+| 文件 | 说明 |
+|------|------|
+| `.github/workflows/publish.yml` | 推送到 `main` 时构建多架构二进制（发布 Release `latest`）与容器镜像（Docker Hub / 华为云 SWR），并将 SWR 仓库设为公开 |
+| `.github/workflows/helm-lint.yml` | Helm Chart 语法校验：`helmfile lint` + 各环境（default/dev/staging/prod）渲染 + YAML 解析校验 |
 
 ## 2. 必需的 Secrets
 
