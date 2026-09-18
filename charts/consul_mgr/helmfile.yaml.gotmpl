@@ -20,7 +20,6 @@ environments:
       - namespace: consul-mgr-dev
       - environment: development
       - replicas: 1
-      - logLevel: debug
 
   # 测试环境配置
   staging:
@@ -29,7 +28,6 @@ environments:
       - namespace: consul-mgr-staging
       - environment: staging
       - replicas: 2
-      - logLevel: info
 
   # 生产环境配置
   prod:
@@ -38,7 +36,6 @@ environments:
       - namespace: consul-mgr
       - environment: production
       - replicas: 3
-      - logLevel: warn
       - hpaEnabled: true
       - hpaMinReplicas: 3
       - hpaMaxReplicas: 10
@@ -97,17 +94,10 @@ releases:
       - redisHost: {{ .Values.redisHost | quote }}
       - redisPort: {{ .Values.redisPort }}
       - redisPassword: {{ .Values.redisPassword | quote }}
-      # JWT 配置
+      # JWT 密钥（过期/签发者等已页面可配置）
       - jwtSecret: {{ .Values.jwtSecret | quote }}
-      - jwtAccessExpire: {{ .Values.jwtAccessExpire }}
-      - jwtRefreshExpire: {{ .Values.jwtRefreshExpire }}
-      # 管理员配置
-      - adminUsername: {{ .Values.adminUsername | quote }}
+      # 管理员密码（用户名/邮箱已页面可配置）
       - adminPassword: {{ .Values.adminPassword | quote }}
-      - adminEmail: {{ .Values.adminEmail | quote }}
-      # 默认 Consul 配置
-      - consulAddress: {{ .Values.consulAddress | quote }}
-      - consulToken: {{ .Values.consulToken | quote }}
       # Casdoor 配置（外部 FlyIAM 提供）
       - casdoorEndpoint: {{ .Values.casdoorEndpoint | quote }}
       - casdoorPublicEndpoint: {{ .Values.casdoorPublicEndpoint | quote }}
@@ -144,16 +134,10 @@ releases:
       - resourcesRequestsMemory: {{ .Values.resourcesRequestsMemory | quote }}
       - resourcesLimitsCpu: {{ .Values.resourcesLimitsCpu | quote }}
       - resourcesLimitsMemory: {{ .Values.resourcesLimitsMemory | quote }}
-      # 日志配置
-      - logLevel: {{ .Values.logLevel | quote }}
-      - logFormat: {{ .Values.logFormat | quote }}
       # 节点调度配置（硬性节点亲和性）
-      # 说明：FlyIAM 对接 / 安全 / 跨域 / 审计 / 权限 / Consul 默认 等均已「页面可配置」，
-      # 存于数据库（DB 优先 / env 兜底），此处不再逐项透传，Chart 得以简化。
-      - authCookieSameSite: {{ .Values.authCookieSameSite | quote }}
-      - authCookieSecure: {{ .Values.authCookieSecure | quote }}
-      - authCookieDomain: {{ .Values.authCookieDomain | quote }}
-      - corsAllowedOrigins: {{ .Values.corsAllowedOrigins | quote }}
+      # 说明：FlyIAM 对接 / 安全 / 跨域 / 审计 / 权限 / Consul 默认 / 日志 / JWT 过期 /
+      # 管理员用户名邮箱 等均已「页面可配置」，存于数据库（DB 优先 / env 兜底），
+      # 此处不再逐项透传，Chart 得以简化。
       - nodeLabel: {{ .Values.nodeLabel | quote }}
       - nodeLabelValue: {{ .Values.nodeLabelValue | quote }}
       # existingSecret

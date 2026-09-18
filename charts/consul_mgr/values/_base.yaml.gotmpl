@@ -73,32 +73,12 @@ redisCacheTtl: {{ env "CONSUL_MGR_REDIS_CACHE_TTL" | default "300" }}
 # ==================== JWT 配置 ====================
 # JWT 密钥（必填，建议 32 位以上随机字符串，生产环境必须使用 existingSecret）
 jwtSecret: '{{ env "CONSUL_MGR_JWT_SECRET" | default "ysyh!9SkyFlyIAMSecretKey2024xxxxxxxx" }}'
-# JWT Access Token 过期时间（秒，默认 2 小时）
-jwtAccessExpire: {{ env "CONSUL_MGR_JWT_ACCESS_EXPIRE" | default "7200" }}
-# JWT Refresh Token 过期时间（秒，默认 7 天）
-jwtRefreshExpire: {{ env "CONSUL_MGR_JWT_REFRESH_EXPIRE" | default "604800" }}
-# JWT 签发者
-jwtIssuer: '{{ env "CONSUL_MGR_JWT_ISSUER" | default "consul_mgr" }}'
+# 说明：JWT 过期时间/签发者、管理员用户名/邮箱、Consul 默认、权限、审计、日志、
+# 安全/跨域等均可经「系统设置」页面配置（存数据库），不再由 Chart 注入。
 
-# ==================== 管理员配置 ====================
-# 管理员用户名
-adminUsername: '{{ env "CONSUL_MGR_ADMIN_USERNAME" | default "admin" }}'
+# ==================== 管理员密码 ====================
 # 管理员密码（生产环境必须使用 existingSecret）
 adminPassword: '{{ env "CONSUL_MGR_ADMIN_PASSWORD" | default "ysyh!9Sky" }}'
-# 管理员邮箱
-adminEmail: '{{ env "CONSUL_MGR_ADMIN_EMAIL" | default "admin@example.com" }}'
-
-# ==================== 默认 Consul 配置（可在页面另行配置服务组）====================
-# 默认 Consul 地址
-consulAddress: '{{ env "CONSUL_MGR_CONSUL_ADDRESS" | default "" }}'
-# 默认 Consul Token
-consulToken: '{{ env "CONSUL_MGR_CONSUL_TOKEN" | default "" }}'
-# 默认数据中心
-consulDatacenter: '{{ env "CONSUL_MGR_CONSUL_DATACENTER" | default "dc1" }}'
-# Consul 操作超时（秒）
-consulTimeout: {{ env "CONSUL_MGR_CONSUL_TIMEOUT" | default "10" }}
-# 批量查询/操作并发上限
-consulMaxConcurrency: {{ env "CONSUL_MGR_CONSUL_MAX_CONCURRENCY" | default "16" }}
 
 # ==================== 认证配置（复用外部 FlyIAM 提供的 Casdoor）====================
 # 默认：外置域名方式（经域名对外暴露）
@@ -163,47 +143,10 @@ networkPolicyCasdoorPorts: '{{ env "CONSUL_MGR_NETWORK_POLICY_CASDOOR_PORTS" | d
 # 出站：是否放行全部出站（调试用；生产建议 false 并依赖下方精确规则）
 networkPolicyAllowAllEgress: {{ env "CONSUL_MGR_NETWORK_POLICY_ALLOW_ALL_EGRESS" | default "false" }}
 
-# ==================== FlyIAM 服务对接 ====================
-# FlyIAM 业务 API 地址（用于同步用户字段定义）；留空则禁用同步
-flyiamApiEndpoint: '{{ env "CONSUL_MGR_FLYIAM_API_ENDPOINT" | default "" }}'
-# 服务间调用凭证（需与 FlyIAM 的 SERVICE_TOKEN 一致，经 Secret 注入）
-flyiamServiceToken: '{{ env "CONSUL_MGR_FLYIAM_SERVICE_TOKEN" | default "" }}'
-# 首次启动写入 DB 的自动同步种子（之后以页面配置为准）
-flyiamSyncEnabled: {{ env "CONSUL_MGR_FLYIAM_SYNC_ENABLED" | default "false" }}
-flyiamSyncOnStartup: {{ env "CONSUL_MGR_FLYIAM_SYNC_ON_STARTUP" | default "true" }}
-flyiamSyncInterval: '{{ env "CONSUL_MGR_FLYIAM_SYNC_INTERVAL" | default "6h" }}'
-
-# ==================== 安全与跨域配置 ====================
-# 登录 Cookie 的 SameSite 策略：lax / strict / none
-#   同源部署（前端嵌入后端，默认）用 lax；
-#   前后端跨域部署必须 none（同时需 HTTPS）。
-authCookieSameSite: '{{ env "CONSUL_MGR_AUTH_COOKIE_SAMESITE" | default "lax" }}'
-# 登录 Cookie 是否仅 HTTPS 发送：auto / true / false
-authCookieSecure: '{{ env "CONSUL_MGR_AUTH_COOKIE_SECURE" | default "auto" }}'
-# 登录 Cookie 作用域（跨子域共享时设为 .example.com），留空为当前域
-authCookieDomain: '{{ env "CONSUL_MGR_AUTH_COOKIE_DOMAIN" | default "" }}'
-# 允许的跨域来源（逗号分隔，精确匹配；为空则关闭跨域）。
-#   仅当前端与后端不同源时填写；不能使用 *（跨域携带 Cookie 需具体来源）。
-corsAllowedOrigins: '{{ env "CONSUL_MGR_CORS_ALLOWED_ORIGINS" | default "" }}'
-
 # ==================== 节点调度配置 ====================
 # 节点标签（用于硬性节点亲和性，必须调度到带该标签的 Linux 节点）
 nodeLabel: '{{ env "CONSUL_MGR_NODE_LABEL" | default "consul_mgr" }}'
 nodeLabelValue: '{{ env "CONSUL_MGR_NODE_LABEL_VALUE" | default "true" }}'
-
-# ==================== 权限配置 ====================
-# 是否启用服务组级授权
-permissionEnableServiceGroupAuth: {{ env "CONSUL_MGR_PERMISSION_ENABLE_SERVICE_GROUP_AUTH" | default "true" }}
-# 默认权限
-permissionDefault: '{{ env "CONSUL_MGR_PERMISSION_DEFAULT" | default "read" }}'
-
-# ==================== 审计日志配置 ====================
-auditEnabled: {{ env "CONSUL_MGR_AUDIT_ENABLED" | default "true" }}
-auditRetentionDays: {{ env "CONSUL_MGR_AUDIT_RETENTION_DAYS" | default "90" }}
-
-# ==================== 日志配置 ====================
-logLevel: '{{ env "CONSUL_MGR_LOG_LEVEL" | default "info" }}'
-logFormat: '{{ env "CONSUL_MGR_LOG_FORMAT" | default "json" }}'
 
 # ==================== 资源限制配置 ====================
 resourcesRequestsCpu: '{{ env "CONSUL_MGR_RES_REQ_CPU" | default "100m" }}'

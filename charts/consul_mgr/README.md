@@ -117,17 +117,22 @@ charts/consul_mgr/
 | `CONSUL_MGR_CASDOOR_CLIENT_ID` / `..._SECRET` | 应用凭据（FlyIAM 获取） | - |
 | `CONSUL_MGR_CASDOOR_ORGANIZATION` | 组织 | `flyiam` |
 | `CONSUL_MGR_CASDOOR_APPLICATION` | 应用 | `flyiam` |
-| `CONSUL_MGR_AUTH_COOKIE_SAMESITE` | 登录 Cookie SameSite（跨域需 `none`） | `lax` |
-| `CONSUL_MGR_AUTH_COOKIE_SECURE` | 登录 Cookie Secure（`auto`/`true`/`false`） | `auto` |
-| `CONSUL_MGR_AUTH_COOKIE_DOMAIN` | 登录 Cookie 作用域（跨子域共享） | 空 |
-| `CONSUL_MGR_CORS_ALLOWED_ORIGINS` | 允许的跨域来源（逗号分隔，为空关闭） | 空 |
-> **页面可配置（推荐）**：FlyIAM 对接、安全/跨域、审计、权限、日志、Casdoor 连接、
-> Consul 默认等均已改为「页面配置」——存于数据库（**DB 优先 / env 兜底**），
+
+> **页面可配置（推荐）**：安全/跨域、审计、权限、日志、JWT 过期/签发者、
+> 管理员用户名/邮箱、Consul 默认、FlyIAM 对接、Casdoor 连接（组织/应用/证书等）
+> 均已改为「页面配置」——存于数据库（**DB 优先 / env 兜底**），
 > 在「人员组织 → 系统设置」（或「用户字段」页的自动同步配置）中修改，**保存即生效，
-> 无需改 Chart 或环境变量**。上表同名环境变量仍可用作 CI 首次种子，但非必需。
+> 无需改 Chart 或环境变量**。这些项**已从 Chart 移除**，仅保留下方「引导必需」的配置。
 >
 > 其中 **Casdoor 连接**（地址 / 组织 / 应用 / 凭据等）修改后会**原子热重载**客户端，
 > **无需重启 Pod**；若重建失败（如地址不可达），配置已保存但旧客户端仍继续服务并提示错误。
+
+> **引导必需（Chart 保留）**：`DATABASE_URL`（或 DB 分项）、`REDIS_*`、`JWT_SECRET`、
+> `ADMIN_PASSWORD`、`CASDOOR_ENDPOINT` / `CASDOOR_PUBLIC_ENDPOINT` /
+> `CASDOOR_CLIENT_ID` / `CASDOOR_CLIENT_SECRET` / `CASDOOR_CERTIFICATE` /
+> `CASDOOR_ORGANIZATION` / `CASDOOR_APPLICATION` / `CASDOOR_DEFAULT_PASSWORD`。
+> 原因：登录与首次启动校验依赖它们，且登录前无法访问设置页（先有鸡还是蛋）。
+> 其余配置保存于数据库，Pod 重启后仍生效。
 
 > ⚠️ 生产环境请通过环境变量或 `existingSecret` 覆盖 `CONSUL_MGR_DB_PASSWORD`、
 > `CONSUL_MGR_JWT_SECRET`、`CONSUL_MGR_ADMIN_PASSWORD`、
@@ -224,7 +229,7 @@ export CONSUL_MGR_EXISTING_SECRET="consul-mgr-secret"
 helmfile sync
 ```
 
-> Secret 需包含 key：`DB_PASSWORD`、`REDIS_PASSWORD`、`JWT_SECRET`、`ADMIN_PASSWORD`、`CASDOOR_CLIENT_ID`、`CASDOOR_CLIENT_SECRET`（可选 `CONSUL_TOKEN`）。
+> Secret 需包含 key：`DB_PASSWORD`、`REDIS_PASSWORD`、`JWT_SECRET`、`ADMIN_PASSWORD`、`CASDOOR_CLIENT_ID`、`CASDOOR_CLIENT_SECRET`。
 
 ## 认证接入方式
 

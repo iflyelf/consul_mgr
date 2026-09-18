@@ -195,31 +195,10 @@ env:
   - name: REDIS_CACHE_TTL
     value: {{ .Values.redisCacheTtl | quote }}
 
-  # JWT 配置
-  - name: JWT_ACCESS_EXPIRE
-    value: {{ .Values.jwtAccessExpire | quote }}
-  - name: JWT_REFRESH_EXPIRE
-    value: {{ .Values.jwtRefreshExpire | quote }}
-  - name: JWT_ISSUER
-    value: {{ .Values.jwtIssuer | quote }}
-
-  # 管理员配置
-  - name: ADMIN_USERNAME
-    value: {{ .Values.adminUsername | quote }}
-  - name: ADMIN_EMAIL
-    value: {{ .Values.adminEmail | quote }}
-
-  # 默认 Consul 配置
-  {{- if .Values.consulAddress }}
-  - name: CONSUL_ADDRESS
-    value: {{ .Values.consulAddress | quote }}
-  {{- end }}
-  - name: CONSUL_DATACENTER
-    value: {{ .Values.consulDatacenter | quote }}
-  - name: CONSUL_TIMEOUT
-    value: {{ .Values.consulTimeout | quote }}
-  - name: CONSUL_MAX_CONCURRENCY
-    value: {{ .Values.consulMaxConcurrency | quote }}
+  # JWT 过期/签发者、管理员用户名/邮箱、Consul 默认、权限、审计、日志、
+  # 安全/跨域等均已改为「页面可配置」（存数据库，DB 优先 / env 兜底），
+  # 不再经 Chart 注入；仅保留登录与首次启动引导必需的配置（DB/Redis/JWT 密钥/
+  # 管理员密码/Casdoor 端点与凭据）。
 
   # 认证配置（复用外部 FlyIAM 提供的 Casdoor）
   - name: CASDOOR_ENDPOINT
@@ -236,41 +215,6 @@ env:
     value: {{ .Values.casdoorApplication | quote }}
   - name: CASDOOR_DEFAULT_PASSWORD
     value: {{ .Values.casdoorDefaultPassword | quote }}
-
-  # 权限配置
-  - name: PERMISSION_ENABLE_SERVICE_GROUP_AUTH
-    value: {{ .Values.permissionEnableServiceGroupAuth | quote }}
-  - name: PERMISSION_DEFAULT
-    value: {{ .Values.permissionDefault | quote }}
-
-  # 审计日志配置
-  - name: AUDIT_ENABLED
-    value: {{ .Values.auditEnabled | quote }}
-  - name: AUDIT_RETENTION_DAYS
-    value: {{ .Values.auditRetentionDays | quote }}
-
-  # 日志配置
-  - name: LOG_LEVEL
-    value: {{ .Values.logLevel | quote }}
-  - name: LOG_FORMAT
-    value: {{ .Values.logFormat | quote }}
-
-  # FlyIAM 服务对接与安全/跨域等配置已改为「页面可配置」（存数据库，DB 优先）。
-  # 如确有 CI 场景需要，仍可用同名环境变量注入（见 values/_base 注释）。
-
-  # 安全与跨域配置
-  - name: AUTH_COOKIE_SAMESITE
-    value: {{ .Values.authCookieSameSite | quote }}
-  - name: AUTH_COOKIE_SECURE
-    value: {{ .Values.authCookieSecure | quote }}
-  {{- if .Values.authCookieDomain }}
-  - name: AUTH_COOKIE_DOMAIN
-    value: {{ .Values.authCookieDomain | quote }}
-  {{- end }}
-  {{- if .Values.corsAllowedOrigins }}
-  - name: CORS_ALLOWED_ORIGINS
-    value: {{ .Values.corsAllowedOrigins | quote }}
-  {{- end }}
 
 # ============================================
 # 敏感信息配置（从 Secret 注入）
@@ -297,9 +241,6 @@ secret:
   ADMIN_PASSWORD: {{ .Values.adminPassword | quote }}
   CASDOOR_CLIENT_ID: {{ .Values.casdoorClientId | quote }}
   CASDOOR_CLIENT_SECRET: {{ .Values.casdoorClientSecret | quote }}
-  {{- if .Values.consulToken }}
-  CONSUL_TOKEN: {{ .Values.consulToken | quote }}
-  {{- end }}
 
 # ============================================
 # Casdoor 集群内引用（ExternalName Service，casdoorInCluster=true 时使用）

@@ -31,8 +31,10 @@ type ServiceContext struct {
 	ConsulManager *consul.Manager
 	// casdoorRef 原子指针：页面修改 Casdoor 连接配置后可热重载（免重启）
 	casdoorRef atomic.Pointer[casdoor.Client]
-	Cache      *cache.Cache
-	Perm       *perm.Checker
+	// casdoorBuild 重建 Casdoor 客户端；默认 initCasdoorClient，测试可注入替身。
+	casdoorBuild func(config.Config) (*casdoor.Client, error)
+	Cache        *cache.Cache
+	Perm         *perm.Checker
 }
 
 // Casdoor 返回当前 Casdoor 客户端（可能已被热重载替换）。
@@ -45,7 +47,11 @@ func (s *ServiceContext) Casdoor() *casdoor.Client {
 // 触发时机：页面修改 casdoor.* 设置后。重建失败时保留旧客户端，
 // 返回错误供调用方提示用户。
 func (s *ServiceContext) ReloadCasdoor(ctx context.Context) error {
-	client, err := initCasdoorClient(*s.Config)
+	build := s.casdoorBuild
+	if build == nil {
+		build = initCasdoorClient
+	}
+	client, err := build(*s.Config)
 	if err != nil {
 		return err
 	}
@@ -199,6 +205,7 @@ func NewServiceContext(c *config.Config) *ServiceContext {
 		DB:            sqlx.NewSqlConnFromDB(db),
 		RawDB:         db,
 		ConsulManager: consulManager,
+		casdoorBuild:  initCasdoorClient,
 		Cache:         cacheClient,
 		Perm:          perm.New(db),
 	}
