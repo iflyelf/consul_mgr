@@ -111,8 +111,15 @@ func (c *Cache) Get(ctx context.Context, key string, dest interface{}) bool {
 	return true
 }
 
-// Set 序列化并写入缓存
+// Set 序列化并写入缓存（使用默认 TTL）
 func (c *Cache) Set(ctx context.Context, key string, value interface{}) {
+	c.SetWithTTL(ctx, key, value, c.ttl)
+}
+
+// SetWithTTL 序列化并写入缓存（指定 TTL）
+//
+// 用于对新鲜度要求较高的数据（如用户列表），可单独设置更短的过期时间。
+func (c *Cache) SetWithTTL(ctx context.Context, key string, value interface{}, ttl time.Duration) {
 	if !c.Enabled() {
 		return
 	}
@@ -120,7 +127,11 @@ func (c *Cache) Set(ctx context.Context, key string, value interface{}) {
 	if err != nil {
 		return
 	}
-	if err := c.rdb.SetexCtx(ctx, key, string(data), int(c.ttl.Seconds())); err != nil {
+	secs := int(ttl.Seconds())
+	if secs <= 0 {
+		secs = 1
+	}
+	if err := c.rdb.SetexCtx(ctx, key, string(data), secs); err != nil {
 		logx.Errorf("[cache] 写入缓存失败 key=%s: %v", key, err)
 	}
 }

@@ -92,6 +92,8 @@ curl -s -o /dev/null -w "%{redirect_url}\n" http://localhost:8080/api/auth/login
   防止登录 CSRF（无需配置）。
 - **默认密码**：`CASDOOR_DEFAULT_PASSWORD` 不再提供代码默认值，必须显式注入
   （环境变量 / Secret），否则启动即失败；新增用户与重置密码使用该值。
+- **用户列表新鲜度**：缓存 TTL 默认 30s（`CASDOOR_USER_CACHE_TTL` 可调），
+  并以 SingleFlight 合并并发回源；列表接口支持 `?refresh=1` 强制绕过缓存。
 - **令牌校验**：访问令牌经 Casdoor 权威校验（查库存在、未过期、用户未禁用/删除），
   校验结果缓存 60s，不再信任未验签的 JWT 载荷。
 

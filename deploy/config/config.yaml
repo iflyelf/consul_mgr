@@ -57,7 +57,9 @@ Casdoor:
   OrganizationName: flyiam
   ApplicationName: flyiam
   # 新增用户时的默认密码（环境变量: CASDOOR_DEFAULT_PASSWORD）
-  DefaultPassword: "ysyh!9Sky"
+  # 默认密码：必须显式设置（环境变量 CASDOOR_DEFAULT_PASSWORD / Secret）。
+  # 不提供内置默认值，留空将导致启动校验失败，避免弱口令被静默沿用。
+  DefaultPassword: ""
 
 Web:
   Embedded: true

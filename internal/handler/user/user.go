@@ -45,9 +45,11 @@ func ListUsersHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 		page, _ := strconv.Atoi(r.URL.Query().Get("page"))
 		pageSize, _ := strconv.Atoi(r.URL.Query().Get("page_size"))
 		keyword := r.URL.Query().Get("keyword")
+		// refresh=1 强制绕过缓存，立即从 Casdoor 拉取最新列表
+		refresh := r.URL.Query().Get("refresh") == "1" || r.URL.Query().Get("refresh") == "true"
 
-		l := user.NewUserLogic(r.Context(), ctx.CasdoorClient, ctx.Cache)
-		list, total, err := l.ListUsers(keyword, page, pageSize)
+		l := user.NewUserLogic(r.Context(), ctx.CasdoorClient, ctx.Cache, ctx.Config.Casdoor.UserCacheTTL)
+		list, total, err := l.ListUsers(keyword, page, pageSize, refresh)
 		if err != nil {
 			httpx.WriteJson(w, http.StatusOK, map[string]interface{}{"code": 500, "message": err.Error()})
 			return
@@ -77,7 +79,7 @@ func CreateUserHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 			httpx.WriteJson(w, http.StatusOK, map[string]interface{}{"code": 400, "message": "域账号不能为空"})
 			return
 		}
-		l := user.NewUserLogic(r.Context(), ctx.CasdoorClient, ctx.Cache)
+		l := user.NewUserLogic(r.Context(), ctx.CasdoorClient, ctx.Cache, ctx.Config.Casdoor.UserCacheTTL)
 		if err := l.CreateUser(casdoor.UserUpsert{
 			Name: req.Name, DisplayName: req.DisplayName, Avatar: req.Avatar, Email: req.Email,
 			Phone: req.Phone, Password: req.Password, Properties: req.Properties,
@@ -103,7 +105,7 @@ func UpdateUserHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 			return
 		}
 		req.Name = name
-		l := user.NewUserLogic(r.Context(), ctx.CasdoorClient, ctx.Cache)
+		l := user.NewUserLogic(r.Context(), ctx.CasdoorClient, ctx.Cache, ctx.Config.Casdoor.UserCacheTTL)
 		if err := l.UpdateUser(casdoor.UserUpsert{
 			Name: req.Name, DisplayName: req.DisplayName, Avatar: req.Avatar, Email: req.Email,
 			Phone: req.Phone, Properties: req.Properties,
@@ -123,7 +125,7 @@ func DeleteUserHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 			httpx.WriteJson(w, http.StatusOK, map[string]interface{}{"code": 400, "message": "缺少用户标识"})
 			return
 		}
-		l := user.NewUserLogic(r.Context(), ctx.CasdoorClient, ctx.Cache)
+		l := user.NewUserLogic(r.Context(), ctx.CasdoorClient, ctx.Cache, ctx.Config.Casdoor.UserCacheTTL)
 		if err := l.DeleteUser(name); err != nil {
 			httpx.WriteJson(w, http.StatusOK, map[string]interface{}{"code": 500, "message": err.Error()})
 			return
@@ -150,7 +152,7 @@ func ResetPasswordHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 		if password == "" {
 			password = ctx.Config.Casdoor.DefaultPassword
 		}
-		l := user.NewUserLogic(r.Context(), ctx.CasdoorClient, ctx.Cache)
+		l := user.NewUserLogic(r.Context(), ctx.CasdoorClient, ctx.Cache, ctx.Config.Casdoor.UserCacheTTL)
 		if err := l.ResetPassword(name, password); err != nil {
 			httpx.WriteJson(w, http.StatusOK, map[string]interface{}{"code": 500, "message": err.Error()})
 			return
@@ -196,7 +198,7 @@ func SetUserAdminHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 			httpx.WriteJson(w, http.StatusOK, map[string]interface{}{"code": 400, "message": "参数错误: " + err.Error()})
 			return
 		}
-		l := user.NewUserLogic(r.Context(), ctx.CasdoorClient, ctx.Cache)
+		l := user.NewUserLogic(r.Context(), ctx.CasdoorClient, ctx.Cache, ctx.Config.Casdoor.UserCacheTTL)
 		if err := l.SetUserAdmin(name, req.IsAdmin); err != nil {
 			httpx.WriteJson(w, http.StatusOK, map[string]interface{}{"code": 500, "message": err.Error()})
 			return
