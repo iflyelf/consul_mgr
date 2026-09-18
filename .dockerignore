@@ -1,0 +1,47 @@
+# Git
+.git/
+.gitignore
+.github/
+
+# Documentation
+*.md
+docs/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Build artifacts（注意：不要排除 web/dist，它供 go:embed 使用）
+consul_mgr
+consul_mgr-*
+/dist/
+/build/
+
+# Logs
+*.log
+logs/
+
+# Test files
+*_test.go
+testdata/
+
+# Kubernetes / 部署（镜像仅使用 etc/config.yaml）
+charts/
+deploy/kubernetes/
+
+# Development
+.env
+.env.local
+*.local.yaml
+tmp/
+temp/
+
+# Go
+vendor/
+go.work
+
+# Node（保留 web/dist，仅排除依赖目录）
+node_modules/
+.cache/
