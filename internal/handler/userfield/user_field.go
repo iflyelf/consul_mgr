@@ -93,7 +93,7 @@ func DeleteUserFieldHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 // SyncUserFieldsHandler 立即从 FlyIAM 同步字段定义（手动触发）
 func SyncUserFieldsHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		cfg := ctx.Config.FlyIAM
+		cfg := ctx.Config().FlyIAM
 		if cfg.Endpoint == "" || cfg.ServiceToken == "" {
 			response.BadRequest(w, "未配置 FlyIAM 地址或服务令牌（CONSUL_MGR_FLYIAM_API_ENDPOINT / _SERVICE_TOKEN）")
 			return
@@ -124,7 +124,7 @@ func GetSyncConfigHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 		// 附带服务端是否已配置 FlyIAM 对接，供前端提示
 		response.Success(w, map[string]interface{}{
 			"config":           cfg,
-			"flyiamConfigured": ctx.Config.FlyIAM.Endpoint != "" && ctx.Config.FlyIAM.ServiceToken != "",
+			"flyiamConfigured": ctx.Config().FlyIAM.Endpoint != "" && ctx.Config().FlyIAM.ServiceToken != "",
 		})
 	}
 }

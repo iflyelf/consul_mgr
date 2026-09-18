@@ -31,7 +31,7 @@ func newTestClient(t *testing.T, endpoint string) *casdoor.Client {
 // TestReloadCasdoor_ConcurrentSwap 验证热重载期间并发读取不会拿到 nil，
 // 且每次 ReloadCasdoor 都会原子替换为新客户端（配合 -race 检测数据竞争）。
 func TestReloadCasdoor_ConcurrentSwap(t *testing.T) {
-	svcCtx := &ServiceContext{Config: &config.Config{}}
+	svcCtx := &ServiceContext{cfgStore: config.NewStore(&config.Config{})}
 	svcCtx.casdoorRef.Store(newTestClient(t, "http://init"))
 
 	var seq int64
@@ -87,7 +87,7 @@ func TestReloadCasdoor_ConcurrentSwap(t *testing.T) {
 
 // TestReloadCasdoor_ErrorKeepsOldClient 验证重建失败时保留旧客户端。
 func TestReloadCasdoor_ErrorKeepsOldClient(t *testing.T) {
-	svcCtx := &ServiceContext{Config: &config.Config{}}
+	svcCtx := &ServiceContext{cfgStore: config.NewStore(&config.Config{})}
 	old := newTestClient(t, "http://old")
 	svcCtx.casdoorRef.Store(old)
 	svcCtx.casdoorBuild = func(config.Config) (*casdoor.Client, error) {

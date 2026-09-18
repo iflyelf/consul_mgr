@@ -48,14 +48,18 @@ func publicEndpoint(c *config.Config) string {
 	return c.Casdoor.Endpoint
 }
 
+// configFn 返回当前配置快照的函数（支持页面修改后即时生效，且并发安全）。
+type configFn func() *config.Config
+
 // ConfigHandler 下发前端所需的 Casdoor 运行时配置
 //
 // 功能：前端启动时调用，避免把 Casdoor 地址在构建期写死
 //
 // 请求方式：GET
 // 路径：/api/auth/config
-func ConfigHandler(c *config.Config) http.HandlerFunc {
+func ConfigHandler(cfgFn configFn) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		c := cfgFn()
 		redirectUri := requestBaseURL(r) + "/callback"
 		httpx.WriteJson(w, http.StatusOK, map[string]interface{}{
 			"code":    200,
@@ -82,14 +86,14 @@ func ConfigHandler(c *config.Config) http.HandlerFunc {
 // 参数:
 //
 //	format=json  返回 JSON（不跳转），便于接口调试
-func LoginHandler(casdoorFn func() *casdoor.Client, c *config.Config) http.HandlerFunc {
+func LoginHandler(casdoorFn func() *casdoor.Client, cfgFn configFn) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// 回调地址基于当前请求动态推导，避免写死
 		redirectUri := requestBaseURL(r) + "/callback"
 
 		// 生成随机 state 并写入 Cookie，回调时校验，防止登录 CSRF
 		state := casdoor.GenState()
-		http.SetCookie(w, c.CookieConfig().NewCookie(oauthStateCookie, state, 600, r))
+		http.SetCookie(w, cfgFn().CookieConfig().NewCookie(oauthStateCookie, state, 600, r))
 
 		// 调用 Logic 层
 		logic := auth.NewOAuthLogic(r.Context(), casdoorFn())
@@ -123,9 +127,10 @@ func LoginHandler(casdoorFn func() *casdoor.Client, c *config.Config) http.Handl
 //
 // 请求方式：GET
 // 路径：/api/auth/callback
-func CallbackHandler(casdoorFn func() *casdoor.Client, c *config.Config) http.HandlerFunc {
-	cookieCfg := c.CookieConfig()
+func CallbackHandler(casdoorFn func() *casdoor.Client, cfgFn configFn) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// 每次请求读取最新 Cookie 配置（页面修改后即时生效）
+		cookieCfg := cfgFn().CookieConfig()
 		// 解析请求参数
 		var req types.CallbackRequest
 		req.Code = r.URL.Query().Get("code")
@@ -264,9 +269,9 @@ func GetUserInfoHandler(casdoorFn func() *casdoor.Client) http.HandlerFunc {
 // 请求方式：POST
 // 路径：/api/auth/logout
 // 需要认证：是
-func LogoutHandler(c *config.Config) http.HandlerFunc {
-	cookieCfg := c.CookieConfig()
+func LogoutHandler(cfgFn configFn) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		cookieCfg := cfgFn().CookieConfig()
 		// 获取用户名（用于日志）
 		username, _ := middleware.GetUsernameFromContext(r.Context())
 

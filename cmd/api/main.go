@@ -731,7 +731,7 @@ func registerHandlers(server *rest.Server, ctx *svc.ServiceContext) {
 	// 静态文件服务（前端）
 	// ============================================================
 
-	if ctx.Config.Web.Embedded {
+	if ctx.Config().Web.Embedded {
 		log.Println("启用嵌入式 Web 界面")
 	}
 }

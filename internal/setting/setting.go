@@ -186,19 +186,23 @@ var registryMap = func() map[string]Item {
 }()
 
 // Service 设置服务
+//
+// 并发模型：配置以 config.Store（atomic 快照）承载。修改时先 Clone 副本、
+// 在副本上应用，再原子替换，读者始终看到不可变快照，避免读写数据竞争。
+// mu 仅用于串行化「副本修改 + 替换」过程，防止并发保存相互覆盖。
 type Service struct {
-	mu    sync.RWMutex
+	mu    sync.Mutex
 	db    sqlx.SqlConn
-	cfg   *config.Config
+	store *config.Store
 	items map[string]Item
 }
 
-// NewService 创建设置服务
-func NewService(db sqlx.SqlConn, cfg *config.Config) *Service {
-	return &Service{db: db, cfg: cfg, items: registryMap}
+// NewService 创建设置服务（store 为共享配置快照存储）
+func NewService(db sqlx.SqlConn, store *config.Store) *Service {
+	return &Service{db: db, store: store, items: registryMap}
 }
 
-// Load 从数据库加载设置并应用到 Config
+// Load 从数据库加载设置并应用到配置
 func (s *Service) Load(ctx context.Context) error {
 	var rows []struct {
 		Key   string `db:"key"`
@@ -207,22 +211,30 @@ func (s *Service) Load(ctx context.Context) error {
 	if err := s.db.QueryRowsCtx(ctx, &rows, `SELECT key, value FROM app_settings`); err != nil {
 		return fmt.Errorf("读取应用设置失败: %w", err)
 	}
+	if len(rows) == 0 {
+		return nil
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	snap := s.store.Get().Clone()
 	for _, r := range rows {
 		if it, ok := s.items[r.Key]; ok {
-			it.Set(s.cfg, r.Value)
+			it.Set(snap, r.Value)
 		}
 	}
+	s.store.Store(snap)
 	return nil
 }
 
-// Apply 写入 DB 并即时应用到内存 Config。
+// Apply 写入 DB 并即时应用到内存配置。
 //
 // 返回实际生效的 key 列表（供调用方判断是否需要热重载相关组件，如 Casdoor 客户端）。
 func (s *Service) Apply(ctx context.Context, kv map[string]string) ([]string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	snap := s.store.Get().Clone()
+	// 无论中途是否出错都提交已应用的键：保证内存快照与已写入 DB 的部分保持一致。
+	defer s.store.Store(snap)
 	applied := make([]string, 0, len(kv))
 	for k, v := range kv {
 		it, ok := s.items[k]
@@ -235,7 +247,7 @@ func (s *Service) Apply(ctx context.Context, kv map[string]string) ([]string, er
 			k, v); err != nil {
 			return applied, fmt.Errorf("保存设置 %s 失败: %w", k, err)
 		}
-		it.Set(s.cfg, v)
+		it.Set(snap, v)
 		applied = append(applied, k)
 	}
 	return applied, nil
@@ -253,11 +265,10 @@ func NeedsCasdoorReload(applied []string) bool {
 
 // View 返回全部可配置项（secret 以占位符返回）
 func (s *Service) View() []map[string]interface{} {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	cfg := s.store.Get()
 	out := make([]map[string]interface{}, 0, len(Registry))
 	for _, it := range Registry {
-		val := it.Get(s.cfg)
+		val := it.Get(cfg)
 		if it.Secret && val != "" {
 			val = "******"
 		}

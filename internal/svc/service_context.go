@@ -23,8 +23,9 @@ import (
 
 // ServiceContext 服务上下文
 type ServiceContext struct {
-	// Config 使用指针：页面修改设置后直接写回，既有读取点自动生效（无需重启）
-	Config        *config.Config
+	// cfgStore 原子配置快照：页面修改设置后写时复制并整体替换，
+	// 读者经 Config() 获取不可变快照，避免共享 *Config 的读写数据竞争。
+	cfgStore      *config.Store
 	Settings      *setting.Service
 	DB            sqlx.SqlConn
 	RawDB         *sql.DB // 原生连接：PostgreSQL 数组(TEXT[])需 pq.Array 扫描
@@ -35,6 +36,11 @@ type ServiceContext struct {
 	casdoorBuild func(config.Config) (*casdoor.Client, error)
 	Cache        *cache.Cache
 	Perm         *perm.Checker
+}
+
+// Config 返回当前配置快照（只读，调用方不得修改）。
+func (s *ServiceContext) Config() *config.Config {
+	return s.cfgStore.Get()
 }
 
 // Casdoor 返回当前 Casdoor 客户端（可能已被热重载替换）。
@@ -51,13 +57,13 @@ func (s *ServiceContext) ReloadCasdoor(ctx context.Context) error {
 	if build == nil {
 		build = initCasdoorClient
 	}
-	client, err := build(*s.Config)
+	client, err := build(*s.Config())
 	if err != nil {
 		return err
 	}
 	s.casdoorRef.Store(client)
 	log.Printf("🔄 Casdoor 客户端已热重载（endpoint=%s，organization=%s）",
-		s.Config.Casdoor.Endpoint, s.Config.Casdoor.OrganizationName)
+		s.Config().Casdoor.Endpoint, s.Config().Casdoor.OrganizationName)
 	return nil
 }
 
@@ -78,8 +84,8 @@ func (s *ServiceContext) CacheKeyInstancesByService(groupID int64, serviceName s
 
 // ConsulConcurrency 返回 Consul 批量操作并发度
 func (s *ServiceContext) ConsulConcurrency() int {
-	if s.Config.Consul.MaxConcurrency > 0 {
-		return s.Config.Consul.MaxConcurrency
+	if mc := s.Config().Consul.MaxConcurrency; mc > 0 {
+		return mc
 	}
 	return 16
 }
@@ -177,14 +183,16 @@ func NewServiceContext(c *config.Config) *ServiceContext {
 	}
 
 	// 加载页面设置（DB 优先 / env 兜底），在初始化 Casdoor 客户端前应用
-	settings := setting.NewService(sqlx.NewSqlConnFromDB(db), c)
+	cfgStore := config.NewStore(c)
+	settings := setting.NewService(sqlx.NewSqlConnFromDB(db), cfgStore)
 	if err := settings.Load(context.Background()); err != nil {
 		log.Printf("⚠️ 加载应用设置失败（将使用环境变量默认值）: %v", err)
 	}
+	svcCfg := cfgStore.Get()
 
 	// Casdoor 连接配置校验须在 settings.Load 之后：
 	// 这些字段可由「系统设置」页面（数据库）提供，此时已合并 DB 值。
-	if err := c.ValidateCasdoor(); err != nil {
+	if err := svcCfg.ValidateCasdoor(); err != nil {
 		log.Fatalf("❌ Casdoor 配置校验失败: %v", err)
 	}
 
@@ -192,23 +200,23 @@ func NewServiceContext(c *config.Config) *ServiceContext {
 	consulManager := consul.NewManager()
 
 	// 初始化 Casdoor 客户端
-	casdoorClient, err := initCasdoorClient(*c)
+	casdoorClient, err := initCasdoorClient(*svcCfg)
 	if err != nil {
 		log.Fatalf("初始化 Casdoor 客户端失败: %v", err)
 	}
 
 	// 初始化 Redis 缓存（连接失败自动降级，不影响启动）
 	cacheClient := cache.New(cache.Config{
-		Enabled:  c.Redis.Enabled,
-		Host:     c.Redis.Host,
-		Port:     c.Redis.Port,
-		Password: c.Redis.Password,
-		DB:       c.Redis.DB,
-		TTL:      c.Redis.TTL,
+		Enabled:  svcCfg.Redis.Enabled,
+		Host:     svcCfg.Redis.Host,
+		Port:     svcCfg.Redis.Port,
+		Password: svcCfg.Redis.Password,
+		DB:       svcCfg.Redis.DB,
+		TTL:      svcCfg.Redis.TTL,
 	})
 
 	svcCtx := &ServiceContext{
-		Config:        c,
+		cfgStore:      cfgStore,
 		Settings:      settings,
 		DB:            sqlx.NewSqlConnFromDB(db),
 		RawDB:         db,
