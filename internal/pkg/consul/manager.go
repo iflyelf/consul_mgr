@@ -23,25 +23,25 @@ func (m *Manager) GetClient(groupID int64, cfg *Config) (*Client, error) {
 	m.mu.RLock()
 	client, exists := m.clients[groupID]
 	m.mu.RUnlock()
-	
+
 	if exists {
 		return client, nil
 	}
-	
+
 	// 创建新客户端
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	
+
 	// 双重检查
 	if client, exists := m.clients[groupID]; exists {
 		return client, nil
 	}
-	
+
 	client, err := NewClient(cfg)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	m.clients[groupID] = client
 	return client, nil
 }
@@ -59,16 +59,16 @@ func (m *Manager) TestConnection(groupID int64, cfg *Config) error {
 	if err != nil {
 		return err
 	}
-	
+
 	if err := client.TestConnection(); err != nil {
 		return err
 	}
-	
+
 	// 测试成功后缓存客户端
 	m.mu.Lock()
 	m.clients[groupID] = client
 	m.mu.Unlock()
-	
+
 	return nil
 }
 
@@ -77,21 +77,21 @@ func (m *Manager) GetOrCreateClient(groupID int64, address, token, datacenter st
 	m.mu.RLock()
 	client, exists := m.clients[groupID]
 	m.mu.RUnlock()
-	
+
 	if exists {
 		return client, nil
 	}
-	
+
 	cfg := &Config{
 		Address:    address,
 		Token:      token,
 		Datacenter: datacenter,
 	}
-	
+
 	if timeout > 0 {
 		cfg.Timeout = time.Duration(timeout) * time.Second
 	}
-	
+
 	return m.GetClient(groupID, cfg)
 }
 

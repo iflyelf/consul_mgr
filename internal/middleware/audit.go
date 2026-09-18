@@ -137,20 +137,20 @@ func (m *AuditMiddleware) Handle(next http.HandlerFunc) http.HandlerFunc {
 			next.ServeHTTP(w, r)
 			return
 		}
-		
+
 		startTime := time.Now()
-		
+
 		// 获取用户信息
 		ctx := r.Context()
 		userID, _ := GetUserIdFromContext(ctx)
 		username, _ := GetUsernameFromContext(ctx)
-		
+
 		// 如果没有用户信息，说明是未认证的请求，不记录
 		if userID == "" {
 			next.ServeHTTP(w, r)
 			return
 		}
-		
+
 		// 读取请求体（限制大小，避免大 body 造成内存膨胀）
 		var requestBody []byte
 		if r.Body != nil {
@@ -158,23 +158,23 @@ func (m *AuditMiddleware) Handle(next http.HandlerFunc) http.HandlerFunc {
 			requestBody, _ = io.ReadAll(io.LimitReader(r.Body, maxAuditBody))
 			r.Body = io.NopCloser(io.MultiReader(bytes.NewReader(requestBody), r.Body))
 		}
-		
+
 		// 包装响应写入器
 		rw := &responseWriter{
 			ResponseWriter: w,
 			statusCode:     http.StatusOK,
 			body:           &bytes.Buffer{},
 		}
-		
+
 		// 调用下一个处理器
 		next.ServeHTTP(rw, r)
-		
+
 		// 确定操作类型
 		action := getActionFromMethod(r.Method)
-		
+
 		// 确定资源类型
 		resourceType, resourceID, resourceName := parseResourceFromPath(r.URL.Path)
-		
+
 		// 提取 group_id（如果有）
 		var groupID *int64
 		if gid := r.URL.Query().Get("group_id"); gid != "" {
@@ -182,7 +182,7 @@ func (m *AuditMiddleware) Handle(next http.HandlerFunc) http.HandlerFunc {
 			fmt.Sscanf(gid, "%d", &id)
 			groupID = &id
 		}
-		
+
 		// 构造详情（请求体按敏感字段脱敏，避免 token/密码明文落库）
 		details := map[string]interface{}{
 			"method":       r.Method,
@@ -191,7 +191,7 @@ func (m *AuditMiddleware) Handle(next http.HandlerFunc) http.HandlerFunc {
 			"request_body": sanitizeBody(requestBody),
 			"duration_ms":  time.Since(startTime).Milliseconds(),
 		}
-		
+
 		// 确定状态
 		status := "success"
 		errorMessage := ""
@@ -199,7 +199,7 @@ func (m *AuditMiddleware) Handle(next http.HandlerFunc) http.HandlerFunc {
 			status = "error"
 			errorMessage = rw.body.String()
 		}
-		
+
 		// 记录审计日志
 		auditLogic := audit.NewAuditLogic(ctx, m.ctx.DB)
 		err := auditLogic.LogAction(
@@ -216,7 +216,7 @@ func (m *AuditMiddleware) Handle(next http.HandlerFunc) http.HandlerFunc {
 			status,
 			errorMessage,
 		)
-		
+
 		if err != nil {
 			logx.Errorf("记录审计日志失败: %v", err)
 		}
@@ -243,11 +243,11 @@ func parseResourceFromPath(path string) (resourceType, resourceID, resourceName 
 	// /api/groups -> groups
 	// /api/groups/123 -> groups, 123
 	// /api/instances -> instances
-	
+
 	if len(path) > 5 && path[:5] == "/api/" {
 		path = path[5:]
 	}
-	
+
 	parts := strings.Split(path, "/")
 	if len(parts) > 0 {
 		resourceType = parts[0]
@@ -256,7 +256,7 @@ func parseResourceFromPath(path string) (resourceType, resourceID, resourceName 
 		resourceID = parts[1]
 		resourceName = parts[1]
 	}
-	
+
 	return
 }
 
@@ -266,12 +266,12 @@ func getClientIP(r *http.Request) string {
 	if ip := r.Header.Get("X-Forwarded-For"); ip != "" {
 		return strings.Split(ip, ",")[0]
 	}
-	
+
 	// 尝试从 X-Real-IP 获取
 	if ip := r.Header.Get("X-Real-IP"); ip != "" {
 		return ip
 	}
-	
+
 	// 从 RemoteAddr 获取
 	return strings.Split(r.RemoteAddr, ":")[0]
 }

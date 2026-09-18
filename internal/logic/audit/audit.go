@@ -52,25 +52,25 @@ func (l *AuditLogic) LogAction(
 	details map[string]interface{},
 	ipAddress, userAgent, status, errorMessage string,
 ) error {
-	
+
 	detailsJSON, _ := json.Marshal(details)
-	
+
 	query := `
 		INSERT INTO audit_logs 
 		(user_id, username, action, resource_type, resource_id, resource_name,
 		 group_id, details, ip_address, user_agent, status, error_message)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 	`
-	
+
 	_, err := l.db.ExecCtx(l.ctx, query,
 		userID, username, action, resourceType, resourceID, resourceName,
 		groupID, detailsJSON, ipAddress, userAgent, status, errorMessage)
-	
+
 	if err != nil {
 		l.logger.Errorf("记录审计日志失败: %v", err)
 		return fmt.Errorf("记录审计日志失败: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -82,60 +82,60 @@ func (l *AuditLogic) ListAuditLogs(
 	startTime, endTime *time.Time,
 	page, pageSize int,
 ) ([]*AuditLog, int64, error) {
-	
+
 	// 构建查询条件
 	whereClause := "WHERE 1=1"
 	args := []interface{}{}
 	argIdx := 1
-	
+
 	if userID != "" {
 		whereClause += fmt.Sprintf(" AND user_id = $%d", argIdx)
 		args = append(args, userID)
 		argIdx++
 	}
-	
+
 	if username != "" {
 		whereClause += fmt.Sprintf(" AND username LIKE $%d", argIdx)
 		args = append(args, "%"+username+"%")
 		argIdx++
 	}
-	
+
 	if action != "" {
 		whereClause += fmt.Sprintf(" AND action = $%d", argIdx)
 		args = append(args, action)
 		argIdx++
 	}
-	
+
 	if resourceType != "" {
 		whereClause += fmt.Sprintf(" AND resource_type = $%d", argIdx)
 		args = append(args, resourceType)
 		argIdx++
 	}
-	
+
 	if groupID != nil {
 		whereClause += fmt.Sprintf(" AND group_id = $%d", argIdx)
 		args = append(args, *groupID)
 		argIdx++
 	}
-	
+
 	if status != "" {
 		whereClause += fmt.Sprintf(" AND status = $%d", argIdx)
 		args = append(args, status)
 		argIdx++
 	}
-	
+
 	if startTime != nil {
 		whereClause += fmt.Sprintf(" AND created_at >= $%d", argIdx)
 		args = append(args, *startTime)
 		argIdx++
 	}
-	
+
 	if endTime != nil {
 		whereClause += fmt.Sprintf(" AND created_at <= $%d", argIdx)
 		args = append(args, *endTime)
 		argIdx++
 	}
-	
+
 	// 查询总数
 	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM audit_logs %s", whereClause)
 	var total int64
@@ -144,7 +144,7 @@ func (l *AuditLogic) ListAuditLogs(
 		l.logger.Errorf("查询审计日志总数失败: %v", err)
 		return nil, 0, fmt.Errorf("查询审计日志总数失败: %w", err)
 	}
-	
+
 	// 查询列表
 	offset := (page - 1) * pageSize
 	listQuery := fmt.Sprintf(`
@@ -155,16 +155,16 @@ func (l *AuditLogic) ListAuditLogs(
 		ORDER BY created_at DESC
 		LIMIT $%d OFFSET $%d
 	`, whereClause, argIdx, argIdx+1)
-	
+
 	args = append(args, pageSize, offset)
-	
+
 	var logs []*AuditLog
 	err = l.db.QueryRowsCtx(l.ctx, &logs, listQuery, args...)
 	if err != nil {
 		l.logger.Errorf("查询审计日志列表失败: %v", err)
 		return nil, 0, fmt.Errorf("查询审计日志列表失败: %w", err)
 	}
-	
+
 	return logs, total, nil
 }
 
@@ -175,60 +175,60 @@ func (l *AuditLogic) ExportAuditLogs(
 	status string,
 	startTime, endTime *time.Time,
 ) ([]*AuditLog, error) {
-	
+
 	// 构建查询条件（与 ListAuditLogs 相同，但不分页）
 	whereClause := "WHERE 1=1"
 	args := []interface{}{}
 	argIdx := 1
-	
+
 	if userID != "" {
 		whereClause += fmt.Sprintf(" AND user_id = $%d", argIdx)
 		args = append(args, userID)
 		argIdx++
 	}
-	
+
 	if username != "" {
 		whereClause += fmt.Sprintf(" AND username LIKE $%d", argIdx)
 		args = append(args, "%"+username+"%")
 		argIdx++
 	}
-	
+
 	if action != "" {
 		whereClause += fmt.Sprintf(" AND action = $%d", argIdx)
 		args = append(args, action)
 		argIdx++
 	}
-	
+
 	if resourceType != "" {
 		whereClause += fmt.Sprintf(" AND resource_type = $%d", argIdx)
 		args = append(args, resourceType)
 		argIdx++
 	}
-	
+
 	if groupID != nil {
 		whereClause += fmt.Sprintf(" AND group_id = $%d", argIdx)
 		args = append(args, *groupID)
 		argIdx++
 	}
-	
+
 	if status != "" {
 		whereClause += fmt.Sprintf(" AND status = $%d", argIdx)
 		args = append(args, status)
 		argIdx++
 	}
-	
+
 	if startTime != nil {
 		whereClause += fmt.Sprintf(" AND created_at >= $%d", argIdx)
 		args = append(args, *startTime)
 		argIdx++
 	}
-	
+
 	if endTime != nil {
 		whereClause += fmt.Sprintf(" AND created_at <= $%d", argIdx)
 		args = append(args, *endTime)
 		argIdx++
 	}
-	
+
 	// 查询所有记录（限制最多 10000 条）
 	query := fmt.Sprintf(`
 		SELECT id, user_id, username, action, resource_type, resource_id, resource_name,
@@ -238,29 +238,29 @@ func (l *AuditLogic) ExportAuditLogs(
 		ORDER BY created_at DESC
 		LIMIT 10000
 	`, whereClause)
-	
+
 	var logs []*AuditLog
 	err := l.db.QueryRowsCtx(l.ctx, &logs, query, args...)
 	if err != nil {
 		l.logger.Errorf("导出审计日志失败: %v", err)
 		return nil, fmt.Errorf("导出审计日志失败: %w", err)
 	}
-	
+
 	return logs, nil
 }
 
 // CleanupOldLogs 清理过期日志
 func (l *AuditLogic) CleanupOldLogs(retentionDays int) (int64, error) {
 	cutoffDate := time.Now().AddDate(0, 0, -retentionDays)
-	
+
 	query := `DELETE FROM audit_logs WHERE created_at < $1`
-	
+
 	result, err := l.db.ExecCtx(l.ctx, query, cutoffDate)
 	if err != nil {
 		l.logger.Errorf("清理过期日志失败: %v", err)
 		return 0, fmt.Errorf("清理过期日志失败: %w", err)
 	}
-	
+
 	rows, _ := result.RowsAffected()
 	l.logger.Infof("清理过期日志成功: %d 条 (保留 %d 天)", rows, retentionDays)
 	return rows, nil

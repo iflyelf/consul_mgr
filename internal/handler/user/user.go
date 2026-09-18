@@ -34,12 +34,14 @@ type userUpsertRequest struct {
 // ListUsersHandler 用户列表（来自 Casdoor，支持关键字/分页）
 //
 // 查询参数:
-//   keyword   - 用户名 / 显示名 / 邮箱 模糊搜索
-//   page      - 页码（默认 1）
-//   page_size - 每页条数（默认 20）
+//
+//	keyword   - 用户名 / 显示名 / 邮箱 模糊搜索
+//	page      - 页码（默认 1）
+//	page_size - 每页条数（默认 20）
 //
 // 说明:
-//   全量用户经 Redis 缓存后在内存过滤与分页，避免人员多时每次请求都打 Casdoor。
+//
+//	全量用户经 Redis 缓存后在内存过滤与分页，避免人员多时每次请求都打 Casdoor。
 func ListUsersHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		page, _ := strconv.Atoi(r.URL.Query().Get("page"))

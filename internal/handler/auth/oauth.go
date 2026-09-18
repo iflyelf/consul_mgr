@@ -80,7 +80,8 @@ func ConfigHandler(c *config.Config) http.HandlerFunc {
 // 路径：/api/auth/login
 //
 // 参数:
-//   format=json  返回 JSON（不跳转），便于接口调试
+//
+//	format=json  返回 JSON（不跳转），便于接口调试
 func LoginHandler(casdoorFn func() *casdoor.Client, c *config.Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// 回调地址基于当前请求动态推导，避免写死

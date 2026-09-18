@@ -70,7 +70,7 @@ func main() {
 
 	// 创建服务上下文
 	ctx := svc.NewServiceContext(&c)
-	
+
 	// 创建 REST 服务器
 	opts := []rest.RunOption{
 		rest.WithNotFoundHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -119,7 +119,7 @@ func main() {
 	fmt.Printf("Login URL:     http://%s:%d/api/auth/login\n", c.Host, c.Port)
 	fmt.Printf("Web UI:        http://%s:%d/\n", c.Host, c.Port)
 	fmt.Printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
-	
+
 	server.Start()
 }
 
@@ -129,17 +129,17 @@ func registerHandlers(server *rest.Server, ctx *svc.ServiceContext) {
 	casdoorAuth := middleware.NewCasdoorAuthMiddleware(ctx.Casdoor)
 	permissionMw := middleware.NewPermissionMiddleware(ctx.Casdoor, ctx.RawDB)
 	auditMw := middleware.NewAuditMiddleware(ctx)
-	
+
 	// ============================================================
 	// 公开路由（无需认证）
 	// ============================================================
-	
+
 	server.AddRoute(rest.Route{
 		Method:  http.MethodGet,
 		Path:    "/health",
 		Handler: healthHandler(),
 	})
-	
+
 	server.AddRoutes([]rest.Route{
 		{
 			Method:  http.MethodGet,
@@ -157,40 +157,40 @@ func registerHandlers(server *rest.Server, ctx *svc.ServiceContext) {
 			Handler: authHandler.CallbackHandler(ctx.Casdoor, ctx.Config),
 		},
 	})
-	
+
 	// ============================================================
 	// 需要认证的路由
 	// ============================================================
-	
+
 	// 认证相关
 	server.AddRoute(rest.Route{
 		Method:  http.MethodGet,
 		Path:    "/api/auth/userinfo",
 		Handler: casdoorAuth.Handle(authHandler.GetUserInfoHandler(ctx.Casdoor)),
 	})
-	
+
 	server.AddRoute(rest.Route{
 		Method:  http.MethodPost,
 		Path:    "/api/auth/refresh",
 		Handler: casdoorAuth.Handle(authHandler.RefreshTokenHandler(ctx.Casdoor)),
 	})
-	
+
 	server.AddRoute(rest.Route{
 		Method:  http.MethodPost,
 		Path:    "/api/auth/logout",
 		Handler: casdoorAuth.Handle(authHandler.LogoutHandler(ctx.Config)),
 	})
-	
+
 	// ============================================================
 	// 服务组管理（需要权限：consul_group）
 	// ============================================================
-	
+
 	server.AddRoute(rest.Route{
 		Method:  http.MethodGet,
 		Path:    "/api/groups",
 		Handler: casdoorAuth.Handle(group.ListGroupsHandler(ctx)),
 	})
-	
+
 	server.AddRoute(rest.Route{
 		Method: http.MethodPost,
 		Path:   "/api/groups",
@@ -202,7 +202,7 @@ func registerHandlers(server *rest.Server, ctx *svc.ServiceContext) {
 			),
 		),
 	})
-	
+
 	server.AddRoute(rest.Route{
 		Method: http.MethodGet,
 		Path:   "/api/groups/:id",
@@ -210,7 +210,7 @@ func registerHandlers(server *rest.Server, ctx *svc.ServiceContext) {
 			group.GetGroupHandler(ctx),
 		),
 	})
-	
+
 	server.AddRoute(rest.Route{
 		Method: http.MethodPut,
 		Path:   "/api/groups/:id",
@@ -222,7 +222,7 @@ func registerHandlers(server *rest.Server, ctx *svc.ServiceContext) {
 			),
 		),
 	})
-	
+
 	server.AddRoute(rest.Route{
 		Method: http.MethodDelete,
 		Path:   "/api/groups/:id",
@@ -234,7 +234,7 @@ func registerHandlers(server *rest.Server, ctx *svc.ServiceContext) {
 			),
 		),
 	})
-	
+
 	server.AddRoute(rest.Route{
 		Method: http.MethodPost,
 		Path:   "/api/groups/:id/test",
@@ -250,23 +250,23 @@ func registerHandlers(server *rest.Server, ctx *svc.ServiceContext) {
 			group.DetectDatacenterHandler(ctx),
 		),
 	})
-	
+
 	// ============================================================
 	// 服务管理（需要权限：consul_service）
 	// ============================================================
-	
+
 	server.AddRoute(rest.Route{
 		Method:  http.MethodGet,
 		Path:    "/api/services",
 		Handler: casdoorAuth.Handle(serviceHandler.ListServicesHandler(ctx)),
 	})
-	
+
 	server.AddRoute(rest.Route{
 		Method:  http.MethodGet,
 		Path:    "/api/services/detail",
 		Handler: casdoorAuth.Handle(serviceHandler.GetServiceDetailHandler(ctx)),
 	})
-	
+
 	server.AddRoute(rest.Route{
 		Method: http.MethodDelete,
 		Path:   "/api/services",
@@ -278,7 +278,7 @@ func registerHandlers(server *rest.Server, ctx *svc.ServiceContext) {
 			),
 		),
 	})
-	
+
 	server.AddRoute(rest.Route{
 		Method: http.MethodPost,
 		Path:   "/api/services/batch-delete",
@@ -290,11 +290,11 @@ func registerHandlers(server *rest.Server, ctx *svc.ServiceContext) {
 			),
 		),
 	})
-	
+
 	// ============================================================
 	// 实例管理（需要权限：consul_instance）
 	// ============================================================
-	
+
 	server.AddRoute(rest.Route{
 		Method: http.MethodGet,
 		Path:   "/api/instances",
@@ -304,7 +304,7 @@ func registerHandlers(server *rest.Server, ctx *svc.ServiceContext) {
 			),
 		),
 	})
-	
+
 	server.AddRoute(rest.Route{
 		Method: http.MethodGet,
 		Path:   "/api/instances/:id",
@@ -314,7 +314,7 @@ func registerHandlers(server *rest.Server, ctx *svc.ServiceContext) {
 			),
 		),
 	})
-	
+
 	server.AddRoute(rest.Route{
 		Method: http.MethodPost,
 		Path:   "/api/instances",
@@ -326,7 +326,7 @@ func registerHandlers(server *rest.Server, ctx *svc.ServiceContext) {
 			),
 		),
 	})
-	
+
 	server.AddRoute(rest.Route{
 		Method: http.MethodPut,
 		Path:   "/api/instances/:id",
@@ -338,7 +338,7 @@ func registerHandlers(server *rest.Server, ctx *svc.ServiceContext) {
 			),
 		),
 	})
-	
+
 	// 兼容基于查询参数的更新/删除（前端使用 instance_id 查询参数）
 	server.AddRoute(rest.Route{
 		Method: http.MethodPut,
@@ -351,7 +351,7 @@ func registerHandlers(server *rest.Server, ctx *svc.ServiceContext) {
 			),
 		),
 	})
-	
+
 	server.AddRoute(rest.Route{
 		Method: http.MethodDelete,
 		Path:   "/api/instances",
@@ -363,7 +363,7 @@ func registerHandlers(server *rest.Server, ctx *svc.ServiceContext) {
 			),
 		),
 	})
-	
+
 	server.AddRoute(rest.Route{
 		Method: http.MethodDelete,
 		Path:   "/api/instances/:id",
@@ -375,7 +375,7 @@ func registerHandlers(server *rest.Server, ctx *svc.ServiceContext) {
 			),
 		),
 	})
-	
+
 	server.AddRoute(rest.Route{
 		Method: http.MethodGet,
 		Path:   "/api/instances/export",
@@ -385,7 +385,7 @@ func registerHandlers(server *rest.Server, ctx *svc.ServiceContext) {
 			),
 		),
 	})
-	
+
 	server.AddRoute(rest.Route{
 		Method: http.MethodPost,
 		Path:   "/api/instances/import",
@@ -397,7 +397,7 @@ func registerHandlers(server *rest.Server, ctx *svc.ServiceContext) {
 			),
 		),
 	})
-	
+
 	server.AddRoute(rest.Route{
 		Method: http.MethodPost,
 		Path:   "/api/instances/batch-delete",
@@ -427,7 +427,7 @@ func registerHandlers(server *rest.Server, ctx *svc.ServiceContext) {
 		Path:    "/api/instances/batch-register/preview",
 		Handler: casdoorAuth.Handle(instance.PreviewBatchRegisterHandler(ctx)),
 	})
-	
+
 	server.AddRoute(rest.Route{
 		Method: http.MethodGet,
 		Path:   "/api/instances/datacenters",
@@ -435,7 +435,7 @@ func registerHandlers(server *rest.Server, ctx *svc.ServiceContext) {
 			instance.GetDatacentersHandler(ctx),
 		),
 	})
-	
+
 	server.AddRoute(rest.Route{
 		Method: http.MethodGet,
 		Path:   "/api/instances/services",
@@ -443,11 +443,11 @@ func registerHandlers(server *rest.Server, ctx *svc.ServiceContext) {
 			instance.GetServicesHandler(ctx),
 		),
 	})
-	
+
 	// ============================================================
 	// 权限管理（需要权限：admin）
 	// ============================================================
-	
+
 	// 用户权限
 	server.AddRoute(rest.Route{
 		Method: http.MethodGet,
@@ -458,7 +458,7 @@ func registerHandlers(server *rest.Server, ctx *svc.ServiceContext) {
 			),
 		),
 	})
-	
+
 	server.AddRoute(rest.Route{
 		Method: http.MethodPost,
 		Path:   "/api/permissions/users",
@@ -470,7 +470,7 @@ func registerHandlers(server *rest.Server, ctx *svc.ServiceContext) {
 			),
 		),
 	})
-	
+
 	server.AddRoute(rest.Route{
 		Method: http.MethodDelete,
 		Path:   "/api/permissions/users",
@@ -482,7 +482,7 @@ func registerHandlers(server *rest.Server, ctx *svc.ServiceContext) {
 			),
 		),
 	})
-	
+
 	// 角色权限
 	server.AddRoute(rest.Route{
 		Method: http.MethodGet,
@@ -493,7 +493,7 @@ func registerHandlers(server *rest.Server, ctx *svc.ServiceContext) {
 			),
 		),
 	})
-	
+
 	server.AddRoute(rest.Route{
 		Method: http.MethodPost,
 		Path:   "/api/permissions/roles",
@@ -505,7 +505,7 @@ func registerHandlers(server *rest.Server, ctx *svc.ServiceContext) {
 			),
 		),
 	})
-	
+
 	server.AddRoute(rest.Route{
 		Method: http.MethodDelete,
 		Path:   "/api/permissions/roles",
@@ -517,7 +517,7 @@ func registerHandlers(server *rest.Server, ctx *svc.ServiceContext) {
 			),
 		),
 	})
-	
+
 	// ============================================================
 	// 人员组织：用户 / 团队 / 角色（需要管理员权限）
 	// ============================================================
@@ -706,7 +706,7 @@ func registerHandlers(server *rest.Server, ctx *svc.ServiceContext) {
 	// ============================================================
 	// 审计日志（需要权限：audit_log）
 	// ============================================================
-	
+
 	server.AddRoute(rest.Route{
 		Method: http.MethodGet,
 		Path:   "/api/audit-logs",
@@ -716,7 +716,7 @@ func registerHandlers(server *rest.Server, ctx *svc.ServiceContext) {
 			),
 		),
 	})
-	
+
 	server.AddRoute(rest.Route{
 		Method: http.MethodGet,
 		Path:   "/api/audit-logs/export",
@@ -726,11 +726,11 @@ func registerHandlers(server *rest.Server, ctx *svc.ServiceContext) {
 			),
 		),
 	})
-	
+
 	// ============================================================
 	// 静态文件服务（前端）
 	// ============================================================
-	
+
 	if ctx.Config.Web.Embedded {
 		log.Println("启用嵌入式 Web 界面")
 	}

@@ -9,9 +9,9 @@ import (
 	"fmt"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
-	"strings"
 
 	"github.com/hashicorp/consul/api"
 	"github.com/zeromicro/go-zero/core/logx"
@@ -37,6 +37,7 @@ func getConsulClientWithAddr(ctx context.Context, svcCtx *svc.ServiceContext, gr
 	}
 	return client.GetAPIClient(), client.Address(), nil
 }
+
 type ListInstancesLogic struct {
 	ctx    context.Context
 	svcCtx *svc.ServiceContext
@@ -61,10 +62,11 @@ func (l *ListInstancesLogic) listInstancesByService(client *api.Client, groupID 
 // ListInstancesCached 获取单个服务的实例（带缓存），供其他模块复用
 //
 // 参数:
-//   ctx, svcCtx - 上下文与服务上下文
-//   client      - Consul 客户端
-//   groupID     - 服务组 ID
-//   serviceName - 服务名
+//
+//	ctx, svcCtx - 上下文与服务上下文
+//	client      - Consul 客户端
+//	groupID     - 服务组 ID
+//	serviceName - 服务名
 func ListInstancesCached(ctx context.Context, svcCtx *svc.ServiceContext, client *api.Client, groupID int64, serviceName string) []types.ConsulInstanceInfo {
 	cacheKey := svcCtx.CacheKeyInstancesByService(groupID, serviceName)
 	var cached []types.ConsulInstanceInfo
@@ -374,9 +376,10 @@ func NewBatchDeleteInstancesLogic(ctx context.Context, svcCtx *svc.ServiceContex
 // BatchDeleteInstances 批量删除实例
 //
 // 返回:
-//   int - 成功数量
-//   []string - 失败的实例ID
-//   error - 致命错误
+//
+//	int - 成功数量
+//	[]string - 失败的实例ID
+//	error - 致命错误
 func (l *BatchDeleteInstancesLogic) BatchDeleteInstances(groupID int64, instanceIDs []string) (int, []string, error) {
 	client, addr, err := getConsulClientWithAddr(l.ctx, l.svcCtx, groupID)
 	if err != nil {
@@ -543,16 +546,18 @@ func buildRegistration(instance *types.RegisterInstanceRequest) *api.AgentServic
 // ImportInstances 批量导入实例
 //
 // 参数:
-//   groupID   - 服务组 ID
-//   format    - 数据格式（json/yaml/csv）
-//   data      - 文件内容
-//   overwrite - 是否强制覆盖已存在的实例（false 时跳过已存在项）
+//
+//	groupID   - 服务组 ID
+//	format    - 数据格式（json/yaml/csv）
+//	data      - 文件内容
+//	overwrite - 是否强制覆盖已存在的实例（false 时跳过已存在项）
 //
 // 返回:
-//   int - 成功数量（含覆盖）
-//   int - 跳过数量（已存在且未开启覆盖）
-//   int - 失败数量
-//   error - 致命错误（解析失败等）
+//
+//	int - 成功数量（含覆盖）
+//	int - 跳过数量（已存在且未开启覆盖）
+//	int - 失败数量
+//	error - 致命错误（解析失败等）
 func (l *ImportInstancesLogic) ImportInstances(groupID int64, format string, data []byte, overwrite bool) (int, int, int, error) {
 	client, err := getConsulClient(l.ctx, l.svcCtx, groupID)
 	if err != nil {
@@ -619,10 +624,11 @@ func (l *ImportInstancesLogic) ImportInstances(groupID int64, format string, dat
 //  2. 对待注册集合统一并发注册（单一并发池）。
 //
 // 返回:
-//   success - 成功数
-//   skipped - 跳过数（批内重复 或 已存在且不覆盖）
-//   failed  - 失败数
-//   errs    - 失败详情（已排序）
+//
+//	success - 成功数
+//	skipped - 跳过数（批内重复 或 已存在且不覆盖）
+//	failed  - 失败数
+//	errs    - 失败详情（已排序）
 func registerInstancesParallel(
 	client *api.Client,
 	svcCtx *svc.ServiceContext,
@@ -937,11 +943,12 @@ func NewBatchRegisterInstancesLogic(ctx context.Context, svcCtx *svc.ServiceCont
 // 支持 "10.1.255.24-26:80,10.1.255.38:443,10.1.255.0/24:8080" 形式。
 //
 // 返回:
-//   int - 成功数量
-//   int - 跳过数量（已存在且未开启覆盖）
-//   int - 失败数量
-//   []string - 展开后的实例 ID 列表
-//   error - 致命错误
+//
+//	int - 成功数量
+//	int - 跳过数量（已存在且未开启覆盖）
+//	int - 失败数量
+//	[]string - 展开后的实例 ID 列表
+//	error - 致命错误
 func (l *BatchRegisterInstancesLogic) BatchRegisterInstances(req *types.BatchRegisterRequest) (int, int, int, []string, error) {
 	client, err := getConsulClient(l.ctx, l.svcCtx, req.GroupID)
 	if err != nil {

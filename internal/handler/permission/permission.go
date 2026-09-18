@@ -36,7 +36,7 @@ func GrantUserPermissionHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 			})
 			return
 		}
-		
+
 		logic := permission.NewPermissionLogic(r.Context(), ctx.RawDB)
 		result, err := logic.GrantUserPermission(req.GroupID, req.UserID, req.Permissions)
 		if err != nil {
@@ -46,7 +46,7 @@ func GrantUserPermissionHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 			})
 			return
 		}
-		
+
 		httpx.WriteJson(w, http.StatusOK, map[string]interface{}{
 			"code":    200,
 			"message": "授予权限成功",
@@ -60,7 +60,7 @@ func RevokeUserPermissionHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		groupID, _ := strconv.ParseInt(r.URL.Query().Get("group_id"), 10, 64)
 		userID := r.URL.Query().Get("user_id")
-		
+
 		if groupID == 0 || userID == "" {
 			httpx.WriteJson(w, http.StatusBadRequest, map[string]interface{}{
 				"code":    400,
@@ -68,7 +68,7 @@ func RevokeUserPermissionHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 			})
 			return
 		}
-		
+
 		logic := permission.NewPermissionLogic(r.Context(), ctx.RawDB)
 		err := logic.RevokeUserPermission(groupID, userID)
 		if err != nil {
@@ -78,7 +78,7 @@ func RevokeUserPermissionHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 			})
 			return
 		}
-		
+
 		httpx.WriteJson(w, http.StatusOK, map[string]interface{}{
 			"code":    200,
 			"message": "撤销权限成功",
@@ -90,7 +90,7 @@ func RevokeUserPermissionHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 func ListUserPermissionsHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		groupID, _ := strconv.ParseInt(r.URL.Query().Get("group_id"), 10, 64)
-		
+
 		if groupID == 0 {
 			httpx.WriteJson(w, http.StatusBadRequest, map[string]interface{}{
 				"code":    400,
@@ -98,7 +98,7 @@ func ListUserPermissionsHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 			})
 			return
 		}
-		
+
 		logic := permission.NewPermissionLogic(r.Context(), ctx.RawDB)
 		perms, err := logic.ListUserPermissions(groupID)
 		if err != nil {
@@ -108,7 +108,7 @@ func ListUserPermissionsHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 			})
 			return
 		}
-		
+
 		httpx.WriteJson(w, http.StatusOK, map[string]interface{}{
 			"code":    200,
 			"message": "success",
@@ -128,7 +128,7 @@ func GrantRolePermissionHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 			})
 			return
 		}
-		
+
 		logic := permission.NewPermissionLogic(r.Context(), ctx.RawDB)
 		result, err := logic.GrantRolePermission(req.GroupID, req.RoleName, req.Permissions)
 		if err != nil {
@@ -138,7 +138,7 @@ func GrantRolePermissionHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 			})
 			return
 		}
-		
+
 		httpx.WriteJson(w, http.StatusOK, map[string]interface{}{
 			"code":    200,
 			"message": "授予权限成功",
@@ -152,7 +152,7 @@ func RevokeRolePermissionHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		groupID, _ := strconv.ParseInt(r.URL.Query().Get("group_id"), 10, 64)
 		roleName := r.URL.Query().Get("role_name")
-		
+
 		if groupID == 0 || roleName == "" {
 			httpx.WriteJson(w, http.StatusBadRequest, map[string]interface{}{
 				"code":    400,
@@ -160,7 +160,7 @@ func RevokeRolePermissionHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 			})
 			return
 		}
-		
+
 		logic := permission.NewPermissionLogic(r.Context(), ctx.RawDB)
 		err := logic.RevokeRolePermission(groupID, roleName)
 		if err != nil {
@@ -170,7 +170,7 @@ func RevokeRolePermissionHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 			})
 			return
 		}
-		
+
 		httpx.WriteJson(w, http.StatusOK, map[string]interface{}{
 			"code":    200,
 			"message": "撤销权限成功",
@@ -182,7 +182,7 @@ func RevokeRolePermissionHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 func ListRolePermissionsHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		groupID, _ := strconv.ParseInt(r.URL.Query().Get("group_id"), 10, 64)
-		
+
 		if groupID == 0 {
 			httpx.WriteJson(w, http.StatusBadRequest, map[string]interface{}{
 				"code":    400,
@@ -190,7 +190,7 @@ func ListRolePermissionsHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 			})
 			return
 		}
-		
+
 		logic := permission.NewPermissionLogic(r.Context(), ctx.RawDB)
 		perms, err := logic.ListRolePermissions(groupID)
 		if err != nil {
@@ -200,7 +200,7 @@ func ListRolePermissionsHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 			})
 			return
 		}
-		
+
 		httpx.WriteJson(w, http.StatusOK, map[string]interface{}{
 			"code":    200,
 			"message": "success",

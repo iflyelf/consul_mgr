@@ -17,21 +17,21 @@ func getSPAHandler() http.Handler {
 	if err != nil {
 		panic(err)
 	}
-	
+
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := strings.TrimPrefix(r.URL.Path, "/")
-		
+
 		// 如果是 API 请求或健康检查，不处理
 		if strings.HasPrefix(path, "api/") || path == "health" {
 			http.NotFound(w, r)
 			return
 		}
-		
+
 		// 如果路径为空，使用 index.html
 		if path == "" {
 			path = "index.html"
 		}
-		
+
 		// 尝试读取文件
 		file, err := distFS.Open(path)
 		if err != nil {
@@ -51,7 +51,7 @@ func getSPAHandler() http.Handler {
 			}
 		}
 		defer file.Close()
-		
+
 		// 设置正确的 Content-Type
 		if strings.HasSuffix(path, ".js") {
 			w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
@@ -68,7 +68,7 @@ func getSPAHandler() http.Handler {
 		} else if strings.HasSuffix(path, ".png") {
 			w.Header().Set("Content-Type", "image/png")
 		}
-		
+
 		// 缓存头：带 hash 的资源长缓存；index.html 必须每次校验，
 		// 避免发版后仍使用旧 HTML（引用已删除的旧 chunk）。
 		if strings.HasPrefix(path, "assets/") {

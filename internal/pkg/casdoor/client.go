@@ -46,11 +46,13 @@ type Client struct {
 // NewClient 创建 Casdoor 客户端
 //
 // 参数:
-//   config - Casdoor 配置信息
+//
+//	config - Casdoor 配置信息
 //
 // 返回:
-//   *Client - Casdoor 客户端实例
-//   error - 错误信息
+//
+//	*Client - Casdoor 客户端实例
+//	error - 错误信息
 func NewClient(config *Config) (*Client, error) {
 	// 验证配置
 	if config.Endpoint == "" {
@@ -251,10 +253,12 @@ func genState() string {
 // 说明：使用 PublicEndpoint（浏览器可达地址）构造，保证跨域名/IP 部署可用
 //
 // 参数:
-//   redirectUri - 回调地址
+//
+//	redirectUri - 回调地址
 //
 // 返回:
-//   string - 登录 URL
+//
+//	string - 登录 URL
 func (c *Client) GetSigninUrl(redirectUri, state string) string {
 	base := strings.TrimRight(c.browserEndpoint(), "/")
 	return fmt.Sprintf(
@@ -272,10 +276,12 @@ func GenState() string { return genState() }
 // GetSignupUrl 获取注册 URL
 //
 // 参数:
-//   redirectUri - 回调地址
+//
+//	redirectUri - 回调地址
 //
 // 返回:
-//   string - 注册 URL
+//
+//	string - 注册 URL
 func (c *Client) GetSignupUrl(redirectUri string) string {
 	base := strings.TrimRight(c.browserEndpoint(), "/")
 	return fmt.Sprintf(
@@ -290,11 +296,13 @@ func (c *Client) GetSignupUrl(redirectUri string) string {
 // GetToken 通过授权码获取 Token
 //
 // 参数:
-//   code - 授权码
+//
+//	code - 授权码
 //
 // 返回:
-//   string - Access Token
-//   error - 错误信息
+//
+//	string - Access Token
+//	error - 错误信息
 func (c *Client) GetToken(code string) (string, error) {
 	token, err := c.sdk.GetOAuthToken(code, "")
 	if err != nil {
@@ -306,15 +314,18 @@ func (c *Client) GetToken(code string) (string, error) {
 // ParseToken 解析 JWT Token（不验证签名）
 //
 // 参数:
-//   token - JWT Token
+//
+//	token - JWT Token
 //
 // 返回:
-//   *Claims - Token 声明信息
-//   error - 错误信息
+//
+//	*Claims - Token 声明信息
+//	error - 错误信息
 //
 // 说明:
-//   由于 Token 是后端直接从 Casdoor 换取的（可信渠道），
-//   此处只需解码 JWT 载荷获取用户信息，无需再用证书验证签名。
+//
+//	由于 Token 是后端直接从 Casdoor 换取的（可信渠道），
+//	此处只需解码 JWT 载荷获取用户信息，无需再用证书验证签名。
 func (c *Client) ParseToken(token string) (*Claims, error) {
 	// 使用 jwt 库解析但不验证签名
 	parsed, err := jwt.Parse(token, func(t *jwt.Token) (interface{}, error) {
@@ -462,11 +473,13 @@ func (c *Client) ParseToken(token string) (*Claims, error) {
 // GetUserInfo 获取用户详细信息
 //
 // 参数:
-//   username - 用户名
+//
+//	username - 用户名
 //
 // 返回:
-//   *UserInfo - 用户信息
-//   error - 错误信息
+//
+//	*UserInfo - 用户信息
+//	error - 错误信息
 func (c *Client) GetUserInfo(username string) (*UserInfo, error) {
 	user, err := c.sdk.GetUser(username)
 	if err != nil {
@@ -493,11 +506,13 @@ func (c *Client) GetUserInfo(username string) (*UserInfo, error) {
 // GetUserRoles 获取用户的角色列表
 //
 // 参数:
-//   username - 用户名
+//
+//	username - 用户名
 //
 // 返回:
-//   []string - 角色名称列表
-//   error - 错误信息
+//
+//	[]string - 角色名称列表
+//	error - 错误信息
 func (c *Client) GetUserRoles(username string) ([]string, error) {
 	user, err := c.sdk.GetUser(username)
 	if err != nil {
@@ -519,18 +534,20 @@ func (c *Client) GetUserRoles(username string) ([]string, error) {
 // CheckPermission 检查用户是否有指定权限
 //
 // 参数:
-//   username - 用户名
-//   resource - 资源类型（如: consul_group, consul_service）
-//   action - 操作类型（如: read, write, delete）
+//
+//	username - 用户名
+//	resource - 资源类型（如: consul_group, consul_service）
+//	action - 操作类型（如: read, write, delete）
 //
 // 返回:
-//   bool - 是否有权限
-//   error - 错误信息
+//
+//	bool - 是否有权限
+//	error - 错误信息
 //
 // 权限检查逻辑：
-//   1. 获取用户的所有权限
-//   2. 遍历权限列表，匹配资源类型和操作
-//   3. 支持通配符匹配（* 表示所有）
+//  1. 获取用户的所有权限
+//  2. 遍历权限列表，匹配资源类型和操作
+//  3. 支持通配符匹配（* 表示所有）
 func (c *Client) CheckPermission(username, resource, action string) (bool, error) {
 	user, err := c.sdk.GetUser(username)
 	if err != nil {
@@ -582,13 +599,15 @@ func (c *Client) CheckPermission(username, resource, action string) (bool, error
 // CheckPermissionByToken 通过 Token 检查权限
 //
 // 参数:
-//   token - JWT Token
-//   resource - 资源类型
-//   action - 操作类型
+//
+//	token - JWT Token
+//	resource - 资源类型
+//	action - 操作类型
 //
 // 返回:
-//   bool - 是否有权限
-//   error - 错误信息
+//
+//	bool - 是否有权限
+//	error - 错误信息
 func (c *Client) CheckPermissionByToken(token, resource, action string) (bool, error) {
 	// 解析 Token 获取用户信息
 	claims, err := c.ParseToken(token)
@@ -641,11 +660,13 @@ func (c *Client) CheckPermissionByToken(token, resource, action string) (bool, e
 // RefreshToken 刷新 Token
 //
 // 参数:
-//   refreshToken - 刷新令牌
+//
+//	refreshToken - 刷新令牌
 //
 // 返回:
-//   string - 新的 Access Token
-//   error - 错误信息
+//
+//	string - 新的 Access Token
+//	error - 错误信息
 func (c *Client) RefreshToken(refreshToken string) (string, error) {
 	token, err := c.sdk.RefreshOAuthToken(refreshToken)
 	if err != nil {
@@ -657,7 +678,8 @@ func (c *Client) RefreshToken(refreshToken string) (string, error) {
 // GetConfig 获取客户端配置
 //
 // 返回:
-//   *Config - 配置信息
+//
+//	*Config - 配置信息
 func (c *Client) GetConfig() *Config {
 	return c.config
 }

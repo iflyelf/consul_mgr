@@ -21,13 +21,13 @@ func ListAuditLogsHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 		action := r.URL.Query().Get("action")
 		resourceType := r.URL.Query().Get("resource_type")
 		status := r.URL.Query().Get("status")
-		
+
 		var groupID *int64
 		if gid := r.URL.Query().Get("group_id"); gid != "" {
 			id, _ := strconv.ParseInt(gid, 10, 64)
 			groupID = &id
 		}
-		
+
 		var startTime, endTime *time.Time
 		if st := r.URL.Query().Get("start_time"); st != "" {
 			t, _ := time.Parse(time.RFC3339, st)
@@ -37,22 +37,22 @@ func ListAuditLogsHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 			t, _ := time.Parse(time.RFC3339, et)
 			endTime = &t
 		}
-		
+
 		page, _ := strconv.Atoi(r.URL.Query().Get("page"))
 		pageSize, _ := strconv.Atoi(r.URL.Query().Get("page_size"))
-		
+
 		if page <= 0 {
 			page = 1
 		}
 		if pageSize <= 0 {
 			pageSize = 20
 		}
-		
+
 		logic := audit.NewAuditLogic(r.Context(), ctx.DB)
 		logs, total, err := logic.ListAuditLogs(
 			userID, username, action, resourceType, groupID, status,
 			startTime, endTime, page, pageSize)
-		
+
 		if err != nil {
 			httpx.WriteJson(w, http.StatusInternalServerError, map[string]interface{}{
 				"code":    500,
@@ -60,7 +60,7 @@ func ListAuditLogsHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 			})
 			return
 		}
-		
+
 		httpx.WriteJson(w, http.StatusOK, map[string]interface{}{
 			"code":    200,
 			"message": "success",
@@ -82,13 +82,13 @@ func ExportAuditLogsHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 		action := r.URL.Query().Get("action")
 		resourceType := r.URL.Query().Get("resource_type")
 		status := r.URL.Query().Get("status")
-		
+
 		var groupID *int64
 		if gid := r.URL.Query().Get("group_id"); gid != "" {
 			id, _ := strconv.ParseInt(gid, 10, 64)
 			groupID = &id
 		}
-		
+
 		var startTime, endTime *time.Time
 		if st := r.URL.Query().Get("start_time"); st != "" {
 			t, _ := time.Parse(time.RFC3339, st)
@@ -98,12 +98,12 @@ func ExportAuditLogsHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 			t, _ := time.Parse(time.RFC3339, et)
 			endTime = &t
 		}
-		
+
 		logic := audit.NewAuditLogic(r.Context(), ctx.DB)
 		logs, err := logic.ExportAuditLogs(
 			userID, username, action, resourceType, groupID, status,
 			startTime, endTime)
-		
+
 		if err != nil {
 			httpx.WriteJson(w, http.StatusInternalServerError, map[string]interface{}{
 				"code":    500,
@@ -111,31 +111,31 @@ func ExportAuditLogsHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 			})
 			return
 		}
-		
+
 		// 设置 CSV 响应头
 		w.Header().Set("Content-Type", "text/csv; charset=utf-8")
 		w.Header().Set("Content-Disposition", "attachment; filename=audit_logs.csv")
-		
+
 		// 写入 UTF-8 BOM（让 Excel 正确识别编码）
 		w.Write([]byte{0xEF, 0xBB, 0xBF})
-		
+
 		// 创建 CSV Writer
 		writer := csv.NewWriter(w)
 		defer writer.Flush()
-		
+
 		// 写入表头
 		writer.Write([]string{
-			"ID", "用户ID", "用户名", "操作", "资源类型", "资源ID", 
+			"ID", "用户ID", "用户名", "操作", "资源类型", "资源ID",
 			"资源名称", "服务组ID", "状态", "IP地址", "创建时间",
 		})
-		
+
 		// 写入数据
 		for _, log := range logs {
 			groupIDStr := ""
 			if log.GroupID != nil {
 				groupIDStr = strconv.FormatInt(*log.GroupID, 10)
 			}
-			
+
 			writer.Write([]string{
 				strconv.FormatInt(log.ID, 10),
 				log.UserID,

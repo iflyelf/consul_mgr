@@ -82,9 +82,10 @@ func (c *Client) Address() string {
 // DetectDatacenter 自动检测 Consul 的数据中心
 //
 // 返回:
-//   string - 数据中心名称
-//   string - 节点名称
-//   error - 错误信息
+//
+//	string - 数据中心名称
+//	string - 节点名称
+//	error - 错误信息
 func (c *Client) DetectDatacenter() (string, string, error) {
 	self, err := c.client.Agent().Self()
 	if err != nil {
@@ -157,9 +158,10 @@ func (c *Client) RegisterService(registration *api.AgentServiceRegistration) err
 // DeregisterService 注销服务实例（支持集群）
 //
 // 说明:
-//   Consul 的 Agent.ServiceDeregister 只能注销「本 Agent 注册」的服务。
-//   集群中若服务注册在其他节点，本节点 Agent 会返回 404 Unknown service ID。
-//   此时回退到 Catalog.Deregister（可按节点注销集群中任意实例）。
+//
+//	Consul 的 Agent.ServiceDeregister 只能注销「本 Agent 注册」的服务。
+//	集群中若服务注册在其他节点，本节点 Agent 会返回 404 Unknown service ID。
+//	此时回退到 Catalog.Deregister（可按节点注销集群中任意实例）。
 func (c *Client) DeregisterService(serviceID string) error {
 	return DeregisterService(c.client, serviceID)
 }
@@ -303,7 +305,7 @@ func (c *Client) UpdateServiceTags(serviceID string, tags []string) error {
 	if err != nil {
 		return err
 	}
-	
+
 	registration := &api.AgentServiceRegistration{
 		ID:      service.ID,
 		Name:    service.Service,
@@ -312,7 +314,7 @@ func (c *Client) UpdateServiceTags(serviceID string, tags []string) error {
 		Address: service.Address,
 		Meta:    service.Meta,
 	}
-	
+
 	return c.RegisterService(registration)
 }
 
@@ -322,7 +324,7 @@ func (c *Client) UpdateServiceMeta(serviceID string, meta map[string]string) err
 	if err != nil {
 		return err
 	}
-	
+
 	registration := &api.AgentServiceRegistration{
 		ID:      service.ID,
 		Name:    service.Service,
@@ -331,18 +333,20 @@ func (c *Client) UpdateServiceMeta(serviceID string, meta map[string]string) err
 		Address: service.Address,
 		Meta:    meta,
 	}
-	
+
 	return c.RegisterService(registration)
 }
 
 // FriendlyError 将底层网络/Consul 错误转换为面向用户的友好提示
 //
 // 参数:
-//   address - Consul 地址
-//   err     - 原始错误
+//
+//	address - Consul 地址
+//	err     - 原始错误
 //
 // 返回:
-//   error - 友好错误（含原始信息）
+//
+//	error - 友好错误（含原始信息）
 func FriendlyError(address string, err error) error {
 	if err == nil {
 		return nil

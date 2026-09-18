@@ -6,9 +6,9 @@
 //     - permissions：直接权限
 //     - role_ids：引用角色的权限（取并集）
 //     - services：授权的服务名
-//         · 空 []        = 无任何服务权限
-//         · ["*"]        = 该服务组下全部服务
-//         · ["a","b"]    = 仅限这些服务
+//     · 空 []        = 无任何服务权限
+//     · ["*"]        = 该服务组下全部服务
+//     · ["a","b"]    = 仅限这些服务
 //
 // 权限取值: read / write / delete，支持 "*" 通配。
 package perm
@@ -36,10 +36,11 @@ func New(db *sql.DB) *Checker {
 // Check 判断用户是否具备某操作权限
 //
 // 参数:
-//   userID      - Casdoor 用户 ID
-//   groupID     - 服务组 ID
-//   serviceName - 服务名；为空表示「组级」判定（仅 all 授权可通过）
-//   action      - read / write / delete
+//
+//	userID      - Casdoor 用户 ID
+//	groupID     - 服务组 ID
+//	serviceName - 服务名；为空表示「组级」判定（仅 all 授权可通过）
+//	action      - read / write / delete
 func (c *Checker) Check(ctx context.Context, userID string, groupID int64, serviceName, action string) (bool, error) {
 	if c == nil || c.db == nil {
 		return false, nil
@@ -170,8 +171,9 @@ func serviceAllowed(services []string, serviceName string) bool {
 // AllowedServices 返回用户在指定服务组被授权的服务集合
 //
 // 返回:
-//   all      - 是否拥有全部服务权限
-//   services - 明确授权的服务名（all=false 时有意义）
+//
+//	all      - 是否拥有全部服务权限
+//	services - 明确授权的服务名（all=false 时有意义）
 func (c *Checker) AllowedServices(ctx context.Context, userID string, groupID int64) (bool, []string, error) {
 	if c == nil || c.db == nil {
 		return false, nil, nil

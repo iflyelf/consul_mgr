@@ -30,11 +30,13 @@ func NewOAuthLogic(ctx context.Context, client *casdoor.Client) *OAuthLogic {
 // GetLoginUrl 获取登录 URL
 //
 // 参数:
-//   redirectUri - 回调地址
+//
+//	redirectUri - 回调地址
 //
 // 返回:
-//   *types.LoginResponse - 登录响应
-//   error - 错误信息
+//
+//	*types.LoginResponse - 登录响应
+//	error - 错误信息
 func (l *OAuthLogic) GetLoginUrl(redirectUri, state string) (*types.LoginResponse, error) {
 	// 获取 Casdoor 登录 URL
 	loginUrl := l.client.GetSigninUrl(redirectUri, state)
@@ -49,11 +51,13 @@ func (l *OAuthLogic) GetLoginUrl(redirectUri, state string) (*types.LoginRespons
 // HandleCallback 处理 OAuth 回调
 //
 // 参数:
-//   req - 回调请求
+//
+//	req - 回调请求
 //
 // 返回:
-//   *types.CallbackResponse - 回调响应
-//   error - 错误信息
+//
+//	*types.CallbackResponse - 回调响应
+//	error - 错误信息
 func (l *OAuthLogic) HandleCallback(req *types.CallbackRequest) (*types.CallbackResponse, error) {
 	// 1. 验证参数
 	if req.Code == "" {
@@ -117,11 +121,13 @@ func (l *OAuthLogic) HandleCallback(req *types.CallbackRequest) (*types.Callback
 // RefreshToken 刷新 Token
 //
 // 参数:
-//   req - 刷新请求
+//
+//	req - 刷新请求
 //
 // 返回:
-//   *types.RefreshTokenResponse - 刷新响应
-//   error - 错误信息
+//
+//	*types.RefreshTokenResponse - 刷新响应
+//	error - 错误信息
 func (l *OAuthLogic) RefreshToken(req *types.RefreshTokenRequest) (*types.RefreshTokenResponse, error) {
 	// 1. 验证参数
 	if req.RefreshToken == "" {
@@ -153,11 +159,13 @@ func (l *OAuthLogic) RefreshToken(req *types.RefreshTokenRequest) (*types.Refres
 // GetCurrentUser 获取当前用户信息
 //
 // 参数:
-//   token - 访问令牌
+//
+//	token - 访问令牌
 //
 // 返回:
-//   *types.UserInfo - 用户信息
-//   error - 错误信息
+//
+//	*types.UserInfo - 用户信息
+//	error - 错误信息
 func (l *OAuthLogic) GetCurrentUser(token string) (*types.UserInfo, error) {
 	// 1. 解析 Token
 	claims, err := l.client.ParseToken(token)

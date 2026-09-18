@@ -59,11 +59,13 @@ type PermissionMiddleware struct {
 // NewPermissionMiddleware 创建权限检查中间件
 //
 // 参数:
-//   casdoorFn - 返回当前 Casdoor 客户端的函数（每次请求时调用，支持热重载）
-//   db        - 原生数据库连接（PostgreSQL TEXT[] 需 pq.Array 扫描）
+//
+//	casdoorFn - 返回当前 Casdoor 客户端的函数（每次请求时调用，支持热重载）
+//	db        - 原生数据库连接（PostgreSQL TEXT[] 需 pq.Array 扫描）
 //
 // 返回:
-//   *PermissionMiddleware - 中间件实例
+//
+//	*PermissionMiddleware - 中间件实例
 func NewPermissionMiddleware(casdoorFn func() *casdoor.Client, db *sql.DB) *PermissionMiddleware {
 	return &PermissionMiddleware{
 		casdoorFn: casdoorFn,
@@ -75,14 +77,17 @@ func NewPermissionMiddleware(casdoorFn func() *casdoor.Client, db *sql.DB) *Perm
 // RequirePermission 要求指定权限（中间件生成器）
 //
 // 参数:
-//   resource - 资源类型（如: consul_group, consul_service, consul_instance）
-//   action - 操作类型（如: read, write, delete, admin）
+//
+//	resource - 资源类型（如: consul_group, consul_service, consul_instance）
+//	action - 操作类型（如: read, write, delete, admin）
 //
 // 返回:
-//   func(http.HandlerFunc) http.HandlerFunc - 中间件函数
+//
+//	func(http.HandlerFunc) http.HandlerFunc - 中间件函数
 //
 // 使用示例：
-//   router.Use(permissionMw.RequirePermission("consul_group", "write"))
+//
+//	router.Use(permissionMw.RequirePermission("consul_group", "write"))
 func (m *PermissionMiddleware) RequirePermission(resource, action string) func(http.HandlerFunc) http.HandlerFunc {
 	return func(next http.HandlerFunc) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
@@ -139,18 +144,21 @@ func (m *PermissionMiddleware) RequirePermission(resource, action string) func(h
 // RequireServiceGroupAccess 要求服务组访问权限（中间件生成器）
 //
 // 参数:
-//   action - 操作类型（read, write, delete, admin）
+//
+//	action - 操作类型（read, write, delete, admin）
 //
 // 返回:
-//   func(http.HandlerFunc) http.HandlerFunc - 中间件函数
+//
+//	func(http.HandlerFunc) http.HandlerFunc - 中间件函数
 //
 // 权限检查逻辑：
-//   1. 检查全局权限（consul_service:action）
-//   2. 检查服务组级别权限（从数据库查询）
-//   3. 支持用户级权限和角色级权限
+//  1. 检查全局权限（consul_service:action）
+//  2. 检查服务组级别权限（从数据库查询）
+//  3. 支持用户级权限和角色级权限
 //
 // 使用示例：
-//   router.Use(permissionMw.RequireServiceGroupAccess("write"))
+//
+//	router.Use(permissionMw.RequireServiceGroupAccess("write"))
 func (m *PermissionMiddleware) RequireServiceGroupAccess(action string) func(http.HandlerFunc) http.HandlerFunc {
 	return func(next http.HandlerFunc) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
@@ -271,10 +279,12 @@ func (m *PermissionMiddleware) RequireServiceGroupAccess(action string) func(htt
 // RequireAdmin 要求管理员权限（中间件生成器）
 //
 // 返回:
-//   func(http.HandlerFunc) http.HandlerFunc - 中间件函数
+//
+//	func(http.HandlerFunc) http.HandlerFunc - 中间件函数
 //
 // 使用示例：
-//   router.Use(permissionMw.RequireAdmin())
+//
+//	router.Use(permissionMw.RequireAdmin())
 func (m *PermissionMiddleware) RequireAdmin() func(http.HandlerFunc) http.HandlerFunc {
 	return func(next http.HandlerFunc) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
@@ -300,13 +310,16 @@ func (m *PermissionMiddleware) RequireAdmin() func(http.HandlerFunc) http.Handle
 // RequireRole 要求指定角色（中间件生成器）
 //
 // 参数:
-//   roles - 允许的角色列表
+//
+//	roles - 允许的角色列表
 //
 // 返回:
-//   func(http.HandlerFunc) http.HandlerFunc - 中间件函数
+//
+//	func(http.HandlerFunc) http.HandlerFunc - 中间件函数
 //
 // 使用示例：
-//   router.Use(permissionMw.RequireRole("admin", "operator"))
+//
+//	router.Use(permissionMw.RequireRole("admin", "operator"))
 func (m *PermissionMiddleware) RequireRole(roles ...string) func(http.HandlerFunc) http.HandlerFunc {
 	return func(next http.HandlerFunc) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
@@ -352,20 +365,24 @@ func (m *PermissionMiddleware) RequireRole(roles ...string) func(http.HandlerFun
 // OptionalAuth 可选认证中间件（不强制要求登录）
 //
 // 参数:
-//   next - 下一个处理函数
+//
+//	next - 下一个处理函数
 //
 // 返回:
-//   http.HandlerFunc - 包装后的处理函数
+//
+//	http.HandlerFunc - 包装后的处理函数
 //
 // 功能：
-//   如果提供了 Token，则验证并提取用户信息
-//   如果没有提供 Token，则继续执行，但 Context 中没有用户信息
+//
+//	如果提供了 Token，则验证并提取用户信息
+//	如果没有提供 Token，则继续执行，但 Context 中没有用户信息
 //
 // 使用场景：
-//   某些接口对登录用户和未登录用户有不同的行为
+//
+//	某些接口对登录用户和未登录用户有不同的行为
 func (m *PermissionMiddleware) OptionalAuth(next http.HandlerFunc) http.HandlerFunc {
 	authMiddleware := NewCasdoorAuthMiddleware(m.casdoorFn)
-	
+
 	return func(w http.ResponseWriter, r *http.Request) {
 		// 尝试提取 Token
 		token := extractToken(r)

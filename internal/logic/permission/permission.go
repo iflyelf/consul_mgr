@@ -53,7 +53,7 @@ func (l *PermissionLogic) GrantUserPermission(groupID int64, userID string, perm
 		DO UPDATE SET permissions = $3
 		RETURNING id, group_id, user_id, permissions, created_at
 	`
-	
+
 	var perm UserPermission
 	var perms []string
 	err := l.db.QueryRowContext(l.ctx, query, groupID, userID, pq.Array(permissions)).Scan(
@@ -64,7 +64,7 @@ func (l *PermissionLogic) GrantUserPermission(groupID int64, userID string, perm
 		return nil, fmt.Errorf("授予用户权限失败: %w", err)
 	}
 	perm.Permissions = perms
-	
+
 	l.logger.Infof("用户权限授予成功: group=%d, user=%s", groupID, userID)
 	return &perm, nil
 }
@@ -72,18 +72,18 @@ func (l *PermissionLogic) GrantUserPermission(groupID int64, userID string, perm
 // RevokeUserPermission 撤销用户权限
 func (l *PermissionLogic) RevokeUserPermission(groupID int64, userID string) error {
 	query := `DELETE FROM service_group_users WHERE group_id = $1 AND user_id = $2`
-	
+
 	result, err := l.db.ExecContext(l.ctx, query, groupID, userID)
 	if err != nil {
 		l.logger.Errorf("撤销用户权限失败: %v", err)
 		return fmt.Errorf("撤销用户权限失败: %w", err)
 	}
-	
+
 	rows, _ := result.RowsAffected()
 	if rows == 0 {
 		return fmt.Errorf("用户权限不存在")
 	}
-	
+
 	l.logger.Infof("用户权限撤销成功: group=%d, user=%s", groupID, userID)
 	return nil
 }
@@ -95,7 +95,7 @@ func (l *PermissionLogic) GetUserPermission(groupID int64, userID string) (*User
 		FROM service_group_users
 		WHERE group_id = $1 AND user_id = $2
 	`
-	
+
 	var perm UserPermission
 	var perms []string
 	err := l.db.QueryRowContext(l.ctx, query, groupID, userID).Scan(
@@ -120,7 +120,7 @@ func (l *PermissionLogic) ListUserPermissions(groupID int64) ([]*UserPermission,
 		WHERE group_id = $1
 		ORDER BY created_at DESC
 	`
-	
+
 	rows, err := l.db.QueryContext(l.ctx, query, groupID)
 	if err != nil {
 		l.logger.Errorf("查询用户权限列表失败: %v", err)
@@ -142,7 +142,7 @@ func (l *PermissionLogic) ListUserPermissions(groupID int64) ([]*UserPermission,
 		l.logger.Errorf("查询用户权限列表失败: %v", err)
 		return nil, fmt.Errorf("查询用户权限列表失败: %w", err)
 	}
-	
+
 	return perms, nil
 }
 
@@ -155,18 +155,18 @@ func (l *PermissionLogic) GrantRolePermission(groupID int64, roleName string, pe
 		DO UPDATE SET permissions = $3
 		RETURNING id, group_id, role_name, permissions, created_at
 	`
-	
+
 	var perm RolePermission
 	var rperms []string
 	err := l.db.QueryRowContext(l.ctx, query, groupID, roleName, pq.Array(permissions)).Scan(
 		&perm.ID, &perm.GroupID, &perm.RoleName, pq.Array(&rperms), &perm.CreatedAt)
-	
+
 	if err != nil {
 		l.logger.Errorf("授予角色权限失败: %v", err)
 		return nil, fmt.Errorf("授予角色权限失败: %w", err)
 	}
 	perm.Permissions = rperms
-	
+
 	l.logger.Infof("角色权限授予成功: group=%d, role=%s", groupID, roleName)
 	return &perm, nil
 }
@@ -174,18 +174,18 @@ func (l *PermissionLogic) GrantRolePermission(groupID int64, roleName string, pe
 // RevokeRolePermission 撤销角色权限
 func (l *PermissionLogic) RevokeRolePermission(groupID int64, roleName string) error {
 	query := `DELETE FROM service_group_roles WHERE group_id = $1 AND role_name = $2`
-	
+
 	result, err := l.db.ExecContext(l.ctx, query, groupID, roleName)
 	if err != nil {
 		l.logger.Errorf("撤销角色权限失败: %v", err)
 		return fmt.Errorf("撤销角色权限失败: %w", err)
 	}
-	
+
 	rows, _ := result.RowsAffected()
 	if rows == 0 {
 		return fmt.Errorf("角色权限不存在")
 	}
-	
+
 	l.logger.Infof("角色权限撤销成功: group=%d, role=%s", groupID, roleName)
 	return nil
 }
@@ -197,7 +197,7 @@ func (l *PermissionLogic) GetRolePermission(groupID int64, roleName string) (*Ro
 		FROM service_group_roles
 		WHERE group_id = $1 AND role_name = $2
 	`
-	
+
 	var perm RolePermission
 	var rperms []string
 	err := l.db.QueryRowContext(l.ctx, query, groupID, roleName).Scan(
@@ -222,7 +222,7 @@ func (l *PermissionLogic) ListRolePermissions(groupID int64) ([]*RolePermission,
 		WHERE group_id = $1
 		ORDER BY created_at DESC
 	`
-	
+
 	rows, err := l.db.QueryContext(l.ctx, query, groupID)
 	if err != nil {
 		l.logger.Errorf("查询角色权限列表失败: %v", err)
@@ -244,7 +244,7 @@ func (l *PermissionLogic) ListRolePermissions(groupID int64) ([]*RolePermission,
 		l.logger.Errorf("查询角色权限列表失败: %v", err)
 		return nil, fmt.Errorf("查询角色权限列表失败: %w", err)
 	}
-	
+
 	return perms, nil
 }
 
@@ -260,8 +260,8 @@ func (l *PermissionLogic) CheckUserPermission(groupID int64, userID string, requ
 			}
 		}
 	}
-	
+
 	// TODO: 检查用户角色的权限（需要从 Casdoor 获取用户角色）
-	
+
 	return false, nil
 }

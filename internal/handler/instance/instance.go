@@ -324,7 +324,7 @@ func BatchDeleteHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 		if err != nil {
 			httpx.WriteJson(w, http.StatusOK, map[string]interface{}{
 				"code": 500, "message": err.Error(),
-				"data":   map[string]interface{}{"success": success, "failed": failed},
+				"data": map[string]interface{}{"success": success, "failed": failed},
 			})
 			return
 		}
@@ -508,7 +508,7 @@ func ImportInstancesHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 		if err != nil {
 			httpx.WriteJson(w, http.StatusOK, map[string]interface{}{
 				"code": 500, "message": err.Error(),
-				"data":   map[string]interface{}{"success": success, "skipped": skipped, "failed": failed},
+				"data": map[string]interface{}{"success": success, "skipped": skipped, "failed": failed},
 			})
 			return
 		}

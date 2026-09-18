@@ -29,6 +29,7 @@ func getConsulClientWithAddr(ctx context.Context, svcCtx *svc.ServiceContext, gr
 	}
 	return client.GetAPIClient(), client.Address(), nil
 }
+
 // ListServicesLogic 服务列表逻辑
 type ListServicesLogic struct {
 	ctx    context.Context
@@ -265,9 +266,10 @@ func NewGetServiceDetailLogic(ctx context.Context, svcCtx *svc.ServiceContext) *
 // GetServiceDetail 获取服务详情
 //
 // 参数:
-//   groupID     - 服务组 ID
-//   serviceName - 服务名
-//   keyword     - 关键字（过滤实例：实例ID/地址/节点/Tags/Meta）
+//
+//	groupID     - 服务组 ID
+//	serviceName - 服务名
+//	keyword     - 关键字（过滤实例：实例ID/地址/节点/Tags/Meta）
 func (l *GetServiceDetailLogic) GetServiceDetail(groupID int64, serviceName, keyword string) (*types.ServiceDetail, error) {
 	// 缓存键（详情按服务缓存，关键字在内存过滤）
 	cacheKey := l.svcCtx.CacheKeyServiceDetail(groupID, serviceName)

@@ -26,13 +26,13 @@ func TestServiceAllowed(t *testing.T) {
 		target   string
 		want     bool
 	}{
-		{nil, "a", false},                        // 空 = 无权限
+		{nil, "a", false}, // 空 = 无权限
 		{[]string{}, "a", false},
-		{[]string{"*"}, "a", true},               // 全部
-		{[]string{"*"}, "", true},                // 组级 + 全部
-		{[]string{"a", "b"}, "a", true},          // 精确命中
-		{[]string{"a", "b"}, "c", false},         // 未授权
-		{[]string{"a", "b"}, "", false},          // 组级操作需全部
+		{[]string{"*"}, "a", true},       // 全部
+		{[]string{"*"}, "", true},        // 组级 + 全部
+		{[]string{"a", "b"}, "a", true},  // 精确命中
+		{[]string{"a", "b"}, "c", false}, // 未授权
+		{[]string{"a", "b"}, "", false},  // 组级操作需全部
 	}
 	for _, c := range cases {
 		if got := serviceAllowed(c.services, c.target); got != c.want {

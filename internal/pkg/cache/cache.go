@@ -96,7 +96,8 @@ func (c *Cache) Enabled() bool {
 // Get 读取并反序列化缓存
 //
 // 返回:
-//   bool - 是否命中
+//
+//	bool - 是否命中
 func (c *Cache) Get(ctx context.Context, key string, dest interface{}) bool {
 	if !c.Enabled() {
 		return false

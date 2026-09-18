@@ -2,38 +2,38 @@ package types
 
 // ConsulServiceInfo Consul 服务信息
 type ConsulServiceInfo struct {
-	ID              string            `json:"id"`
-	Service         string            `json:"service"`
-	Tags            []string          `json:"tags"`
-	Meta            map[string]string `json:"meta"`
-	Address         string            `json:"address"`
-	Port            int               `json:"port"`
-	Datacenter      string            `json:"datacenter"`
-	HealthStatus    string            `json:"health_status"` // passing, warning, critical
-	InstanceCount   int               `json:"instance_count"`
-	HealthyCount    int               `json:"healthy_count"`
-	UnhealthyCount  int               `json:"unhealthy_count"`
+	ID             string            `json:"id"`
+	Service        string            `json:"service"`
+	Tags           []string          `json:"tags"`
+	Meta           map[string]string `json:"meta"`
+	Address        string            `json:"address"`
+	Port           int               `json:"port"`
+	Datacenter     string            `json:"datacenter"`
+	HealthStatus   string            `json:"health_status"` // passing, warning, critical
+	InstanceCount  int               `json:"instance_count"`
+	HealthyCount   int               `json:"healthy_count"`
+	UnhealthyCount int               `json:"unhealthy_count"`
 }
 
 // ConsulInstanceInfo Consul 实例信息
 type ConsulInstanceInfo struct {
-	ID              string                   `json:"id"`
-	Service         string                   `json:"service"`
-	Tags            []string                 `json:"tags"`
-	Meta            map[string]string        `json:"meta"`
-	Address         string                   `json:"address"`
-	Port            int                      `json:"port"`
-	Node            string                   `json:"node"`
-	NodeAddress     string                   `json:"node_address"`
-	Datacenter      string                   `json:"datacenter"`
-	HealthStatus    string                   `json:"health_status"`
-	Checks          []map[string]interface{} `json:"checks"`
+	ID           string                   `json:"id"`
+	Service      string                   `json:"service"`
+	Tags         []string                 `json:"tags"`
+	Meta         map[string]string        `json:"meta"`
+	Address      string                   `json:"address"`
+	Port         int                      `json:"port"`
+	Node         string                   `json:"node"`
+	NodeAddress  string                   `json:"node_address"`
+	Datacenter   string                   `json:"datacenter"`
+	HealthStatus string                   `json:"health_status"`
+	Checks       []map[string]interface{} `json:"checks"`
 }
 
 // ServiceDetail 服务详情
 type ServiceDetail struct {
-	ServiceName string                `json:"service_name"`
-	Instances   []ConsulInstanceInfo  `json:"instances"`
+	ServiceName string               `json:"service_name"`
+	Instances   []ConsulInstanceInfo `json:"instances"`
 }
 
 // ConsulHealthCheck 健康检查信息
@@ -104,10 +104,10 @@ type BatchRegisterRequest struct {
 	// 实例默认端口（表达式未指定端口时使用）
 	DefaultPort int `json:"default_port,optional"`
 	// 端口覆盖（表达式未指定端口时优先使用）
-	Tags          []string           `json:"tags,optional"`
-	Meta          map[string]string  `json:"meta,optional"`
-	Check         *HealthCheckConfig `json:"check,optional"`
-	Overwrite     bool               `json:"overwrite,optional"`
+	Tags      []string           `json:"tags,optional"`
+	Meta      map[string]string  `json:"meta,optional"`
+	Check     *HealthCheckConfig `json:"check,optional"`
+	Overwrite bool               `json:"overwrite,optional"`
 }
 
 // ImportInstancesRequest 批量导入请求

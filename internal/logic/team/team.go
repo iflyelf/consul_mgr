@@ -256,7 +256,8 @@ func (l *TeamLogic) ListGroupPermissions(teamID int64) ([]*GroupPermission, erro
 // GrantGroupPermission 授予团队对服务组（及其中指定服务）的权限
 //
 // 参数:
-//   services - 授权的服务名；空 = 无权限；["*"] = 该组全部服务
+//
+//	services - 授权的服务名；空 = 无权限；["*"] = 该组全部服务
 func (l *TeamLogic) GrantGroupPermission(teamID, groupID int64, permissions []string, roleIDs []int64, services []string) error {
 	if permissions == nil {
 		permissions = []string{}

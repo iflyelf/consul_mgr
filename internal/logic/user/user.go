@@ -1,10 +1,11 @@
 // Package user 提供「用户管理」逻辑
 //
 // 说明:
-//   用户体系由 Casdoor 维护。为避免「人员一多就卡住」：
-//   1. 全量用户缓存到 Redis（TTL 内复用，避免每次请求都打 Casdoor）；
-//   2. 关键字过滤与分页在内存完成，结果稳定且可控；
-//   3. Casdoor 自带分页行为不稳定（页间重叠），故不直接使用。
+//
+//	用户体系由 Casdoor 维护。为避免「人员一多就卡住」：
+//	1. 全量用户缓存到 Redis（TTL 内复用，避免每次请求都打 Casdoor）；
+//	2. 关键字过滤与分页在内存完成，结果稳定且可控；
+//	3. Casdoor 自带分页行为不稳定（页间重叠），故不直接使用。
 package user
 
 import (
@@ -67,14 +68,16 @@ func (l *UserLogic) InvalidateUsersCache() {
 // ListUsers 查询用户列表（缓存 + 关键字过滤 + 分页）
 //
 // 参数:
-//   keyword  - 用户名 / 显示名 / 邮箱 模糊匹配（大小写不敏感）
-//   page     - 页码（从 1 开始）
-//   pageSize - 每页条数
+//
+//	keyword  - 用户名 / 显示名 / 邮箱 模糊匹配（大小写不敏感）
+//	page     - 页码（从 1 开始）
+//	pageSize - 每页条数
 //
 // 返回:
-//   []casdoor.CasdoorUser - 当前页数据
-//   int                   - 过滤后的总数
-//   error                 - 错误
+//
+//	[]casdoor.CasdoorUser - 当前页数据
+//	int                   - 过滤后的总数
+//	error                 - 错误
 func (l *UserLogic) ListUsers(keyword string, page, pageSize int, refresh ...bool) ([]casdoor.CasdoorUser, int, error) {
 	if page <= 0 {
 		page = 1

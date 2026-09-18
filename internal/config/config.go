@@ -51,8 +51,8 @@ type Config struct {
 		DefaultAddress    string `json:",optional,env=CONSUL_ADDRESS"`
 		DefaultToken      string `json:",optional,env=CONSUL_TOKEN"`
 		DefaultDatacenter string `json:",default=dc1,env=CONSUL_DATACENTER"`
-		Timeout           int    `json:",default=10,env=CONSUL_TIMEOUT"`           // seconds
-		MaxConcurrency    int    `json:",default=16,env=CONSUL_MAX_CONCURRENCY"`   // 批量查询/操作并发上限
+		Timeout           int    `json:",default=10,env=CONSUL_TIMEOUT"`         // seconds
+		MaxConcurrency    int    `json:",default=16,env=CONSUL_MAX_CONCURRENCY"` // 批量查询/操作并发上限
 	}
 
 	Web struct {
@@ -206,15 +206,17 @@ func (c *Config) ValidateCasdoor() error {
 // ApplyEnvOverrides 用环境变量覆盖服务端口、监听地址、运行模式等基础配置
 //
 // 说明:
-//   go-zero 的 rest.RestConf（Host/Port/Mode/Timeout）不携带 env 标签，
-//   且 conf.Load 默认不做 ${VAR} 展开，因此这里显式读取环境变量覆盖，
-//   保证端口/地址/模式可通过容器编排自定义，代码中不硬编码。
+//
+//	go-zero 的 rest.RestConf（Host/Port/Mode/Timeout）不携带 env 标签，
+//	且 conf.Load 默认不做 ${VAR} 展开，因此这里显式读取环境变量覆盖，
+//	保证端口/地址/模式可通过容器编排自定义，代码中不硬编码。
 //
 // 支持的环境变量:
-//   SERVER_HOST    监听地址（默认取配置文件值）
-//   SERVER_PORT    监听端口（默认取配置文件值）
-//   SERVER_MODE    运行模式 dev|test|rt|pre|pro
-//   SERVER_TIMEOUT 服务端超时（毫秒）
+//
+//	SERVER_HOST    监听地址（默认取配置文件值）
+//	SERVER_PORT    监听端口（默认取配置文件值）
+//	SERVER_MODE    运行模式 dev|test|rt|pre|pro
+//	SERVER_TIMEOUT 服务端超时（毫秒）
 func (c *Config) ApplyEnvOverrides() {
 	if v := os.Getenv("SERVER_HOST"); v != "" {
 		c.Host = v

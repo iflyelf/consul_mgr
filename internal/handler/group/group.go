@@ -105,14 +105,14 @@ func ListGroupsHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 		keyword := r.URL.Query().Get("keyword")
 		page, _ := strconv.Atoi(r.URL.Query().Get("page"))
 		pageSize, _ := strconv.Atoi(r.URL.Query().Get("page_size"))
-		
+
 		if page <= 0 {
 			page = 1
 		}
 		if pageSize <= 0 {
 			pageSize = 20
 		}
-		
+
 		logic := group.NewGroupLogic(r.Context(), ctx.DB)
 		groups, total, err := logic.ListGroups(keyword, page, pageSize)
 		if err != nil {
@@ -122,7 +122,7 @@ func ListGroupsHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 			})
 			return
 		}
-		
+
 		masked := make([]*group.Group, 0, len(groups))
 		for _, g := range groups {
 			masked = append(masked, maskGroup(g))
@@ -131,9 +131,9 @@ func ListGroupsHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 			"code":    200,
 			"message": "success",
 			"data": map[string]interface{}{
-				"list":  masked,
-				"total": total,
-				"page":  page,
+				"list":      masked,
+				"total":     total,
+				"page":      page,
 				"page_size": pageSize,
 			},
 		})
@@ -203,7 +203,7 @@ func UpdateGroupHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// 获取 ID
 		idStr := pathvar.Vars(r)["id"]
-		
+
 		id, err := strconv.ParseInt(idStr, 10, 64)
 		if err != nil {
 			httpx.WriteJson(w, http.StatusBadRequest, map[string]interface{}{
@@ -212,7 +212,7 @@ func UpdateGroupHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 			})
 			return
 		}
-		
+
 		var req UpdateGroupRequest
 		if err := httpx.Parse(r, &req); err != nil {
 			httpx.WriteJson(w, http.StatusBadRequest, map[string]interface{}{
@@ -221,9 +221,9 @@ func UpdateGroupHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 			})
 			return
 		}
-		
+
 		logic := group.NewGroupLogic(r.Context(), ctx.DB)
-		
+
 		// 先获取原数据
 		original, err := logic.GetGroup(id)
 		if err != nil {
@@ -233,7 +233,7 @@ func UpdateGroupHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 			})
 			return
 		}
-		
+
 		// 合并更新
 		if req.Name == "" {
 			req.Name = original.Name
@@ -258,7 +258,7 @@ func UpdateGroupHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 				reqDatacenter = detected
 			}
 		}
-		
+
 		result, err := logic.UpdateGroup(
 			id,
 			req.Name,
@@ -268,7 +268,7 @@ func UpdateGroupHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 			reqDatacenter,
 			req.Description,
 		)
-		
+
 		if err != nil {
 			httpx.WriteJson(w, http.StatusInternalServerError, map[string]interface{}{
 				"code":    500,
@@ -294,7 +294,7 @@ func DeleteGroupHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// 获取 ID
 		idStr := pathvar.Vars(r)["id"]
-		
+
 		id, err := strconv.ParseInt(idStr, 10, 64)
 		if err != nil {
 			httpx.WriteJson(w, http.StatusBadRequest, map[string]interface{}{
@@ -303,7 +303,7 @@ func DeleteGroupHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 			})
 			return
 		}
-		
+
 		logic := group.NewGroupLogic(r.Context(), ctx.DB)
 		err = logic.DeleteGroup(id)
 		if err != nil {
@@ -330,7 +330,7 @@ func GetGroupHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// 获取 ID
 		idStr := pathvar.Vars(r)["id"]
-		
+
 		id, err := strconv.ParseInt(idStr, 10, 64)
 		if err != nil {
 			httpx.WriteJson(w, http.StatusBadRequest, map[string]interface{}{
@@ -339,7 +339,7 @@ func GetGroupHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 			})
 			return
 		}
-		
+
 		logic := group.NewGroupLogic(r.Context(), ctx.DB)
 		result, stats, err := logic.GetGroupDetail(id)
 		if err != nil {
@@ -349,7 +349,7 @@ func GetGroupHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 			})
 			return
 		}
-		
+
 		httpx.WriteJson(w, http.StatusOK, map[string]interface{}{
 			"code":    200,
 			"message": "success",

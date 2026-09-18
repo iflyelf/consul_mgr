@@ -17,8 +17,9 @@ import (
 //   - 任意项带端口:       10.1.255.38:443、10.1.255.24-26:80、10.1.255.0/24:8080
 //
 // 返回:
-//   []string - 展开后的 "IP:端口"（无端口时为纯 IP）列表
-//   error    - 解析错误
+//
+//	[]string - 展开后的 "IP:端口"（无端口时为纯 IP）列表
+//	error    - 解析错误
 func ParseIPPorts(input string) ([]string, error) {
 	input = strings.TrimSpace(input)
 	if input == "" {

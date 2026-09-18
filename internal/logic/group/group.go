@@ -253,13 +253,15 @@ func (l *GroupLogic) TestConnection(id int64, manager *consul.Manager) error {
 // DetectDatacenter 探测指定 Consul 地址的数据中心与节点名称
 //
 // 参数:
-//   address - Consul 地址
-//   token   - Consul Token（可选）
+//
+//	address - Consul 地址
+//	token   - Consul Token（可选）
 //
 // 返回:
-//   string - 数据中心
-//   string - 节点名称
-//   error  - 错误信息
+//
+//	string - 数据中心
+//	string - 节点名称
+//	error  - 错误信息
 func (l *GroupLogic) DetectDatacenter(address, token string) (string, string, error) {
 	if address == "" {
 		return "", "", fmt.Errorf("Consul 地址不能为空")

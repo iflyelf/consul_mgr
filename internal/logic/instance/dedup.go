@@ -33,20 +33,24 @@ func localNodeName(client *api.Client) string {
 // dedupClusterRegistrations 注册前的集群级去重
 //
 // 背景:
-//   Consul 集群中，Agent 注册是「节点本地」的；若同一 ServiceID 通过不同 Agent
-//   注册，会在 Catalog 中出现多条记录（不同 Node），即同一实例被多个节点重复注册。
+//
+//	Consul 集群中，Agent 注册是「节点本地」的；若同一 ServiceID 通过不同 Agent
+//	注册，会在 Catalog 中出现多条记录（不同 Node），即同一实例被多个节点重复注册。
 //
 // 方案:
-//   注册前扫描集群 Catalog（而非仅本地 Agent），发现目标 ServiceID 已存在于
-//   「其他节点」时，先通过 Catalog 注销远端记录，保证同一实例在集群中只归属一个节点。
+//
+//	注册前扫描集群 Catalog（而非仅本地 Agent），发现目标 ServiceID 已存在于
+//	「其他节点」时，先通过 Catalog 注销远端记录，保证同一实例在集群中只归属一个节点。
 //
 // 参数:
-//   client  - Consul 客户端
-//   targets - 即将注册的实例列表
+//
+//	client  - Consul 客户端
+//	targets - 即将注册的实例列表
 //
 // 返回:
-//   []string - 被清理的远端重复项（格式 serviceID@node）
-//   error    - 查询/注销失败
+//
+//	[]string - 被清理的远端重复项（格式 serviceID@node）
+//	error    - 查询/注销失败
 func dedupClusterRegistrations(client *api.Client, targets []types.RegisterInstanceRequest) ([]string, error) {
 	if len(targets) == 0 {
 		return nil, nil

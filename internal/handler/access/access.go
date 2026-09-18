@@ -21,8 +21,9 @@ import (
 // 管理员 / 全局权限由中间件放行，此处仅针对服务组授权。
 //
 // 返回:
-//   true  - 通过（或无需校验）
-//   false - 已写出 403 响应
+//
+//	true  - 通过（或无需校验）
+//	false - 已写出 403 响应
 func CheckService(ctx *svc.ServiceContext, w http.ResponseWriter, r *http.Request, groupID int64, serviceName, action string) bool {
 	if groupID == 0 {
 		return true // 无服务组上下文，交由其他校验

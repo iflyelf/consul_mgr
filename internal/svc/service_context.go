@@ -123,12 +123,14 @@ func (s *ServiceContext) InvalidateGroupCaches(ctx context.Context, groupID int6
 //  2. 自动检测数据中心，若与配置不符则自动更新数据库并重建客户端
 //
 // 参数:
-//   ctx     - 上下文
-//   groupID - 服务组 ID
+//
+//	ctx     - 上下文
+//	groupID - 服务组 ID
 //
 // 返回:
-//   *consul.Client - Consul 客户端
-//   error - 错误信息
+//
+//	*consul.Client - Consul 客户端
+//	error - 错误信息
 func (s *ServiceContext) GetConsulClient(ctx context.Context, groupID int64) (*consul.Client, error) {
 	query := `SELECT consul_address, consul_token, consul_datacenter FROM service_groups WHERE id = $1`
 
@@ -270,15 +272,15 @@ func initDB(c config.Config) *sql.DB {
 	if err != nil {
 		log.Fatalf("连接数据库失败: %v", err)
 	}
-	
+
 	db.SetMaxOpenConns(c.Database.MaxOpenConns)
 	db.SetMaxIdleConns(c.Database.MaxIdleConns)
 	db.SetConnMaxLifetime(time.Duration(c.Database.ConnMaxLifetime) * time.Second)
-	
+
 	if err := db.Ping(); err != nil {
 		log.Fatalf("数据库连接测试失败: %v", err)
 	}
-	
+
 	log.Println("数据库连接成功")
 	return db
 }
@@ -522,7 +524,7 @@ func initCasdoorClient(c config.Config) (*casdoor.Client, error) {
 		OrganizationName: c.Casdoor.OrganizationName,
 		ApplicationName:  c.Casdoor.ApplicationName,
 	}
-	
+
 	// 端点自检：确认 Endpoint 指向的是 Casdoor API 而非前端页面/其他服务，
 	// 否则后续调用会以 "invalid character '<' looking for beginning of value" 失败，难以定位。
 	if err := casdoor.ProbeAPI(casdoorConfig.Endpoint); err != nil {
@@ -534,7 +536,7 @@ func initCasdoorClient(c config.Config) (*casdoor.Client, error) {
 	if err != nil {
 		return nil, fmt.Errorf("创建 Casdoor 客户端失败: %w", err)
 	}
-	
+
 	log.Printf("Casdoor 客户端初始化成功: %s", c.Casdoor.Endpoint)
 	return client, nil
 }
@@ -727,12 +729,12 @@ func createServiceGroupTables(db *sql.DB) error {
 	CREATE INDEX IF NOT EXISTS idx_audit_logs_resource ON audit_logs(resource_type);
 	CREATE INDEX IF NOT EXISTS idx_audit_logs_status ON audit_logs(status);
 	`
-	
+
 	_, err := db.Exec(schema)
 	if err != nil {
 		return fmt.Errorf("创建表失败: %w", err)
 	}
-	
+
 	log.Println("服务组和实例相关表创建成功")
 	return nil
 }

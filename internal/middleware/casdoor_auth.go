@@ -27,10 +27,12 @@ type CasdoorAuthMiddleware struct {
 // NewCasdoorAuthMiddleware 创建认证中间件
 //
 // 参数:
-//   casdoorFn - 返回当前 Casdoor 客户端的函数（每次请求时调用，支持热重载）
+//
+//	casdoorFn - 返回当前 Casdoor 客户端的函数（每次请求时调用，支持热重载）
 //
 // 返回:
-//   *CasdoorAuthMiddleware - 中间件实例
+//
+//	*CasdoorAuthMiddleware - 中间件实例
 func NewCasdoorAuthMiddleware(casdoorFn func() *casdoor.Client) *CasdoorAuthMiddleware {
 	return &CasdoorAuthMiddleware{
 		casdoorFn: casdoorFn,
@@ -40,18 +42,20 @@ func NewCasdoorAuthMiddleware(casdoorFn func() *casdoor.Client) *CasdoorAuthMidd
 // Handle 处理认证逻辑
 //
 // 参数:
-//   next - 下一个处理函数
+//
+//	next - 下一个处理函数
 //
 // 返回:
-//   http.HandlerFunc - 包装后的处理函数
+//
+//	http.HandlerFunc - 包装后的处理函数
 //
 // 功能流程：
-//   1. 提取 Authorization Header
-//   2. 解析 Bearer Token
-//   3. 验证 Token 有效性
-//   4. 提取用户信息
-//   5. 存入 Context
-//   6. 调用下一个处理器
+//  1. 提取 Authorization Header
+//  2. 解析 Bearer Token
+//  3. 验证 Token 有效性
+//  4. 提取用户信息
+//  5. 存入 Context
+//  6. 调用下一个处理器
 func (m *CasdoorAuthMiddleware) Handle(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// 1. 提取 Token
@@ -146,11 +150,13 @@ func extractToken(r *http.Request) string {
 // GetUserIdFromContext 从 Context 获取用户 ID
 //
 // 参数:
-//   ctx - 上下文
+//
+//	ctx - 上下文
 //
 // 返回:
-//   string - 用户 ID
-//   bool - 是否存在
+//
+//	string - 用户 ID
+//	bool - 是否存在
 func GetUserIdFromContext(ctx context.Context) (string, bool) {
 	userId, ok := ctx.Value("userId").(string)
 	return userId, ok
@@ -159,11 +165,13 @@ func GetUserIdFromContext(ctx context.Context) (string, bool) {
 // GetUsernameFromContext 从 Context 获取用户名
 //
 // 参数:
-//   ctx - 上下文
+//
+//	ctx - 上下文
 //
 // 返回:
-//   string - 用户名
-//   bool - 是否存在
+//
+//	string - 用户名
+//	bool - 是否存在
 func GetUsernameFromContext(ctx context.Context) (string, bool) {
 	username, ok := ctx.Value("username").(string)
 	return username, ok
@@ -172,11 +180,13 @@ func GetUsernameFromContext(ctx context.Context) (string, bool) {
 // GetUserEmailFromContext 从 Context 获取用户邮箱
 //
 // 参数:
-//   ctx - 上下文
+//
+//	ctx - 上下文
 //
 // 返回:
-//   string - 用户邮箱
-//   bool - 是否存在
+//
+//	string - 用户邮箱
+//	bool - 是否存在
 func GetUserEmailFromContext(ctx context.Context) (string, bool) {
 	email, ok := ctx.Value("userEmail").(string)
 	return email, ok
@@ -185,11 +195,13 @@ func GetUserEmailFromContext(ctx context.Context) (string, bool) {
 // GetUserRolesFromContext 从 Context 获取用户角色列表
 //
 // 参数:
-//   ctx - 上下文
+//
+//	ctx - 上下文
 //
 // 返回:
-//   []string - 角色列表
-//   bool - 是否存在
+//
+//	[]string - 角色列表
+//	bool - 是否存在
 func GetUserRolesFromContext(ctx context.Context) ([]string, bool) {
 	roles, ok := ctx.Value("userRoles").([]string)
 	return roles, ok
@@ -198,10 +210,12 @@ func GetUserRolesFromContext(ctx context.Context) ([]string, bool) {
 // IsAdminFromContext 从 Context 判断是否为管理员
 //
 // 参数:
-//   ctx - 上下文
+//
+//	ctx - 上下文
 //
 // 返回:
-//   bool - 是否为管理员
+//
+//	bool - 是否为管理员
 func IsAdminFromContext(ctx context.Context) bool {
 	isAdmin, ok := ctx.Value("isAdmin").(bool)
 	if !ok {
@@ -213,10 +227,12 @@ func IsAdminFromContext(ctx context.Context) bool {
 // IsGlobalAdminFromContext 从 Context 判断是否为全局管理员
 //
 // 参数:
-//   ctx - 上下文
+//
+//	ctx - 上下文
 //
 // 返回:
-//   bool - 是否为全局管理员
+//
+//	bool - 是否为全局管理员
 func IsGlobalAdminFromContext(ctx context.Context) bool {
 	isGlobalAdmin, ok := ctx.Value("isGlobalAdmin").(bool)
 	if !ok {
@@ -228,11 +244,13 @@ func IsGlobalAdminFromContext(ctx context.Context) bool {
 // GetClaimsFromContext 从 Context 获取完整的 Claims 信息
 //
 // 参数:
-//   ctx - 上下文
+//
+//	ctx - 上下文
 //
 // 返回:
-//   *casdoor.Claims - Claims 信息
-//   bool - 是否存在
+//
+//	*casdoor.Claims - Claims 信息
+//	bool - 是否存在
 func GetClaimsFromContext(ctx context.Context) (*casdoor.Claims, bool) {
 	claims, ok := ctx.Value("claims").(*casdoor.Claims)
 	return claims, ok
@@ -241,11 +259,13 @@ func GetClaimsFromContext(ctx context.Context) (*casdoor.Claims, bool) {
 // GetTokenFromContext 从 Context 获取 Token
 //
 // 参数:
-//   ctx - 上下文
+//
+//	ctx - 上下文
 //
 // 返回:
-//   string - Token
-//   bool - 是否存在
+//
+//	string - Token
+//	bool - 是否存在
 func GetTokenFromContext(ctx context.Context) (string, bool) {
 	token, ok := ctx.Value("token").(string)
 	return token, ok
