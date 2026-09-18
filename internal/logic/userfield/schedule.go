@@ -2,6 +2,7 @@ package userfield
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"strconv"
@@ -45,10 +46,13 @@ func (l *Logic) GetSyncConfig(ctx context.Context) (*model.UserFieldSyncConfig, 
 		COALESCE(last_status,'') AS last_status, COALESCE(last_message,'') AS last_message, updated_at
 		FROM userfield_sync_config WHERE id = $1`
 	if err := l.db.QueryRowCtx(ctx, &cfg, query, syncConfigID); err != nil {
-		// 无配置行时返回默认（关闭自动同步）
-		return &model.UserFieldSyncConfig{
-			ID: syncConfigID, Enabled: false, Interval: "6h", SyncOnStartup: false,
-		}, nil
+		// 仅「无配置行」返回默认（关闭自动同步）；其它错误（如扫描失败）应暴露
+		if errors.Is(err, sqlx.ErrNotFound) {
+			return &model.UserFieldSyncConfig{
+				ID: syncConfigID, Enabled: false, Interval: "6h", SyncOnStartup: false,
+			}, nil
+		}
+		return nil, fmt.Errorf("读取同步配置失败: %w", err)
 	}
 	return &cfg, nil
 }
@@ -206,7 +210,7 @@ func StartScheduler(ctx context.Context, db sqlx.SqlConn, cfg *config.Config) {
 				if err != nil {
 					continue
 				}
-				if sc.LastRunAt != nil && time.Since(*sc.LastRunAt) < d {
+				if sc.LastRunAt.Valid && time.Since(sc.LastRunAt.Time) < d {
 					continue
 				}
 				runAutoSync(ctx, l, cfg.FlyIAM.Endpoint, cfg.FlyIAM.ServiceToken, "auto")

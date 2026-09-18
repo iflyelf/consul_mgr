@@ -11,8 +11,8 @@ type UserFieldSyncConfig struct {
 	Interval string `db:"interval" json:"interval"`
 	// SyncOnStartup 启动时是否同步一次
 	SyncOnStartup bool `db:"sync_on_startup" json:"syncOnStartup"`
-	// LastRunAt 上次执行时间
-	LastRunAt *time.Time `db:"last_run_at" json:"lastRunAt,omitempty"`
+	// LastRunAt 上次执行时间（可空；未执行过为 NULL，须用 NullTime 扫描）
+	LastRunAt NullTime `db:"last_run_at" json:"lastRunAt"`
 	// LastStatus 上次执行状态：success / failed
 	LastStatus string `db:"last_status" json:"lastStatus"`
 	// LastMessage 上次执行结果摘要
@@ -22,15 +22,16 @@ type UserFieldSyncConfig struct {
 
 // UserFieldSyncLog 用户字段同步日志
 type UserFieldSyncLog struct {
-	ID          int64      `db:"id" json:"id"`
-	Status      string     `db:"status" json:"status"` // running / success / failed
-	TriggerType string     `db:"trigger_type" json:"triggerType"`
-	Total       int        `db:"total" json:"total"`
-	Added       int        `db:"added" json:"added"`
-	Updated     int        `db:"updated" json:"updated"`
-	Message     string     `db:"message" json:"message"`
-	StartedAt   time.Time  `db:"started_at" json:"startedAt"`
-	CompletedAt *time.Time `db:"completed_at" json:"completedAt,omitempty"`
+	ID          int64     `db:"id" json:"id"`
+	Status      string    `db:"status" json:"status"` // running / success / failed
+	TriggerType string    `db:"trigger_type" json:"triggerType"`
+	Total       int       `db:"total" json:"total"`
+	Added       int       `db:"added" json:"added"`
+	Updated     int       `db:"updated" json:"updated"`
+	Message     string    `db:"message" json:"message"`
+	StartedAt   time.Time `db:"started_at" json:"startedAt"`
+	// CompletedAt 完成时间（可空；running 时为 NULL，须用 NullTime 扫描）
+	CompletedAt NullTime `db:"completed_at" json:"completedAt"`
 }
 
 // UserFieldSyncProgress 同步进度（内存态，用于前端轮询展示）
