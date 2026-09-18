@@ -121,14 +121,10 @@ charts/consul_mgr/
 | `CONSUL_MGR_AUTH_COOKIE_SECURE` | 登录 Cookie Secure（`auto`/`true`/`false`） | `auto` |
 | `CONSUL_MGR_AUTH_COOKIE_DOMAIN` | 登录 Cookie 作用域（跨子域共享） | 空 |
 | `CONSUL_MGR_CORS_ALLOWED_ORIGINS` | 允许的跨域来源（逗号分隔，为空关闭） | 空 |
-| `CONSUL_MGR_FLYIAM_API_ENDPOINT` | FlyIAM 业务 API 地址（同步用户字段用） | 空 |
-| `CONSUL_MGR_FLYIAM_SERVICE_TOKEN` | 服务间凭证（与 FlyIAM `SERVICE_TOKEN` 一致，**经 Secret 注入**） | 空 |
-| `CONSUL_MGR_FLYIAM_SYNC_ENABLED` | 自动同步默认开关（首次写入 DB，之后以页面为准） | `false` |
-| `CONSUL_MGR_FLYIAM_SYNC_ON_STARTUP` | 启动时同步默认值（同上） | `true` |
-| `CONSUL_MGR_FLYIAM_SYNC_INTERVAL` | 同步间隔默认值（`6h`/`30m`/`1d`） | `6h` |
-
-> 服务令牌不落 env 明文：`CONSUL_MGR_FLYIAM_SERVICE_TOKEN` 写入 Chart Secret，
-> 经 `envFrom` 注入。使用 `existingSecret` 时请在其中加入同名 key。
+> **页面可配置（推荐）**：FlyIAM 对接、安全/跨域、审计、权限、日志、Casdoor 连接、
+> Consul 默认等均已改为「页面配置」——存于数据库（**DB 优先 / env 兜底**），
+> 在「人员组织 → 系统设置」（或「用户字段」页的自动同步配置）中修改，**保存即生效，
+> 无需改 Chart 或环境变量**。上表同名环境变量仍可用作 CI 首次种子，但非必需。
 
 > ⚠️ 生产环境请通过环境变量或 `existingSecret` 覆盖 `CONSUL_MGR_DB_PASSWORD`、
 > `CONSUL_MGR_JWT_SECRET`、`CONSUL_MGR_ADMIN_PASSWORD`、

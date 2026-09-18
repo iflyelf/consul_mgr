@@ -41,7 +41,7 @@ func requestBaseURL(r *http.Request) string {
 // publicEndpoint 返回浏览器可达的 Casdoor 地址
 //
 // 未显式配置 PublicEndpoint 时，回退到服务端 Endpoint。
-func publicEndpoint(c config.Config) string {
+func publicEndpoint(c *config.Config) string {
 	if c.Casdoor.PublicEndpoint != "" {
 		return c.Casdoor.PublicEndpoint
 	}
@@ -54,7 +54,7 @@ func publicEndpoint(c config.Config) string {
 //
 // 请求方式：GET
 // 路径：/api/auth/config
-func ConfigHandler(c config.Config) http.HandlerFunc {
+func ConfigHandler(c *config.Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		redirectUri := requestBaseURL(r) + "/callback"
 		httpx.WriteJson(w, http.StatusOK, map[string]interface{}{
@@ -81,7 +81,7 @@ func ConfigHandler(c config.Config) http.HandlerFunc {
 //
 // 参数:
 //   format=json  返回 JSON（不跳转），便于接口调试
-func LoginHandler(casdoorClient *casdoor.Client, c config.Config) http.HandlerFunc {
+func LoginHandler(casdoorClient *casdoor.Client, c *config.Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// 回调地址基于当前请求动态推导，避免写死
 		redirectUri := requestBaseURL(r) + "/callback"
@@ -122,7 +122,7 @@ func LoginHandler(casdoorClient *casdoor.Client, c config.Config) http.HandlerFu
 //
 // 请求方式：GET
 // 路径：/api/auth/callback
-func CallbackHandler(casdoorClient *casdoor.Client, c config.Config) http.HandlerFunc {
+func CallbackHandler(casdoorClient *casdoor.Client, c *config.Config) http.HandlerFunc {
 	cookieCfg := c.CookieConfig()
 	return func(w http.ResponseWriter, r *http.Request) {
 		// 解析请求参数
@@ -263,7 +263,7 @@ func GetUserInfoHandler(casdoorClient *casdoor.Client) http.HandlerFunc {
 // 请求方式：POST
 // 路径：/api/auth/logout
 // 需要认证：是
-func LogoutHandler(c config.Config) http.HandlerFunc {
+func LogoutHandler(c *config.Config) http.HandlerFunc {
 	cookieCfg := c.CookieConfig()
 	return func(w http.ResponseWriter, r *http.Request) {
 		// 获取用户名（用于日志）

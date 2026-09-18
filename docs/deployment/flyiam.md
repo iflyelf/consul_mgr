@@ -133,16 +133,11 @@ Consul Manager 的用户列表 / 表单由「用户字段定义」驱动（存�
 内置字段与 FlyIAM 一致。若 FlyIAM 从数据源同步的用户字段发生变化，
 无需改代码，配置后一键同步即可：
 
-**Consul Manager 侧**：
-```bash
-export CONSUL_MGR_FLYIAM_API_ENDPOINT="https://flyiam.example.com"
-export CONSUL_MGR_FLYIAM_SERVICE_TOKEN="<与 FlyIAM 一致的服务令牌>"
-```
+**FlyIAM 侧**：登录后在「API 令牌」页点击 **生成令牌**（可设有效期或永久），
+复制令牌。
 
-**FlyIAM 侧**（开放字段导出接口）：
-```bash
-export FLYIAM_SERVICE_TOKEN="<同一个值>"
-```
+**Consul Manager 侧**：在「人员组织 → 系统设置 → FlyIAM 集成」中填入
+FlyIAM 地址与上一步的令牌，保存即生效（无需环境变量 / Chart 配置）。
 
 然后在「人员组织 → 用户字段」点击 **立即同步**（按字段键幂等更新：
 新增缺失字段、更新显示名/类型/可见性/排序）。

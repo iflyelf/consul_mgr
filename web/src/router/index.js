@@ -74,6 +74,12 @@ const routes = [
         name: 'Roles',
         component: () => import('@/views/Roles.vue'),
         meta: { title: '角色管理', requiresAdmin: true }
+      },
+      {
+        path: 'settings',
+        name: 'Settings',
+        component: () => import('@/views/Settings.vue'),
+        meta: { title: '系统设置', requiresAdmin: true }
       }
     ]
   }

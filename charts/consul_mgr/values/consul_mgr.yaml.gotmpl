@@ -255,17 +255,8 @@ env:
   - name: LOG_FORMAT
     value: {{ .Values.logFormat | quote }}
 
-  # FlyIAM 服务对接（令牌经 Secret 注入）
-  {{- if .Values.flyiamApiEndpoint }}
-  - name: CONSUL_MGR_FLYIAM_API_ENDPOINT
-    value: {{ .Values.flyiamApiEndpoint | quote }}
-  {{- end }}
-  - name: CONSUL_MGR_FLYIAM_SYNC_ENABLED
-    value: {{ .Values.flyiamSyncEnabled | quote }}
-  - name: CONSUL_MGR_FLYIAM_SYNC_ON_STARTUP
-    value: {{ .Values.flyiamSyncOnStartup | quote }}
-  - name: CONSUL_MGR_FLYIAM_SYNC_INTERVAL
-    value: {{ .Values.flyiamSyncInterval | quote }}
+  # FlyIAM 服务对接与安全/跨域等配置已改为「页面可配置」（存数据库，DB 优先）。
+  # 如确有 CI 场景需要，仍可用同名环境变量注入（见 values/_base 注释）。
 
   # 安全与跨域配置
   - name: AUTH_COOKIE_SAMESITE
@@ -308,10 +299,6 @@ secret:
   CASDOOR_CLIENT_SECRET: {{ .Values.casdoorClientSecret | quote }}
   {{- if .Values.consulToken }}
   CONSUL_TOKEN: {{ .Values.consulToken | quote }}
-  {{- end }}
-  {{- if .Values.flyiamServiceToken }}
-  # 服务间调用凭证（同步 FlyIAM 用户字段；经 Secret 注入，不落 env 明文）
-  CONSUL_MGR_FLYIAM_SERVICE_TOKEN: {{ .Values.flyiamServiceToken | quote }}
   {{- end }}
 
 # ============================================

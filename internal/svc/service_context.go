@@ -17,11 +17,14 @@ import (
 	"github.com/iflyelf/consul_mgr/internal/pkg/casdoor"
 	"github.com/iflyelf/consul_mgr/internal/pkg/consul"
 	"github.com/iflyelf/consul_mgr/internal/pkg/perm"
+	"github.com/iflyelf/consul_mgr/internal/setting"
 )
 
 // ServiceContext 服务上下文
 type ServiceContext struct {
-	Config        config.Config
+	// Config 使用指针：页面修改设置后直接写回，既有读取点自动生效（无需重启）
+	Config        *config.Config
+	Settings      *setting.Service
 	DB            sqlx.SqlConn
 	RawDB         *sql.DB // 原生连接：PostgreSQL 数组(TEXT[])需 pq.Array 扫描
 	ConsulManager *consul.Manager
@@ -134,20 +137,26 @@ func (s *ServiceContext) GetConsulClient(ctx context.Context, groupID int64) (*c
 }
 
 // NewServiceContext 创建服务上下文
-func NewServiceContext(c config.Config) *ServiceContext {
+func NewServiceContext(c *config.Config) *ServiceContext {
 	// 初始化数据库连接
-	db := initDB(c)
-	
+	db := initDB(*c)
+
 	// 初始化数据库表（不创建用户表，认证由 Casdoor 负责）
-	if err := initSchema(db, c); err != nil {
+	if err := initSchema(db, *c); err != nil {
 		log.Fatalf("初始化数据库失败: %v", err)
+	}
+
+	// 加载页面设置（DB 优先 / env 兜底），在初始化 Casdoor 客户端前应用
+	settings := setting.NewService(sqlx.NewSqlConnFromDB(db), c)
+	if err := settings.Load(context.Background()); err != nil {
+		log.Printf("⚠️ 加载应用设置失败（将使用环境变量默认值）: %v", err)
 	}
 
 	// 初始化 Consul 管理器
 	consulManager := consul.NewManager()
-	
+
 	// 初始化 Casdoor 客户端
-	casdoorClient, err := initCasdoorClient(c)
+	casdoorClient, err := initCasdoorClient(*c)
 	if err != nil {
 		log.Fatalf("初始化 Casdoor 客户端失败: %v", err)
 	}
@@ -164,6 +173,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 
 	return &ServiceContext{
 		Config:        c,
+		Settings:      settings,
 		DB:            sqlx.NewSqlConnFromDB(db),
 		RawDB:         db,
 		ConsulManager: consulManager,
@@ -259,6 +269,10 @@ func initSchema(db *sql.DB, c config.Config) error {
 	if err := createUserFieldDefsTable(db); err != nil {
 		return err
 	}
+	// 应用设置表（页面可配置，DB 优先 / env 兜底）
+	if err := createAppSettingsTable(db); err != nil {
+		return err
+	}
 	if err := createUserFieldSyncTables(db); err != nil {
 		return err
 	}
@@ -273,6 +287,19 @@ func initSchema(db *sql.DB, c config.Config) error {
 	}
 	log.Println("数据库初始化完成")
 	return nil
+}
+
+// createAppSettingsTable 创建应用设置表（页面可配置，DB 优先 / env 兜底）
+func createAppSettingsTable(db *sql.DB) error {
+	schema := `
+	CREATE TABLE IF NOT EXISTS app_settings (
+		key VARCHAR(128) PRIMARY KEY,
+		value TEXT NOT NULL DEFAULT '',
+		updated_at TIMESTAMPTZ DEFAULT NOW()
+	);
+	`
+	_, err := db.Exec(schema)
+	return err
 }
 
 // createUserFieldDefsTable 创建用户字段定义表（与 FlyIAM 结构对齐）

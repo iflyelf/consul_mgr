@@ -20,6 +20,7 @@ import (
 	permissionHandler "github.com/iflyelf/consul_mgr/internal/handler/permission"
 	roleHandler "github.com/iflyelf/consul_mgr/internal/handler/role"
 	serviceHandler "github.com/iflyelf/consul_mgr/internal/handler/service"
+	settingHandler "github.com/iflyelf/consul_mgr/internal/handler/setting"
 	teamHandler "github.com/iflyelf/consul_mgr/internal/handler/team"
 	userHandler "github.com/iflyelf/consul_mgr/internal/handler/user"
 	userFieldHandler "github.com/iflyelf/consul_mgr/internal/handler/userfield"
@@ -68,7 +69,7 @@ func main() {
 	}
 
 	// 创建服务上下文
-	ctx := svc.NewServiceContext(c)
+	ctx := svc.NewServiceContext(&c)
 	
 	// 创建 REST 服务器
 	opts := []rest.RunOption{
@@ -102,7 +103,7 @@ func main() {
 		c.FlyIAM.SyncEnabled, c.FlyIAM.SyncOnStartup, c.FlyIAM.SyncInterval); err != nil {
 		logx.Errorf("写入同步配置种子失败: %v", err)
 	}
-	userfieldLogic.StartScheduler(schedCtx, ctx.DB, c.FlyIAM.Endpoint, c.FlyIAM.ServiceToken)
+	userfieldLogic.StartScheduler(schedCtx, ctx.DB, &c)
 
 	// 启动信息
 	fmt.Printf("🚀 Starting Consul Manager Server\n")
@@ -600,6 +601,18 @@ func registerHandlers(server *rest.Server, ctx *svc.ServiceContext) {
 		Method:  http.MethodGet,
 		Path:    "/api/user-fields/sync/logs",
 		Handler: casdoorAuth.Handle(permissionMw.RequireAdmin()(userFieldHandler.ListSyncLogsHandler(ctx))),
+	})
+
+	// 应用设置（页面可配置，DB 优先 / env 兜底）
+	server.AddRoute(rest.Route{
+		Method:  http.MethodGet,
+		Path:    "/api/settings",
+		Handler: casdoorAuth.Handle(permissionMw.RequireAdmin()(settingHandler.ListSettingsHandler(ctx))),
+	})
+	server.AddRoute(rest.Route{
+		Method:  http.MethodPut,
+		Path:    "/api/settings",
+		Handler: casdoorAuth.Handle(permissionMw.RequireAdmin()(settingHandler.UpdateSettingsHandler(ctx))),
 	})
 
 	// 角色管理

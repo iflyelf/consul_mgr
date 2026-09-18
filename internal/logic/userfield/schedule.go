@@ -11,6 +11,7 @@ import (
 
 	"github.com/zeromicro/go-zero/core/stores/sqlx"
 
+	"github.com/iflyelf/consul_mgr/internal/config"
 	"github.com/iflyelf/consul_mgr/internal/model"
 )
 
@@ -169,22 +170,16 @@ func (l *Logic) SeedSyncConfig(ctx context.Context, enabled bool, onStartup bool
 
 // StartScheduler 启动后台调度：启动时按配置同步一次，之后按间隔检查。
 //
-// 说明：运行时以数据库配置（页面可改）为准；进度写入内存（供前端轮询），
-// 结果落库（供历史查询）。
-func StartScheduler(ctx context.Context, db sqlx.SqlConn, endpoint, serviceToken string) {
+// cfg 为共享指针：FlyIAM 地址/令牌可在页面修改并即时生效（无需重启）。
+// 说明：进度写入内存（供前端轮询），结果落库（供历史查询）。
+func StartScheduler(ctx context.Context, db sqlx.SqlConn, cfg *config.Config) {
 	l := NewLogic(db)
 
-	// 读取配置（页面维护）
-	cfg, err := l.GetSyncConfig(ctx)
-	if err != nil {
-		log.Printf("⚠️ 读取用户字段同步配置失败: %v", err)
-	}
-
 	// 启动时同步（可选）
-	if cfg.SyncOnStartup && endpoint != "" && serviceToken != "" {
+	if cfg.FlyIAM.SyncOnStartup && cfg.FlyIAM.Endpoint != "" && cfg.FlyIAM.ServiceToken != "" {
 		go func() {
 			time.Sleep(5 * time.Second) // 等待服务就绪
-			runAutoSync(ctx, l, endpoint, serviceToken, "startup")
+			runAutoSync(ctx, l, cfg.FlyIAM.Endpoint, cfg.FlyIAM.ServiceToken, "startup")
 		}()
 	}
 
@@ -199,21 +194,22 @@ func StartScheduler(ctx context.Context, db sqlx.SqlConn, endpoint, serviceToken
 				log.Println("⏰ 用户字段自动同步调度器已停止")
 				return
 			case <-ticker.C:
-				if endpoint == "" || serviceToken == "" {
+				// 每次读取最新配置（页面可改）
+				if cfg.FlyIAM.Endpoint == "" || cfg.FlyIAM.ServiceToken == "" {
 					continue
 				}
-				cfg, err := l.GetSyncConfig(ctx)
-				if err != nil || !cfg.Enabled {
+				sc, err := l.GetSyncConfig(ctx)
+				if err != nil || !sc.Enabled {
 					continue
 				}
-				d, err := ParseInterval(cfg.Interval)
+				d, err := ParseInterval(sc.Interval)
 				if err != nil {
 					continue
 				}
-				if cfg.LastRunAt != nil && time.Since(*cfg.LastRunAt) < d {
+				if sc.LastRunAt != nil && time.Since(*sc.LastRunAt) < d {
 					continue
 				}
-				runAutoSync(ctx, l, endpoint, serviceToken, "auto")
+				runAutoSync(ctx, l, cfg.FlyIAM.Endpoint, cfg.FlyIAM.ServiceToken, "auto")
 			}
 		}
 	}()
