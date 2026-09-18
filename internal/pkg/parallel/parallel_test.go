@@ -57,3 +57,21 @@ func TestMapPreservesOrder(t *testing.T) {
 		}
 	}
 }
+
+// TestForEachRecoversPanic 验证单项 panic 被捕获为该项错误，且不影响其它项、
+// 不终止进程。
+func TestForEachRecoversPanic(t *testing.T) {
+	items := []int{0, 1, 2, 3, 4}
+	errs := ForEach(items, 3, func(i int, v int) error {
+		if v == 2 {
+			panic("boom")
+		}
+		return nil
+	})
+	if len(errs) != 1 {
+		t.Fatalf("want 1 error (panic), got %d: %v", len(errs), errs)
+	}
+	if _, ok := errs[2]; !ok {
+		t.Fatalf("panic 项（index 2）应被记录为错误: %v", errs)
+	}
+}

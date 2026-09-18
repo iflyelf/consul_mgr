@@ -9,6 +9,8 @@
 package parallel
 
 import (
+	"fmt"
+	"runtime/debug"
 	"sync"
 )
 
@@ -29,7 +31,8 @@ const DefaultConcurrency = 16
 //
 // 说明:
 //   - 任何一项失败都不会中断其他项；
-//   - 结果通过返回值汇总，调用方按需处理。
+//   - 结果通过返回值汇总，调用方按需处理；
+//   - fn 内部 panic 会被捕获并记为该下标的错误，避免拖垮整个进程。
 func ForEach[T any](items []T, concurrency int, fn func(index int, item T) error) map[int]error {
 	return ForEachIndex(len(items), concurrency, func(i int) error {
 		return fn(i, items[i])
@@ -39,6 +42,9 @@ func ForEach[T any](items []T, concurrency int, fn func(index int, item T) error
 // ForEachIndex 以固定并发度并行遍历 [0, n)
 //
 // 适用于结果不便于直接索引（或需要按下标写入切片）的场景。
+//
+// 并发模型：信号量在「派发前」获取，因此同时在跑的 goroutine 数量始终
+// 不超过 concurrency（而非先创建 n 个再排队），大 n 时内存/调度开销更小。
 func ForEachIndex(n, concurrency int, fn func(index int) error) map[int]error {
 	if n <= 0 {
 		return nil
@@ -58,11 +64,19 @@ func ForEachIndex(n, concurrency int, fn func(index int) error) map[int]error {
 	sem := make(chan struct{}, concurrency)
 
 	for i := 0; i < n; i++ {
+		sem <- struct{}{} // 先占坑：限制同时在跑的 goroutine 数
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
-			sem <- struct{}{}
 			defer func() { <-sem }()
+			// panic 兜底：单项异常不应终止整个进程
+			defer func() {
+				if r := recover(); r != nil {
+					mu.Lock()
+					errs[idx] = fmt.Errorf("panic: %v\n%s", r, debug.Stack())
+					mu.Unlock()
+				}
+			}()
 
 			if err := fn(idx); err != nil {
 				mu.Lock()
@@ -83,7 +97,7 @@ func ForEachIndex(n, concurrency int, fn func(index int) error) map[int]error {
 //
 // 说明:
 //   - 保序：out[i] 对应 items[i]；
-//   - 任一处理函数 panic 会向上传播（由调用方保证 fn 不 panic）。
+//   - fn 内部 panic 会被捕获（该项结果保持零值），不影响其它项。
 func Map[T any, R any](items []T, concurrency int, fn func(item T) R) []R {
 	out := make([]R, len(items))
 	if len(items) == 0 {
