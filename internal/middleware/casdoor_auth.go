@@ -59,7 +59,7 @@ func NewCasdoorAuthMiddleware(casdoorFn func() *casdoor.Client) *CasdoorAuthMidd
 func (m *CasdoorAuthMiddleware) Handle(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// 1. 提取 Token
-		token := extractToken(r)
+		token := ExtractToken(r)
 		if token == "" {
 			logx.Error("未提供认证令牌")
 			httpx.WriteJson(w, http.StatusUnauthorized, map[string]interface{}{
@@ -125,13 +125,17 @@ func (m *CasdoorAuthMiddleware) Handle(next http.HandlerFunc) http.HandlerFunc {
 // AuthCookieName 登录凭证 Cookie 名（HttpOnly，JS 不可读，降低 XSS 窃取风险）
 const AuthCookieName = "consul_mgr_token"
 
-// extractToken 从请求中提取 Token
+// ExtractToken 从请求中提取 Token。
 //
 // 优先级：
 //  1. HttpOnly Cookie（推荐，浏览器自动携带，JS 不可读）
 //  2. Authorization: Bearer <token>（API 调用/旧会话兼容）
 //  3. token 查询参数（不推荐）
-func extractToken(r *http.Request) string {
+//
+// 说明：这是全项目**唯一**的取 token 实现。登录凭证已改为 HttpOnly Cookie，
+// handler 一律从 Context 取 token（GetTokenFromContext），不要另写只读
+// Authorization 的实现，否则会出现「Cookie 登录态在部分接口失效」的问题。
+func ExtractToken(r *http.Request) string {
 	if c, err := r.Cookie(AuthCookieName); err == nil && c.Value != "" {
 		return c.Value
 	}

@@ -385,7 +385,7 @@ func (m *PermissionMiddleware) OptionalAuth(next http.HandlerFunc) http.HandlerF
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		// 尝试提取 Token
-		token := extractToken(r)
+		token := ExtractToken(r)
 		if token == "" {
 			// 没有 Token，直接继续
 			next.ServeHTTP(w, r)
