@@ -3,6 +3,7 @@ package middleware
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -14,6 +15,84 @@ import (
 	"github.com/iflyelf/consul_mgr/internal/logic/audit"
 	"github.com/iflyelf/consul_mgr/internal/svc"
 )
+
+// sensitiveKeys 审计日志中需要脱敏的字段名（小写匹配）
+var sensitiveKeys = []string{
+	"password", "passwd", "secret", "token", "credential",
+	"client_secret", "access_key", "secret_key",
+}
+
+// isSensitiveKey 判断字段名是否敏感
+func isSensitiveKey(key string) bool {
+	k := strings.ToLower(key)
+	for _, s := range sensitiveKeys {
+		if strings.Contains(k, s) {
+			return true
+		}
+	}
+	return false
+}
+
+// sanitizeValue 递归脱敏 JSON 值中的敏感字段
+func sanitizeValue(v interface{}) interface{} {
+	switch t := v.(type) {
+	case map[string]interface{}:
+		for k, val := range t {
+			if isSensitiveKey(k) {
+				t[k] = "******"
+				continue
+			}
+			t[k] = sanitizeValue(val)
+		}
+		return t
+	case []interface{}:
+		for i, item := range t {
+			t[i] = sanitizeValue(item)
+		}
+		return t
+	default:
+		return v
+	}
+}
+
+// sanitizeBody 对请求体进行脱敏：JSON 逐字段脱敏；非 JSON 仅保留类型说明。
+//
+// 目的：审计日志不应明文保存 token / 密码等敏感信息。
+func sanitizeBody(body []byte) string {
+	if len(body) == 0 {
+		return ""
+	}
+	var parsed interface{}
+	if err := json.Unmarshal(body, &parsed); err != nil {
+		// 非 JSON（如文件上传的表单）不做内容记录，避免误存敏感数据
+		return "(非 JSON 请求体，已省略)"
+	}
+	sanitized := sanitizeValue(parsed)
+	out, err := json.Marshal(sanitized)
+	if err != nil {
+		return "(请求体脱敏失败)"
+	}
+	const maxLen = 8 << 10
+	if len(out) > maxLen {
+		return string(out[:maxLen]) + "...(截断)"
+	}
+	return string(out)
+}
+
+// sanitizeQuery 对查询串中的敏感参数脱敏
+func sanitizeQuery(rawQuery string) string {
+	if rawQuery == "" {
+		return ""
+	}
+	parts := strings.Split(rawQuery, "&")
+	for i, p := range parts {
+		kv := strings.SplitN(p, "=", 2)
+		if len(kv) == 2 && isSensitiveKey(kv[0]) {
+			parts[i] = kv[0] + "=******"
+		}
+	}
+	return strings.Join(parts, "&")
+}
 
 // AuditMiddleware 审计日志中间件
 type AuditMiddleware struct {
@@ -72,11 +151,12 @@ func (m *AuditMiddleware) Handle(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 		
-		// 读取请求体
+		// 读取请求体（限制大小，避免大 body 造成内存膨胀）
 		var requestBody []byte
 		if r.Body != nil {
-			requestBody, _ = io.ReadAll(r.Body)
-			r.Body = io.NopCloser(bytes.NewBuffer(requestBody))
+			const maxAuditBody = 64 << 10 // 64KB
+			requestBody, _ = io.ReadAll(io.LimitReader(r.Body, maxAuditBody))
+			r.Body = io.NopCloser(io.MultiReader(bytes.NewReader(requestBody), r.Body))
 		}
 		
 		// 包装响应写入器
@@ -103,12 +183,12 @@ func (m *AuditMiddleware) Handle(next http.HandlerFunc) http.HandlerFunc {
 			groupID = &id
 		}
 		
-		// 构造详情
+		// 构造详情（请求体按敏感字段脱敏，避免 token/密码明文落库）
 		details := map[string]interface{}{
 			"method":       r.Method,
 			"path":         r.URL.Path,
-			"query":        r.URL.RawQuery,
-			"request_body": string(requestBody),
+			"query":        sanitizeQuery(r.URL.RawQuery),
+			"request_body": sanitizeBody(requestBody),
 			"duration_ms":  time.Since(startTime).Milliseconds(),
 		}
 		

@@ -170,10 +170,23 @@ func CallbackHandler(casdoorClient *casdoor.Client) http.HandlerFunc {
 			return
 		}
 
+		// 凭证写入 HttpOnly Cookie（JS 不可读），响应不再回传 access_token
+		http.SetCookie(w, &http.Cookie{
+			Name:     middleware.AuthCookieName,
+			Value:    resp.AccessToken,
+			Path:     "/",
+			MaxAge:   int(resp.ExpiresIn),
+			HttpOnly: true,
+			SameSite: http.SameSiteLaxMode,
+			Secure:   r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https",
+		})
+
 		httpx.WriteJson(w, http.StatusOK, map[string]interface{}{
 			"code":    200,
 			"message": "登录成功",
-			"data":    resp,
+			"data": map[string]interface{}{
+				"user_info": resp.UserInfo,
+			},
 		})
 	}
 }
@@ -270,13 +283,19 @@ func LogoutHandler() http.HandlerFunc {
 		// 获取用户名（用于日志）
 		username, _ := middleware.GetUsernameFromContext(r.Context())
 
-		// 注意：JWT Token 是无状态的，服务端无法主动失效
-		// 需要客户端清除 Token
-		// 如果需要服务端主动失效，需要维护 Token 黑名单
+		// 清除登录 Cookie（HttpOnly）
+		http.SetCookie(w, &http.Cookie{
+			Name:     middleware.AuthCookieName,
+			Value:    "",
+			Path:     "/",
+			MaxAge:   -1,
+			HttpOnly: true,
+			SameSite: http.SameSiteLaxMode,
+		})
 
 		httpx.WriteJson(w, http.StatusOK, map[string]interface{}{
 			"code":    200,
-			"message": "登出成功，请清除本地 Token",
+			"message": "登出成功",
 			"data": map[string]string{
 				"username": username,
 			},

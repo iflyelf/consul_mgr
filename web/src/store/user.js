@@ -1,13 +1,18 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 
+// 仅缓存非敏感的用户展示信息；登录凭证由后端 HttpOnly Cookie 承载，
+// 前端不接触 token（避免 localStorage 被 XSS 窃取）。
+const USER_KEY = 'userInfo'
+
 export const useUserStore = defineStore('user', () => {
   // 状态
-  const token = ref(localStorage.getItem('token') || '')
-  const userInfo = ref(JSON.parse(localStorage.getItem('userInfo') || 'null'))
+  const userInfo = ref(JSON.parse(localStorage.getItem(USER_KEY) || 'null'))
+  // 登录态以服务端探测为准（Cookie 不可被 JS 读取）
+  const isLoggedIn = ref(false)
+  const initialized = ref(false)
 
   // 计算属性
-  const isLoggedIn = computed(() => !!token.value)
   const username = computed(() => userInfo.value?.name || '')
   const displayName = computed(() => userInfo.value?.display_name || userInfo.value?.name || '')
   const email = computed(() => userInfo.value?.email || '')
@@ -16,115 +21,99 @@ export const useUserStore = defineStore('user', () => {
   const roles = computed(() => userInfo.value?.roles || [])
 
   /**
-   * 设置 Token
-   */
-  const setToken = (newToken) => {
-    token.value = newToken
-    localStorage.setItem('token', newToken)
-  }
-
-  /**
    * 设置用户信息
    */
   const setUser = (info) => {
     userInfo.value = info
-    localStorage.setItem('userInfo', JSON.stringify(info))
+    localStorage.setItem(USER_KEY, JSON.stringify(info))
   }
 
   /**
-   * 设置 Token 和用户信息
-   */
-  const setAuth = (newToken, info) => {
-    setToken(newToken)
-    setUser(info)
-  }
-
-  /**
-   * 清除认证信息
+   * 清除认证信息（本地用户信息；Cookie 由后端清除）
    */
   const clearAuth = () => {
-    token.value = ''
     userInfo.value = null
-    localStorage.removeItem('token')
-    localStorage.removeItem('userInfo')
+    isLoggedIn.value = false
+    localStorage.removeItem(USER_KEY)
   }
 
   /**
    * 检查是否有指定角色
    */
-  const hasRole = (role) => {
-    return roles.value.includes(role)
-  }
+  const hasRole = (role) => roles.value.includes(role)
 
   /**
    * 检查是否有任一角色
    */
-  const hasAnyRole = (...roleList) => {
-    return roleList.some(role => roles.value.includes(role))
-  }
+  const hasAnyRole = (...roleList) => roleList.some(role => roles.value.includes(role))
 
   /**
-   * 从后端刷新当前用户信息（用于校正管理员标记等）
+   * 从后端刷新当前用户信息（凭证由 Cookie 自动携带）
+   * @param {boolean} silent 不触发全局 401 跳转（用于登录态探测）
    */
-  const fetchUserInfo = async () => {
-    if (!token.value) return null
+  const fetchUserInfo = async (silent = false) => {
     try {
       const resp = await fetch('/api/auth/userinfo', {
-        headers: { 'Authorization': `Bearer ${token.value}` }
+        credentials: 'include'
       })
       const result = await resp.json()
       if (result.code === 200 && result.data) {
         setUser(result.data)
+        isLoggedIn.value = true
         return result.data
       }
     } catch (error) {
-      console.error('获取用户信息失败:', error)
+      if (!silent) console.error('获取用户信息失败:', error)
     }
     return null
   }
 
   /**
-   * 登出
+   * 初始化：探测登录态（应用启动/路由守卫调用一次）
+   */
+  const init = async () => {
+    if (initialized.value) return
+    try {
+      await fetchUserInfo(true)
+    } finally {
+      initialized.value = true
+    }
+  }
+
+  /**
+   * 登出：通知后端清除 Cookie
    */
   const logout = async () => {
     try {
-      // 调用后端登出接口
-      await fetch('/api/auth/logout', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token.value}`
-        }
-      })
+      await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' })
     } catch (error) {
       console.error('登出请求失败:', error)
     } finally {
-      // 无论接口成功与否，都清除本地信息
       clearAuth()
     }
   }
 
   return {
     // 状态
-    token,
     userInfo,
-    
-    // 计算属性
     isLoggedIn,
+    initialized,
+
+    // 计算属性
     username,
     displayName,
     email,
     avatar,
     isAdmin,
     roles,
-    
+
     // 方法
-    setToken,
     setUser,
-    setAuth,
     clearAuth,
     hasRole,
     hasAnyRole,
     fetchUserInfo,
+    init,
     logout
   }
 })

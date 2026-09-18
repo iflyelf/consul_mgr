@@ -50,20 +50,18 @@ onMounted(async () => {
     // 1. 更新状态
     statusText.value = '正在验证授权码...'
     
-    // 2. 处理回调，换取 Token
+    // 2. 处理回调（后端已把凭证写入 HttpOnly Cookie，响应仅含用户信息）
     const data = await handleCallback()
-    
+
     statusText.value = '正在获取用户信息...'
     progress.value = 60
-    
-    // 3. 保存 Token（同时更新 Pinia Store 与 localStorage）
-    const token = data.access_token
-    userStore.setToken(token)
 
-    // 4. 保存用户信息到 Store
+    // 3. 保存用户信息到 Store（前端不保存 token）
     if (data.user_info) {
       userStore.setUser(data.user_info)
     }
+    // 标记已登录
+    userStore.isLoggedIn = true
     
     statusText.value = '登录成功，正在跳转...'
     progress.value = 100

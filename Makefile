@@ -1,7 +1,10 @@
-.PHONY: build build-linux-amd64 build-linux-arm64 build-all clean run test
+.PHONY: build build-linux-amd64 build-linux-arm64 build-all clean run test schema
 
 VERSION ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "dev")
 LDFLAGS := -s -w -X main.version=$(VERSION)
+
+# 数据库连接串（导出表结构用，可通过环境变量覆盖）
+DATABASE_URL ?= postgresql://postgres:ysyh!9Sky@localhost:5432/consul_mgr?sslmode=disable
 
 # 本地构建
 build:
@@ -43,6 +46,21 @@ fmt:
 # 代码检查
 lint:
 	golangci-lint run
+
+# 从运行中的数据库导出表结构快照（避免手工维护过期）
+schema:
+	@command -v pg_dump >/dev/null 2>&1 || { echo "❌ 需要 pg_dump（postgresql-client）"; exit 1; }
+	@echo "📤 导出表结构到 deploy/sql/schema.sql ..."
+	@printf '%s\n' \
+	  '-- =============================================================================' \
+	  '-- Consul Manager 数据库表结构（自动生成，请勿手工编辑）' \
+	  '--' \
+	  '-- 生成方式：make schema（pg_dump --schema-only）' \
+	  '-- 权威来源：程序启动时按代码内嵌 DDL 自动建表；本文件仅为审计/参考快照。' \
+	  '-- =============================================================================' \
+	  > deploy/sql/schema.sql
+	pg_dump --schema-only --no-owner --no-privileges "$(DATABASE_URL)" >> deploy/sql/schema.sql
+	@echo "✅ 已生成: deploy/sql/schema.sql"
 
 # 生成发布包
 release: build-all

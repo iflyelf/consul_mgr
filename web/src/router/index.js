@@ -114,11 +114,15 @@ router.beforeEach(async (to, from, next) => {
   
   // 获取用户 Store
   const userStore = useUserStore()
-  const isLoggedIn = userStore.isLoggedIn
-  
+
+  // 登录态探测（凭证在 HttpOnly Cookie，需向后端确认，仅执行一次）
+  if (!userStore.initialized) {
+    await userStore.init()
+  }
+
   // 如果路由需要认证
   if (to.meta.requiresAuth !== false) {
-    if (!isLoggedIn) {
+    if (!userStore.isLoggedIn) {
       // 未登录，跳转到登录页
       next('/login')
       return
@@ -135,13 +139,13 @@ router.beforeEach(async (to, from, next) => {
       return
     }
   }
-  
+
   // 如果已登录访问登录页，跳转到首页
-  if (to.path === '/login' && isLoggedIn) {
+  if (to.path === '/login' && userStore.isLoggedIn) {
     next('/')
     return
   }
-  
+
   next()
 })
 

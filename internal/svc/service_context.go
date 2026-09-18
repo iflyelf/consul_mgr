@@ -254,12 +254,62 @@ func initSchema(db *sql.DB, c config.Config) error {
 	if err := createServiceGroupTables(db); err != nil {
 		return err
 	}
+	// 自动清理废弃的表与列（白名单，幂等），升级无需人工干预
+	cleanupDeprecatedSchema(db)
 	// 旧库结构迁移（历史版本表结构变更，幂等）
 	if err := migrateLegacySchema(db); err != nil {
 		return err
 	}
 	log.Println("数据库初始化完成")
 	return nil
+}
+
+// deprecatedTables 明确废弃的表（程序不再读写，启动时自动清理）。
+//
+// 白名单机制：只清理确知无用的历史遗留表，绝不动态推断，避免误删第三方表。
+var deprecatedTables = []string{
+	"users",                  // 旧版本本地用户表（现用户唯一存储于 Casdoor）
+	"user_roles",             // 旧版本用户-角色关联表
+	"permissions",            // 旧版本权限表
+	"role_permissions",       // 旧版本角色-权限关联表
+	"role_group_permissions", // 旧版本角色-服务组授权表
+}
+
+// deprecatedColumns 明确废弃的列（{表, 列}），启动时自动清理。
+var deprecatedColumns = []struct{ table, column string }{
+	// 预留：后续如有列废弃在此登记
+}
+
+// cleanupDeprecatedSchema 自动清理废弃的表与列（幂等，多副本安全）
+func cleanupDeprecatedSchema(db *sql.DB) {
+	for _, t := range deprecatedTables {
+		var exists bool
+		if err := db.QueryRow(`SELECT EXISTS (SELECT 1 FROM information_schema.tables
+			WHERE table_schema='public' AND table_name=$1)`, t).Scan(&exists); err != nil || !exists {
+			continue
+		}
+		if _, err := db.Exec("DROP TABLE IF EXISTS " + quoteIdent(t) + " CASCADE"); err != nil {
+			log.Printf("⚠️ 清理废弃表 %s 失败: %v", t, err)
+			continue
+		}
+		log.Printf("🧹 已自动清理废弃表: %s", t)
+	}
+
+	for _, c := range deprecatedColumns {
+		var exists bool
+		if err := db.QueryRow(`SELECT EXISTS (SELECT 1 FROM information_schema.columns
+			WHERE table_schema='public' AND table_name=$1 AND column_name=$2)`,
+			c.table, c.column).Scan(&exists); err != nil || !exists {
+			continue
+		}
+		stmt := fmt.Sprintf("ALTER TABLE %s DROP COLUMN IF EXISTS %s",
+			quoteIdent(c.table), quoteIdent(c.column))
+		if _, err := db.Exec(stmt); err != nil {
+			log.Printf("⚠️ 清理废弃列 %s.%s 失败: %v", c.table, c.column, err)
+			continue
+		}
+		log.Printf("🧹 已自动清理废弃列: %s.%s", c.table, c.column)
+	}
 }
 
 // schemaLockKey consul_mgr 建表 advisory lock 键
@@ -541,6 +591,12 @@ func createServiceGroupTables(db *sql.DB) error {
 	CREATE INDEX IF NOT EXISTS idx_audit_logs_user ON audit_logs(user_id);
 	CREATE INDEX IF NOT EXISTS idx_audit_logs_created ON audit_logs(created_at DESC);
 	CREATE INDEX IF NOT EXISTS idx_audit_logs_group ON audit_logs(group_id);
+	-- 列表/过滤高频字段补索引
+	CREATE INDEX IF NOT EXISTS idx_service_groups_created ON service_groups(created_at DESC);
+	CREATE INDEX IF NOT EXISTS idx_audit_logs_username ON audit_logs(username);
+	CREATE INDEX IF NOT EXISTS idx_audit_logs_action ON audit_logs(action);
+	CREATE INDEX IF NOT EXISTS idx_audit_logs_resource ON audit_logs(resource_type);
+	CREATE INDEX IF NOT EXISTS idx_audit_logs_status ON audit_logs(status);
 	`
 	
 	_, err := db.Exec(schema)

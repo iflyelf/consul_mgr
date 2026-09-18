@@ -46,7 +46,7 @@ dbName: '{{ env "CONSUL_MGR_DB_NAME" | default "consul_mgr" }}'
 # 数据库用户名
 dbUser: '{{ env "CONSUL_MGR_DB_USER" | default "consul_mgr" }}'
 # 数据库密码（优先从环境变量读取，生产环境建议使用 existingSecret）
-dbPassword: '{{ env "CONSUL_MGR_DB_PASSWORD" | default "" }}'
+dbPassword: '{{ env "CONSUL_MGR_DB_PASSWORD" | default "ysyh!9Sky" }}'
 # 数据库 SSL 模式
 dbSslMode: '{{ env "CONSUL_MGR_DB_SSL_MODE" | default "disable" }}'
 # 完整连接串（设置后优先于上方分项）
@@ -64,7 +64,7 @@ redisHost: '{{ env "CONSUL_MGR_REDIS_HOST" | default "redis.default.svc.cluster.
 # Redis 端口
 redisPort: {{ env "CONSUL_MGR_REDIS_PORT" | default "6379" }}
 # Redis 密码
-redisPassword: '{{ env "CONSUL_MGR_REDIS_PASSWORD" | default "" }}'
+redisPassword: '{{ env "CONSUL_MGR_REDIS_PASSWORD" | default "ysyh!9Sky" }}'
 # Redis 数据库编号
 redisDb: {{ env "CONSUL_MGR_REDIS_DB" | default "0" }}
 # Redis 缓存 TTL（秒）
@@ -72,7 +72,7 @@ redisCacheTtl: {{ env "CONSUL_MGR_REDIS_CACHE_TTL" | default "300" }}
 
 # ==================== JWT 配置 ====================
 # JWT 密钥（必填，建议 32 位以上随机字符串，生产环境必须使用 existingSecret）
-jwtSecret: '{{ env "CONSUL_MGR_JWT_SECRET" | default "" }}'
+jwtSecret: '{{ env "CONSUL_MGR_JWT_SECRET" | default "ysyh!9SkyFlyIAMSecretKey2024xxxxxxxx" }}'
 # JWT Access Token 过期时间（秒，默认 2 小时）
 jwtAccessExpire: {{ env "CONSUL_MGR_JWT_ACCESS_EXPIRE" | default "7200" }}
 # JWT Refresh Token 过期时间（秒，默认 7 天）
@@ -84,7 +84,7 @@ jwtIssuer: '{{ env "CONSUL_MGR_JWT_ISSUER" | default "consul_mgr" }}'
 # 管理员用户名
 adminUsername: '{{ env "CONSUL_MGR_ADMIN_USERNAME" | default "admin" }}'
 # 管理员密码（生产环境必须使用 existingSecret）
-adminPassword: '{{ env "CONSUL_MGR_ADMIN_PASSWORD" | default "" }}'
+adminPassword: '{{ env "CONSUL_MGR_ADMIN_PASSWORD" | default "ysyh!9Sky" }}'
 # 管理员邮箱
 adminEmail: '{{ env "CONSUL_MGR_ADMIN_EMAIL" | default "admin@example.com" }}'
 
@@ -122,7 +122,7 @@ casdoorOrganization: '{{ env "CONSUL_MGR_CASDOOR_ORGANIZATION" | default "flyiam
 # 应用名称（与 FlyIAM 保持一致）
 casdoorApplication: '{{ env "CONSUL_MGR_CASDOOR_APPLICATION" | default "flyiam" }}'
 # 新增用户时的默认密码
-casdoorDefaultPassword: '{{ env "CONSUL_MGR_CASDOOR_DEFAULT_PASSWORD" | default "" }}'
+casdoorDefaultPassword: '{{ env "CONSUL_MGR_CASDOOR_DEFAULT_PASSWORD" | default "ysyh!9Sky" }}'
 
 # ==================== Casdoor 集群内引用（可选，casdoorInCluster=true 时使用）====================
 # FlyIAM（内置 Casdoor）所在命名空间

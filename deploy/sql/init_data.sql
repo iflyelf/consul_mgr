@@ -11,7 +11,8 @@
 --     - 下方示例地址/Token 请按实际环境替换，切勿直接用于生产。
 -- =============================================================================
 
--- 预置一个示例 Consul 服务组（存在同 code 时跳过）
+-- 预置一个示例 Consul 服务组（存在同名时跳过）
+-- 注：name 上有唯一约束，故按 name 做冲突判定（code 无唯一约束）。
 INSERT INTO service_groups (name, code, consul_address, consul_token, consul_datacenter, description, status)
 VALUES (
     '默认集群',
@@ -22,4 +23,4 @@ VALUES (
     '示例服务组，可通过界面修改或删除',
     1
 )
-ON CONFLICT (code) DO NOTHING;
+ON CONFLICT (name) DO NOTHING;

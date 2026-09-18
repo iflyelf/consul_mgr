@@ -9,8 +9,9 @@
 /**
  * 处理登录回调
  *
- * 从 URL 中取出 code/state，交给后端换取 Token。
- * @returns {Promise<Object>} 登录结果，包含 access_token / user_info
+ * 从 URL 中取出 code/state，交给后端换取凭证。
+ * 后端将凭证写入 HttpOnly Cookie，响应体只返回用户信息，不含 token。
+ * @returns {Promise<Object>} 登录结果，包含 user_info
  */
 export async function handleCallback() {
   const params = new URLSearchParams(window.location.search)
@@ -21,7 +22,9 @@ export async function handleCallback() {
     throw new Error('缺少授权码或状态码')
   }
 
-  const response = await fetch(`/api/auth/callback?code=${code}&state=${state}`)
+  const response = await fetch(`/api/auth/callback?code=${code}&state=${state}`, {
+    credentials: 'include'
+  })
   const result = await response.json()
 
   if (result.code !== 200) {

@@ -117,35 +117,29 @@ func (m *CasdoorAuthMiddleware) Handle(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
+// AuthCookieName 登录凭证 Cookie 名（HttpOnly，JS 不可读，降低 XSS 窃取风险）
+const AuthCookieName = "consul_mgr_token"
+
 // extractToken 从请求中提取 Token
 //
-// 参数:
-//   r - HTTP 请求
-//
-// 返回:
-//   string - Token 字符串，如果没有则返回空字符串
-//
-// 支持的格式：
-//   - Authorization: Bearer <token>
-//   - token 查询参数（不推荐，仅用于某些特殊场景）
+// 优先级：
+//  1. HttpOnly Cookie（推荐，浏览器自动携带，JS 不可读）
+//  2. Authorization: Bearer <token>（API 调用/旧会话兼容）
+//  3. token 查询参数（不推荐）
 func extractToken(r *http.Request) string {
-	// 1. 从 Authorization Header 提取
+	if c, err := r.Cookie(AuthCookieName); err == nil && c.Value != "" {
+		return c.Value
+	}
+
 	bearerToken := r.Header.Get("Authorization")
 	if bearerToken != "" {
-		// 格式：Bearer <token>
 		parts := strings.Split(bearerToken, " ")
 		if len(parts) == 2 && strings.ToLower(parts[0]) == "bearer" {
 			return parts[1]
 		}
 	}
 
-	// 2. 从查询参数提取（备选方案，不推荐）
-	token := r.URL.Query().Get("token")
-	if token != "" {
-		return token
-	}
-
-	return ""
+	return r.URL.Query().Get("token")
 }
 
 // GetUserIdFromContext 从 Context 获取用户 ID

@@ -1,12 +1,13 @@
 -- =============================================================================
--- Consul Manager 数据库结构（参考快照）
+-- Consul Manager 数据库结构（快照，请勿手工编辑）
 --
--- 说明:
---   应用启动时会自动执行等价的 CREATE TABLE IF NOT EXISTS（见
---   internal/svc/service_context.go），因此本文件主要用于：
---     1) 人工建库/审计时参考
---     2) DBA 预创建表（与运行时结构保持一致）
---     3) 结构版本对照
+-- ⚠️ 权威来源：程序启动时按代码内嵌 DDL 自动建表，并自动维护
+--    （建库/加列/改类型/清理废弃表列），无需手工执行任何 SQL。
+--
+-- 重新生成本快照：
+--     make schema            # 用 pg_dump 从运行中的数据库导出
+--   或
+--     pg_dump --schema-only "$DATABASE_URL" > deploy/sql/schema.sql
 --
 --   认证与用户体系由外部 FlyIAM（内置 Casdoor）负责，本项目不创建用户密码表。
 --   Casdoor 自身的表（casdoor_*）由 FlyIAM 管理，不在本文件范围内。
