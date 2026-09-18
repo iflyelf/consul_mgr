@@ -110,17 +110,21 @@ charts/consul_mgr/
 | `CONSUL_MGR_REDIS_HOST` / `CONSUL_MGR_REDIS_PASSWORD` | 缓存 | - |
 | `CONSUL_MGR_JWT_SECRET` | JWT 密钥 | - |
 | `CONSUL_MGR_ADMIN_PASSWORD` | 管理员密码 | - |
-| `CONSUL_MGR_CASDOOR_DEFAULT_PASSWORD` | 新增用户默认密码（**必填**） | - |
-
-> ⚠️ 敏感值不提供内置默认口令：`CONSUL_MGR_DB_PASSWORD`、`CONSUL_MGR_JWT_SECRET`、
-> `CONSUL_MGR_ADMIN_PASSWORD`、`CONSUL_MGR_CASDOOR_DEFAULT_PASSWORD` 需显式设置
-> （环境变量或 `existingSecret`），否则启动校验会失败。
+| `CONSUL_MGR_CASDOOR_DEFAULT_PASSWORD` | 新增用户默认密码（生产请覆盖） | `ysyh!9Sky` |
 | `CONSUL_MGR_CASDOOR_ENDPOINT` | Casdoor 地址（默认外置域名） | `https://casdoor.example.com` |
 | `CONSUL_MGR_CASDOOR_PUBLIC_ENDPOINT` | Casdoor 浏览器地址（留空回退 Endpoint） | - |
 | `CONSUL_MGR_CASDOOR_IN_CLUSTER` | Casdoor 是否在集群内 | `false` |
 | `CONSUL_MGR_CASDOOR_CLIENT_ID` / `..._SECRET` | 应用凭据（FlyIAM 获取） | - |
 | `CONSUL_MGR_CASDOOR_ORGANIZATION` | 组织 | `flyiam` |
 | `CONSUL_MGR_CASDOOR_APPLICATION` | 应用 | `flyiam` |
+| `CONSUL_MGR_AUTH_COOKIE_SAMESITE` | 登录 Cookie SameSite（跨域需 `none`） | `lax` |
+| `CONSUL_MGR_AUTH_COOKIE_SECURE` | 登录 Cookie Secure（`auto`/`true`/`false`） | `auto` |
+| `CONSUL_MGR_AUTH_COOKIE_DOMAIN` | 登录 Cookie 作用域（跨子域共享） | 空 |
+| `CONSUL_MGR_CORS_ALLOWED_ORIGINS` | 允许的跨域来源（逗号分隔，为空关闭） | 空 |
+
+> ⚠️ 生产环境请通过环境变量或 `existingSecret` 覆盖 `CONSUL_MGR_DB_PASSWORD`、
+> `CONSUL_MGR_JWT_SECRET`、`CONSUL_MGR_ADMIN_PASSWORD`、
+> `CONSUL_MGR_CASDOOR_DEFAULT_PASSWORD`（Chart 默认值仅便于快速开始）。
 
 > Chart 仅暴露 ClusterIP Service，不包含 Ingress；域名/HTTPS 请在集群入口层（Ingress Controller / Gateway）统一配置。
 

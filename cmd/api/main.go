@@ -8,6 +8,7 @@ import (
 	"os"
 
 	"github.com/zeromicro/go-zero/core/conf"
+	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/rest"
 
 	"github.com/iflyelf/consul_mgr/internal/config"
@@ -67,14 +68,24 @@ func main() {
 	ctx := svc.NewServiceContext(c)
 	
 	// 创建 REST 服务器
-	server := rest.MustNewServer(c.RestConf, rest.WithNotFoundHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// 如果启用了嵌入式 Web，未找到的路由使用 SPA 处理器
-		if c.Web.Embedded {
-			getSPAHandler().ServeHTTP(w, r)
-		} else {
-			http.NotFound(w, r)
-		}
-	})))
+	opts := []rest.RunOption{
+		rest.WithNotFoundHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// 如果启用了嵌入式 Web，未找到的路由使用 SPA 处理器
+			if c.Web.Embedded {
+				getSPAHandler().ServeHTTP(w, r)
+			} else {
+				http.NotFound(w, r)
+			}
+		})),
+	}
+	// 跨域支持：仅当前端与后端不同源时配置 CORS_ALLOWED_ORIGINS。
+	// go-zero 对具体 origin 会同时下发 Access-Control-Allow-Credentials: true，
+	// 从而允许跨域携带登录 Cookie（需配合 AUTH_COOKIE_SAMESITE=none + HTTPS）。
+	if len(c.Security.CORSAllowedOrigins) > 0 {
+		logx.Infof("已启用跨域访问，允许来源: %v", c.Security.CORSAllowedOrigins)
+		opts = append(opts, rest.WithCors(c.Security.CORSAllowedOrigins...))
+	}
+	server := rest.MustNewServer(c.RestConf, opts...)
 	defer server.Stop()
 
 	// 注册路由
@@ -129,7 +140,7 @@ func registerHandlers(server *rest.Server, ctx *svc.ServiceContext) {
 		{
 			Method:  http.MethodGet,
 			Path:    "/api/auth/callback",
-			Handler: authHandler.CallbackHandler(ctx.CasdoorClient),
+			Handler: authHandler.CallbackHandler(ctx.CasdoorClient, ctx.Config),
 		},
 	})
 	
@@ -153,7 +164,7 @@ func registerHandlers(server *rest.Server, ctx *svc.ServiceContext) {
 	server.AddRoute(rest.Route{
 		Method:  http.MethodPost,
 		Path:    "/api/auth/logout",
-		Handler: casdoorAuth.Handle(authHandler.LogoutHandler()),
+		Handler: casdoorAuth.Handle(authHandler.LogoutHandler(ctx.Config)),
 	})
 	
 	// ============================================================

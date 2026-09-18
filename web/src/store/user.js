@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import { apiUrl } from '@/config/api'
 
 // 仅缓存非敏感的用户展示信息；登录凭证由后端 HttpOnly Cookie 承载，
 // 前端不接触 token（避免 localStorage 被 XSS 窃取）。
@@ -53,7 +54,7 @@ export const useUserStore = defineStore('user', () => {
    */
   const fetchUserInfo = async (silent = false) => {
     try {
-      const resp = await fetch('/api/auth/userinfo', {
+      const resp = await fetch(apiUrl('/auth/userinfo'), {
         credentials: 'include'
       })
       const result = await resp.json()
@@ -85,7 +86,7 @@ export const useUserStore = defineStore('user', () => {
    */
   const logout = async () => {
     try {
-      await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' })
+      await fetch(apiUrl('/auth/logout'), { method: 'POST', credentials: 'include' })
     } catch (error) {
       console.error('登出请求失败:', error)
     } finally {

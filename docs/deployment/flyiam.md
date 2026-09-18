@@ -94,6 +94,25 @@ curl -s -o /dev/null -w "%{redirect_url}\n" http://localhost:8080/api/auth/login
   （环境变量 / Secret），否则启动即失败；新增用户与重置密码使用该值。
 - **用户列表新鲜度**：缓存 TTL 默认 30s（`CASDOOR_USER_CACHE_TTL` 可调），
   并以 SingleFlight 合并并发回源；列表接口支持 `?refresh=1` 强制绕过缓存。
+
+### 跨域部署（前后端不同源）
+
+默认前后端同源（前端嵌入后端），`SameSite=Lax` 即可。仅当前端与后端部署到
+不同域名时，需配置：
+
+```bash
+# 前端构建时指定后端地址
+export VITE_API_BASE_URL="https://consul-api.example.com"
+
+# 后端 Cookie（跨域必须 None + HTTPS）
+export CONSUL_MGR_AUTH_COOKIE_SAMESITE="none"
+# 跨子域共享时：export CONSUL_MGR_AUTH_COOKIE_DOMAIN=".example.com"
+
+# 后端 CORS（显式列出来源，不能用 *）
+export CONSUL_MGR_CORS_ALLOWED_ORIGINS="https://consul.example.com"
+```
+
+> ⚠️ `SameSite=None` 会削弱 CSRF 防护，非跨域部署请保持默认 `lax`。
 - **令牌校验**：访问令牌经 Casdoor 权威校验（查库存在、未过期、用户未禁用/删除），
   校验结果缓存 60s，不再信任未验签的 JWT 载荷。
 

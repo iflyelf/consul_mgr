@@ -6,6 +6,8 @@
 //
 // 作者: iflyelf
 
+import { apiUrl } from '@/config/api'
+
 /**
  * 处理登录回调
  *
@@ -22,7 +24,7 @@ export async function handleCallback() {
     throw new Error('缺少授权码或状态码')
   }
 
-  const response = await fetch(`/api/auth/callback?code=${code}&state=${state}`, {
+  const response = await fetch(apiUrl(`/auth/callback?code=${code}&state=${state}`), {
     credentials: 'include'
   })
   const result = await response.json()

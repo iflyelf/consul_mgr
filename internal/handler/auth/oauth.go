@@ -88,15 +88,7 @@ func LoginHandler(casdoorClient *casdoor.Client, c config.Config) http.HandlerFu
 
 		// 生成随机 state 并写入 Cookie，回调时校验，防止登录 CSRF
 		state := casdoor.GenState()
-		http.SetCookie(w, &http.Cookie{
-			Name:     oauthStateCookie,
-			Value:    state,
-			Path:     "/",
-			MaxAge:   600,
-			HttpOnly: true,
-			SameSite: http.SameSiteLaxMode,
-			Secure:   r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https",
-		})
+		http.SetCookie(w, c.CookieConfig().NewCookie(oauthStateCookie, state, 600, r))
 
 		// 调用 Logic 层
 		logic := auth.NewOAuthLogic(r.Context(), casdoorClient)
@@ -130,7 +122,8 @@ func LoginHandler(casdoorClient *casdoor.Client, c config.Config) http.HandlerFu
 //
 // 请求方式：GET
 // 路径：/api/auth/callback
-func CallbackHandler(casdoorClient *casdoor.Client) http.HandlerFunc {
+func CallbackHandler(casdoorClient *casdoor.Client, c config.Config) http.HandlerFunc {
+	cookieCfg := c.CookieConfig()
 	return func(w http.ResponseWriter, r *http.Request) {
 		// 解析请求参数
 		var req types.CallbackRequest
@@ -156,7 +149,7 @@ func CallbackHandler(casdoorClient *casdoor.Client) http.HandlerFunc {
 			})
 			return
 		}
-		http.SetCookie(w, &http.Cookie{Name: oauthStateCookie, Value: "", Path: "/", MaxAge: -1})
+		http.SetCookie(w, cookieCfg.ClearCookie(oauthStateCookie))
 
 		// 调用 Logic 层
 		logic := auth.NewOAuthLogic(r.Context(), casdoorClient)
@@ -171,15 +164,7 @@ func CallbackHandler(casdoorClient *casdoor.Client) http.HandlerFunc {
 		}
 
 		// 凭证写入 HttpOnly Cookie（JS 不可读），响应不再回传 access_token
-		http.SetCookie(w, &http.Cookie{
-			Name:     middleware.AuthCookieName,
-			Value:    resp.AccessToken,
-			Path:     "/",
-			MaxAge:   int(resp.ExpiresIn),
-			HttpOnly: true,
-			SameSite: http.SameSiteLaxMode,
-			Secure:   r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https",
-		})
+		http.SetCookie(w, cookieCfg.NewCookie(middleware.AuthCookieName, resp.AccessToken, int(resp.ExpiresIn), r))
 
 		httpx.WriteJson(w, http.StatusOK, map[string]interface{}{
 			"code":    200,
@@ -278,20 +263,14 @@ func GetUserInfoHandler(casdoorClient *casdoor.Client) http.HandlerFunc {
 // 请求方式：POST
 // 路径：/api/auth/logout
 // 需要认证：是
-func LogoutHandler() http.HandlerFunc {
+func LogoutHandler(c config.Config) http.HandlerFunc {
+	cookieCfg := c.CookieConfig()
 	return func(w http.ResponseWriter, r *http.Request) {
 		// 获取用户名（用于日志）
 		username, _ := middleware.GetUsernameFromContext(r.Context())
 
 		// 清除登录 Cookie（HttpOnly）
-		http.SetCookie(w, &http.Cookie{
-			Name:     middleware.AuthCookieName,
-			Value:    "",
-			Path:     "/",
-			MaxAge:   -1,
-			HttpOnly: true,
-			SameSite: http.SameSiteLaxMode,
-		})
+		http.SetCookie(w, cookieCfg.ClearCookie(middleware.AuthCookieName))
 
 		httpx.WriteJson(w, http.StatusOK, map[string]interface{}{
 			"code":    200,

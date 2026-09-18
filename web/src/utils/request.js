@@ -2,11 +2,13 @@ import axios from 'axios'
 import { ElMessage } from 'element-plus'
 import router from '@/router'
 import { useUserStore } from '@/store/user'
+import { API_BASE } from '@/config/api'
 
 // 创建 axios 实例
+// 同源部署 baseURL 为相对路径 /api；跨域时由 VITE_API_BASE_URL 指定后端地址。
 // 登录凭证由后端 HttpOnly Cookie 承载，浏览器自动携带，前端不保存 token。
 const request = axios.create({
-  baseURL: '/api',
+  baseURL: `${API_BASE}/api`,
   timeout: 30000,
   withCredentials: true
 })

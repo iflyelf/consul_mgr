@@ -103,6 +103,28 @@ type Config struct {
 		EnableServiceGroupAuth bool     `json:",default=true,env=PERMISSION_ENABLE_SERVICE_GROUP_AUTH"`
 		DefaultPermissions     []string `json:",default=[read],env=PERMISSION_DEFAULT"`
 	}
+
+	// Security 登录凭证与跨域相关配置
+	Security struct {
+		// CookieSameSite 登录 Cookie 的 SameSite 策略：lax / strict / none
+		CookieSameSite string `json:",default=lax,env=AUTH_COOKIE_SAMESITE"`
+		// CookieSecure 是否仅通过 HTTPS 发送：auto / true / false
+		CookieSecure string `json:",default=auto,env=AUTH_COOKIE_SECURE"`
+		// CookieDomain Cookie 作用域（跨子域共享时设为 .example.com）
+		CookieDomain string `json:",optional,env=AUTH_COOKIE_DOMAIN"`
+		// CORSAllowedOrigins 允许的跨域来源（逗号分隔，精确匹配）。
+		//   为空则不启用跨域；跨域时必须显式列出来源（不能用 *）。
+		CORSAllowedOrigins []string `json:",optional"`
+	}
+}
+
+// CookieConfig 从安全配置构造 Cookie 配置
+func (c *Config) CookieConfig() CookieConfig {
+	return CookieConfig{
+		SameSite: c.Security.CookieSameSite,
+		Secure:   c.Security.CookieSecure,
+		Domain:   c.Security.CookieDomain,
+	}
 }
 
 // DSN 返回数据库连接串（优先 DATABASE_URL，否则由分项拼装）
@@ -193,4 +215,21 @@ func (c *Config) ApplyEnvOverrides() {
 	if c.Port == 0 {
 		c.Port = 8080
 	}
+
+	// 跨域来源白名单支持环境变量（逗号分隔）
+	if v := os.Getenv("CORS_ALLOWED_ORIGINS"); v != "" {
+		c.Security.CORSAllowedOrigins = splitAndTrim(v)
+	}
+}
+
+// splitAndTrim 按逗号切分并去除空白
+func splitAndTrim(s string) []string {
+	parts := strings.Split(s, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if t := strings.TrimSpace(p); t != "" {
+			out = append(out, t)
+		}
+	}
+	return out
 }
