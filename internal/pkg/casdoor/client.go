@@ -700,37 +700,91 @@ type CasdoorUser struct {
 	Properties  map[string]string `json:"properties"`
 }
 
+// listUsersPageSize 分页遍历用户时的每页条数
+const listUsersPageSize = 200
+
 // ListUsers 获取 Casdoor 用户列表
 //
 // 说明：用于「人员组织 → 用户管理」展示；用户体系仍由 Casdoor 维护。
 // 同时返回 Properties（自定义字段），供页面展示人事信息。
+//
+// 实现要点：
+//   - 按页遍历而非一次性 c.sdk.GetUsers()。SDK 的无分页接口会把整个响应先
+//     反序列化成泛型 interface{}（大组织时内存放大数倍）再二次序列化，
+//     3 万+ 用户时峰值内存可达数百 MB，存在 OOM 风险；分页后每页内存有界。
+//   - 按唯一键 name 排序，避免 Casdoor 默认按 created_time（可能相同）排序
+//     导致 offset 分页在页间重叠或漏读；并按 owner/name 去重兜底。
 func (c *Client) ListUsers() ([]CasdoorUser, error) {
-	users, err := c.sdk.GetUsers()
+	list := make([]CasdoorUser, 0, listUsersPageSize)
+	seen := make(map[string]struct{}, listUsersPageSize)
+	err := c.IterateUsers(func(users []*casdoorsdk.User) error {
+		for _, u := range users {
+			key := u.Owner + "/" + u.Name
+			if _, ok := seen[key]; ok {
+				continue
+			}
+			seen[key] = struct{}{}
+			props := u.Properties
+			if props == nil {
+				props = map[string]string{}
+			}
+			list = append(list, CasdoorUser{
+				Id:          u.Id,
+				Owner:       u.Owner,
+				Name:        u.Name,
+				DisplayName: u.DisplayName,
+				Email:       u.Email,
+				Phone:       u.Phone,
+				Avatar:      u.Avatar,
+				IsAdmin:     u.IsAdmin,
+				IsForbidden: u.IsForbidden,
+				SignupApp:   u.SignupApplication,
+				CreatedTime: u.CreatedTime,
+				Properties:  props,
+			})
+		}
+		return nil
+	})
 	if err != nil {
 		return nil, fmt.Errorf("获取用户列表失败: %w", err)
 	}
-	list := make([]CasdoorUser, 0, len(users))
-	for _, u := range users {
-		props := u.Properties
-		if props == nil {
-			props = map[string]string{}
-		}
-		list = append(list, CasdoorUser{
-			Id:          u.Id,
-			Owner:       u.Owner,
-			Name:        u.Name,
-			DisplayName: u.DisplayName,
-			Email:       u.Email,
-			Phone:       u.Phone,
-			Avatar:      u.Avatar,
-			IsAdmin:     u.IsAdmin,
-			IsForbidden: u.IsForbidden,
-			SignupApp:   u.SignupApplication,
-			CreatedTime: u.CreatedTime,
-			Properties:  props,
-		})
-	}
 	return list, nil
+}
+
+// IterateUsers 分页遍历 Casdoor 用户，逐页回调（内存峰值与页大小成正比）。
+//
+// 排序固定为 name 升序：owner+name 为唯一键，保证 offset 分页确定性，
+// 避免默认 created_time 相同导致的页间重叠/漏读。
+func (c *Client) IterateUsers(fn func([]*casdoorsdk.User) error) error {
+	page := 1
+	for {
+		users, total, err := c.sdk.GetPaginationUsers(page, listUsersPageSize, map[string]string{
+			"sortField": "name",
+			"sortOrder": "ascend",
+		})
+		if err != nil {
+			return err
+		}
+		if len(users) > 0 {
+			if err := fn(users); err != nil {
+				return err
+			}
+		}
+		if !hasMoreUsersPage(page, listUsersPageSize, total, len(users)) {
+			return nil
+		}
+		page++
+	}
+}
+
+// hasMoreUsersPage 判断分页遍历是否应继续（本页无数据或已取满 total 则停止）。
+//
+// 抽出为纯函数便于单测，避免分页边界（total=0、末页不足、total 偏小）处理出错。
+func hasMoreUsersPage(page, pageSize, total, got int) bool {
+	if got == 0 {
+		return false
+	}
+	return page*pageSize < total
 }
 
 // UserUpsert 用户新增/更新入参

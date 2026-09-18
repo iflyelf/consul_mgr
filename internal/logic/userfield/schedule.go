@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"sync"
@@ -183,6 +184,12 @@ func StartScheduler(ctx context.Context, db sqlx.SqlConn, cfg *config.Config) {
 	if cfg.FlyIAM.SyncOnStartup && cfg.FlyIAM.Endpoint != "" && cfg.FlyIAM.ServiceToken != "" {
 		go func() {
 			time.Sleep(5 * time.Second) // 等待服务就绪
+			// panic 兜底：后台 goroutine 内 panic 会终止整个进程
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("💥 启动时同步 panic（已恢复）: %v\n%s", r, debug.Stack())
+				}
+			}()
 			runAutoSync(ctx, l, cfg.FlyIAM.Endpoint, cfg.FlyIAM.ServiceToken, "startup")
 		}()
 	}
@@ -190,6 +197,8 @@ func StartScheduler(ctx context.Context, db sqlx.SqlConn, cfg *config.Config) {
 	baseTick := time.Minute
 	log.Printf("⏰ 用户字段自动同步调度器已启动（每 %s 检查一次配置）", baseTick)
 	go func() {
+		// panic 兜底：调度循环在独立 goroutine 中，panic 会终止整个进程。
+		// recover 放在循环内，确保单次异常不会让调度器整体停摆。
 		ticker := time.NewTicker(baseTick)
 		defer ticker.Stop()
 		for {
@@ -198,22 +207,29 @@ func StartScheduler(ctx context.Context, db sqlx.SqlConn, cfg *config.Config) {
 				log.Println("⏰ 用户字段自动同步调度器已停止")
 				return
 			case <-ticker.C:
-				// 每次读取最新配置（页面可改）
-				if cfg.FlyIAM.Endpoint == "" || cfg.FlyIAM.ServiceToken == "" {
-					continue
-				}
-				sc, err := l.GetSyncConfig(ctx)
-				if err != nil || !sc.Enabled {
-					continue
-				}
-				d, err := ParseInterval(sc.Interval)
-				if err != nil {
-					continue
-				}
-				if sc.LastRunAt.Valid && time.Since(sc.LastRunAt.Time) < d {
-					continue
-				}
-				runAutoSync(ctx, l, cfg.FlyIAM.Endpoint, cfg.FlyIAM.ServiceToken, "auto")
+				func() {
+					defer func() {
+						if r := recover(); r != nil {
+							log.Printf("💥 用户字段调度器 panic（已恢复）: %v\n%s", r, debug.Stack())
+						}
+					}()
+					// 每次读取最新配置（页面可改）
+					if cfg.FlyIAM.Endpoint == "" || cfg.FlyIAM.ServiceToken == "" {
+						return
+					}
+					sc, err := l.GetSyncConfig(ctx)
+					if err != nil || !sc.Enabled {
+						return
+					}
+					d, err := ParseInterval(sc.Interval)
+					if err != nil {
+						return
+					}
+					if sc.LastRunAt.Valid && time.Since(sc.LastRunAt.Time) < d {
+						return
+					}
+					runAutoSync(ctx, l, cfg.FlyIAM.Endpoint, cfg.FlyIAM.ServiceToken, "auto")
+				}()
 			}
 		}
 	}()
@@ -222,10 +238,20 @@ func StartScheduler(ctx context.Context, db sqlx.SqlConn, cfg *config.Config) {
 // RunSync 执行一次字段同步（带进度与日志），供手动与自动共用。
 //
 // 并发保护：已有同步在运行时直接返回错误，避免重复执行。
-func (l *Logic) RunSync(ctx context.Context, endpoint, serviceToken, trigger string) (int, int, int, error) {
+func (l *Logic) RunSync(ctx context.Context, endpoint, serviceToken, trigger string) (added, updated, total int, err error) {
 	if getProgress().Running {
 		return 0, 0, 0, fmt.Errorf("已有同步任务在执行中，请稍后再试")
 	}
+
+	// panic 兜底：本方法会在后台 goroutine 中被调用，panic 默认会终止进程。
+	// 捕获并记录堆栈，保证「同步异常」不会拖垮服务。
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("💥 用户字段同步 panic（已恢复）: %v\n%s", r, debug.Stack())
+			err = fmt.Errorf("同步任务异常终止: %v", r)
+			setProgress(model.UserFieldSyncProgress{Running: false, Status: "failed", Message: err.Error()})
+		}
+	}()
 
 	logID := l.startSyncLog(ctx, trigger)
 	setProgress(model.UserFieldSyncProgress{
@@ -236,7 +262,7 @@ func (l *Logic) RunSync(ctx context.Context, endpoint, serviceToken, trigger str
 		Trigger:   trigger,
 	})
 
-	added, updated, total, err := l.SyncFromFlyIAM(ctx, endpoint, serviceToken)
+	added, updated, total, err = l.SyncFromFlyIAM(ctx, endpoint, serviceToken)
 	final := model.UserFieldSyncProgress{
 		Running:   false,
 		Total:     total,
