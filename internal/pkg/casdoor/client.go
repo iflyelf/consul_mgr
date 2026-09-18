@@ -132,6 +132,12 @@ func (c *Client) ValidateToken(token string) (*UserInfo, error) {
 	}
 	ch := make(chan result, 1)
 	go func() {
+		// panic 兜底：goroutine 内 panic 会终止整个进程
+		defer func() {
+			if r := recover(); r != nil {
+				ch <- result{err: fmt.Errorf("校验令牌 panic: %v", r)}
+			}
+		}()
 		u, err := c.sdk.WithAccessToken(token).GetAccount()
 		ch <- result{user: u, err: err}
 	}()
