@@ -32,8 +32,11 @@ tmp/
 
 # Config (local overrides)
 etc/config.local.yaml
+# 忽略所有 .env 变体（含 .env.test 等），仅保留示例
 .env
-.env.local
+.env.*
+!.env.example
+!.env.sample
 
 # Frontend
 web/node_modules/

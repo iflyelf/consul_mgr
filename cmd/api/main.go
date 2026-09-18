@@ -246,7 +246,11 @@ func registerHandlers(server *rest.Server, ctx *svc.ServiceContext) {
 		Method: http.MethodDelete,
 		Path:   "/api/services",
 		Handler: casdoorAuth.Handle(
-			auditMw.Handle(serviceHandler.DeleteServiceHandler(ctx)),
+			auditMw.Handle(
+				permissionMw.RequireServiceGroupAccess("delete")(
+					serviceHandler.DeleteServiceHandler(ctx),
+				),
+			),
 		),
 	})
 	
@@ -254,7 +258,11 @@ func registerHandlers(server *rest.Server, ctx *svc.ServiceContext) {
 		Method: http.MethodPost,
 		Path:   "/api/services/batch-delete",
 		Handler: casdoorAuth.Handle(
-			auditMw.Handle(serviceHandler.BatchDeleteServicesHandler(ctx)),
+			auditMw.Handle(
+				permissionMw.RequireServiceGroupAccess("delete")(
+					serviceHandler.BatchDeleteServicesHandler(ctx),
+				),
+			),
 		),
 	})
 	
@@ -276,7 +284,9 @@ func registerHandlers(server *rest.Server, ctx *svc.ServiceContext) {
 		Method: http.MethodGet,
 		Path:   "/api/instances/:id",
 		Handler: casdoorAuth.Handle(
-			instance.GetInstanceHandler(ctx),
+			permissionMw.RequireServiceGroupAccess("read")(
+				instance.GetInstanceHandler(ctx),
+			),
 		),
 	})
 	
@@ -342,15 +352,25 @@ func registerHandlers(server *rest.Server, ctx *svc.ServiceContext) {
 	})
 	
 	server.AddRoute(rest.Route{
-		Method:  http.MethodGet,
-		Path:    "/api/instances/export",
-		Handler: casdoorAuth.Handle(instance.ExportInstancesHandler(ctx)),
+		Method: http.MethodGet,
+		Path:   "/api/instances/export",
+		Handler: casdoorAuth.Handle(
+			permissionMw.RequireServiceGroupAccess("read")(
+				instance.ExportInstancesHandler(ctx),
+			),
+		),
 	})
 	
 	server.AddRoute(rest.Route{
-		Method:  http.MethodPost,
-		Path:    "/api/instances/import",
-		Handler: casdoorAuth.Handle(instance.ImportInstancesHandler(ctx)),
+		Method: http.MethodPost,
+		Path:   "/api/instances/import",
+		Handler: casdoorAuth.Handle(
+			auditMw.Handle(
+				permissionMw.RequireServiceGroupAccess("write")(
+					instance.ImportInstancesHandler(ctx),
+				),
+			),
+		),
 	})
 	
 	server.AddRoute(rest.Route{

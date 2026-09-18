@@ -13,6 +13,21 @@ import (
 	"github.com/iflyelf/consul_mgr/internal/svc"
 )
 
+// maskedSecret 敏感字段回显占位符（提交该值表示「保持原值不变」）
+const maskedSecret = "******"
+
+// maskGroup 脱敏 Consul Token 后再返回（令牌不应经接口回显）
+func maskGroup(g *group.Group) *group.Group {
+	if g == nil {
+		return nil
+	}
+	m := *g
+	if m.ConsulToken != "" {
+		m.ConsulToken = maskedSecret
+	}
+	return &m
+}
+
 // CreateGroupRequest 创建服务组请求
 type CreateGroupRequest struct {
 	Name             string `json:"name" validate:"required"`
@@ -108,11 +123,15 @@ func ListGroupsHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 			return
 		}
 		
+		masked := make([]*group.Group, 0, len(groups))
+		for _, g := range groups {
+			masked = append(masked, maskGroup(g))
+		}
 		httpx.WriteJson(w, http.StatusOK, map[string]interface{}{
 			"code":    200,
 			"message": "success",
 			"data": map[string]interface{}{
-				"list":  groups,
+				"list":  masked,
 				"total": total,
 				"page":  page,
 				"page_size": pageSize,
@@ -174,7 +193,7 @@ func CreateGroupHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 		httpx.WriteJson(w, http.StatusOK, map[string]interface{}{
 			"code":    200,
 			"message": "创建成功",
-			"data":    result,
+			"data":    maskGroup(result),
 		})
 	}
 }
@@ -225,7 +244,7 @@ func UpdateGroupHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 		if req.ConsulAddress == "" {
 			req.ConsulAddress = original.ConsulAddress
 		}
-		if req.ConsulToken == "" {
+		if req.ConsulToken == "" || req.ConsulToken == maskedSecret {
 			req.ConsulToken = original.ConsulToken
 		}
 		if req.Description == "" {
@@ -265,7 +284,7 @@ func UpdateGroupHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 		httpx.WriteJson(w, http.StatusOK, map[string]interface{}{
 			"code":    200,
 			"message": "更新成功",
-			"data":    result,
+			"data":    maskGroup(result),
 		})
 	}
 }
@@ -335,7 +354,7 @@ func GetGroupHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 			"code":    200,
 			"message": "success",
 			"data": map[string]interface{}{
-				"group": result,
+				"group": maskGroup(result),
 				"stats": stats,
 			},
 		})

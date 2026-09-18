@@ -40,8 +40,13 @@ func checkInstanceAccess(ctx *svc.ServiceContext, w http.ResponseWriter, r *http
 	l := instance.NewListInstancesLogic(r.Context(), ctx)
 	detail, err := l.GetInstance(groupID, instanceID)
 	if err != nil || detail == nil {
-		// 无法解析时交由后续逻辑处理，避免掩盖真实错误
-		return true
+		// 安全起见按「拒绝」处理（fail-closed）：
+		// 无法解析实例归属时不能假定有权限，否则 Consul 抖动/组不匹配即可绕过校验。
+		httpx.WriteJson(w, http.StatusForbidden, map[string]interface{}{
+			"code":    403,
+			"message": "无法校验实例归属，已拒绝操作",
+		})
+		return false
 	}
 	return access.CheckService(ctx, w, r, groupID, detail.Service, action)
 }
@@ -292,15 +297,19 @@ func BatchDeleteHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 				svcOf[it.ID] = it.Service
 			}
 			kept := make([]string, 0, len(req.IDs))
-			denied := false
 			for _, id := range req.IDs {
-				if svc, ok := svcOf[id]; ok && !access.ContainsFold(set, svc) {
-					denied = true
+				svc, ok := svcOf[id]
+				if !ok {
+					// 无法解析归属的实例一律拒绝（fail-closed），
+					// 避免「列表未命中即放行」造成越权删除。
+					continue
+				}
+				if !access.ContainsFold(set, svc) {
 					continue
 				}
 				kept = append(kept, id)
 			}
-			if denied && len(kept) == 0 {
+			if len(kept) == 0 {
 				httpx.WriteJson(w, http.StatusForbidden, map[string]interface{}{
 					"code":    403,
 					"message": "没有权限删除所选实例（需管理员在「人员组织 → 团队管理」中授权）",

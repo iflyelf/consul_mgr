@@ -110,6 +110,11 @@ charts/consul_mgr/
 | `CONSUL_MGR_REDIS_HOST` / `CONSUL_MGR_REDIS_PASSWORD` | 缓存 | - |
 | `CONSUL_MGR_JWT_SECRET` | JWT 密钥 | - |
 | `CONSUL_MGR_ADMIN_PASSWORD` | 管理员密码 | - |
+| `CONSUL_MGR_CASDOOR_DEFAULT_PASSWORD` | 新增用户默认密码（**必填**） | - |
+
+> ⚠️ 敏感值不提供内置默认口令：`CONSUL_MGR_DB_PASSWORD`、`CONSUL_MGR_JWT_SECRET`、
+> `CONSUL_MGR_ADMIN_PASSWORD`、`CONSUL_MGR_CASDOOR_DEFAULT_PASSWORD` 需显式设置
+> （环境变量或 `existingSecret`），否则启动校验会失败。
 | `CONSUL_MGR_CASDOOR_ENDPOINT` | Casdoor 地址（默认外置域名） | `https://casdoor.example.com` |
 | `CONSUL_MGR_CASDOOR_PUBLIC_ENDPOINT` | Casdoor 浏览器地址（留空回退 Endpoint） | - |
 | `CONSUL_MGR_CASDOOR_IN_CLUSTER` | Casdoor 是否在集群内 | `false` |

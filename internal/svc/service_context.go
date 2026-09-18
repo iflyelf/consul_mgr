@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	_ "github.com/lib/pq"
@@ -172,22 +173,53 @@ func NewServiceContext(c config.Config) *ServiceContext {
 }
 
 // initDB 初始化数据库连接
-func initDB(c config.Config) *sql.DB {
-	var dsn string
-	if c.Database.DSN != "" {
-		dsn = c.Database.DSN
-	} else {
-		dsn = fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
-			c.Database.Host,
-			c.Database.Port,
-			c.Database.User,
-			c.Database.Password,
-			c.Database.DBName,
-			c.Database.SSLMode,
-		)
+// ensureDatabase 确保目标数据库存在（首次部署时自动创建）。
+//
+// 先尝试连接目标库；若因「库不存在」失败，则连接 postgres 维护库执行
+// CREATE DATABASE。权限不足或其它错误仅告警，交由后续连接给出明确报错。
+func ensureDatabase(c config.Config) {
+	probe, err := sql.Open("postgres", c.DSN())
+	if err == nil {
+		pingErr := probe.Ping()
+		probe.Close()
+		if pingErr == nil {
+			return
+		}
+		if !strings.Contains(strings.ToLower(pingErr.Error()), "does not exist") {
+			return
+		}
 	}
-	
-	db, err := sql.Open("postgres", dsn)
+
+	admin, err := sql.Open("postgres", c.MaintenanceDSN())
+	if err != nil {
+		log.Printf("⚠️ 自动建库：无法连接维护库，请确认数据库 %q 已创建: %v", c.Database.DBName, err)
+		return
+	}
+	defer admin.Close()
+	if err := admin.Ping(); err != nil {
+		log.Printf("⚠️ 自动建库：维护库不可达，请确认数据库 %q 已创建: %v", c.Database.DBName, err)
+		return
+	}
+	stmt := fmt.Sprintf("CREATE DATABASE %s", quoteIdent(c.Database.DBName))
+	if _, err := admin.Exec(stmt); err != nil {
+		if strings.Contains(strings.ToLower(err.Error()), "already exists") {
+			return
+		}
+		log.Printf("⚠️ 自动建库失败（可能权限不足），请确认数据库 %q 已创建: %v", c.Database.DBName, err)
+		return
+	}
+	log.Printf("✅ 已自动创建数据库: %s", c.Database.DBName)
+}
+
+// quoteIdent 为标识符加双引号（防注入）
+func quoteIdent(name string) string {
+	return `"` + strings.ReplaceAll(name, `"`, `""`) + `"`
+}
+
+func initDB(c config.Config) *sql.DB {
+	ensureDatabase(c)
+
+	db, err := sql.Open("postgres", c.DSN())
 	if err != nil {
 		log.Fatalf("连接数据库失败: %v", err)
 	}
@@ -211,11 +243,92 @@ func initDB(c config.Config) *sql.DB {
 //   - 每次启动都执行，确保新增的表/索引能自动创建
 func initSchema(db *sql.DB, c config.Config) error {
 	log.Println("初始化数据库表结构...")
+
+	// 多副本并发 DDL 会触发 PostgreSQL 建表/建索引竞态，用 advisory lock 串行化
+	if lockConn, err := acquireSchemaLock(db); err != nil {
+		log.Printf("⚠️ 获取建表锁失败（继续执行，多副本下可能偶发竞态）: %v", err)
+	} else {
+		defer releaseSchemaLock(lockConn)
+	}
+
 	if err := createServiceGroupTables(db); err != nil {
+		return err
+	}
+	// 旧库结构迁移（历史版本表结构变更，幂等）
+	if err := migrateLegacySchema(db); err != nil {
 		return err
 	}
 	log.Println("数据库初始化完成")
 	return nil
+}
+
+// schemaLockKey consul_mgr 建表 advisory lock 键
+const schemaLockKey int64 = 0x636F6E73756C01 // "consul\x01"
+
+func acquireSchemaLock(db *sql.DB) (*sql.Conn, error) {
+	conn, err := db.Conn(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if _, err := conn.ExecContext(ctx, "SELECT pg_advisory_lock($1)", schemaLockKey); err != nil {
+		_ = conn.Close()
+		return nil, err
+	}
+	return conn, nil
+}
+
+func releaseSchemaLock(conn *sql.Conn) {
+	if conn == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_, _ = conn.ExecContext(ctx, "SELECT pg_advisory_unlock($1)", schemaLockKey)
+	_ = conn.Close()
+}
+
+// migrateLegacySchema 向前兼容旧库结构（幂等）。
+//
+// 背景：历史版本 roles 表无 permissions 列、audit_logs.user_id 与
+// service_groups.created_by 曾为 INT。CREATE TABLE IF NOT EXISTS 对已存在的表
+// 不会补列/改类型，若不迁移，旧库升级后会运行期报错。
+func migrateLegacySchema(db *sql.DB) error {
+	stmts := []string{
+		// roles：补齐 permissions 列（旧版权限走关联表）
+		`ALTER TABLE roles ADD COLUMN IF NOT EXISTS permissions TEXT[] DEFAULT '{}'`,
+		`ALTER TABLE roles ADD COLUMN IF NOT EXISTS description TEXT`,
+		`ALTER TABLE roles ADD COLUMN IF NOT EXISTS code VARCHAR(100) NOT NULL DEFAULT ''`,
+		`ALTER TABLE roles ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW()`,
+		// audit_logs：user_id / group_id 由 INT 改为字符串/整型（旧库为 INT）
+		`ALTER TABLE audit_logs ALTER COLUMN user_id TYPE VARCHAR(100) USING user_id::text`,
+		// service_groups.created_by：旧库为 INT，改为字符串
+		`ALTER TABLE service_groups ALTER COLUMN created_by TYPE VARCHAR(100) USING created_by::text`,
+		// 团队成员/授权相关列补齐
+		`ALTER TABLE team_members ADD COLUMN IF NOT EXISTS username VARCHAR(100)`,
+		`ALTER TABLE team_members ADD COLUMN IF NOT EXISTS display_name VARCHAR(200)`,
+		`ALTER TABLE teams ADD COLUMN IF NOT EXISTS created_by VARCHAR(100)`,
+		`ALTER TABLE teams ADD COLUMN IF NOT EXISTS status SMALLINT DEFAULT 1`,
+		`ALTER TABLE team_group_permissions ADD COLUMN IF NOT EXISTS services TEXT[] DEFAULT '{}'`,
+		`ALTER TABLE service_group_users ADD COLUMN IF NOT EXISTS username VARCHAR(100) NOT NULL DEFAULT ''`,
+		`ALTER TABLE service_group_users ADD COLUMN IF NOT EXISTS created_by VARCHAR(100)`,
+	}
+	for _, q := range stmts {
+		if _, err := db.Exec(q); err != nil {
+			// 表不存在（全新库尚未建）等情况忽略，CREATE 会处理
+			log.Printf("ℹ️ 旧库迁移跳过（%s）: %v", firstLine(q), err)
+		}
+	}
+	return nil
+}
+
+// firstLine 取 SQL 首行用于日志
+func firstLine(s string) string {
+	if i := strings.IndexByte(s, '\n'); i > 0 {
+		return strings.TrimSpace(s[:i])
+	}
+	return strings.TrimSpace(s)
 }
 
 // initCasdoorClient 初始化 Casdoor 客户端

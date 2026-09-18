@@ -2,17 +2,46 @@
 package middleware
 
 import (
+	"bytes"
 	"database/sql"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/rest/httpx"
+	"github.com/zeromicro/go-zero/rest/pathvar"
 
 	"github.com/iflyelf/consul_mgr/internal/pkg/casdoor"
 	"github.com/iflyelf/consul_mgr/internal/pkg/perm"
 )
+
+// peekBodyGroupID 读取请求体中的 group_id（读取后还原 Body，供后续 handler 使用）。
+//
+// 仅用于权限中间件在查询/路径参数缺失时兜底判断组归属；请求体过大或非 JSON
+// 时返回 0（此时依赖 handler 层校验）。
+func peekBodyGroupID(r *http.Request) int64 {
+	if r.Body == nil {
+		return 0
+	}
+	const maxPeek = 1 << 20 // 1MB
+	buf, err := io.ReadAll(io.LimitReader(r.Body, maxPeek))
+	if err != nil {
+		return 0
+	}
+	// 还原 Body，避免影响后续 handler
+	r.Body = io.NopCloser(io.MultiReader(bytes.NewReader(buf), r.Body))
+
+	var payload struct {
+		GroupID int64 `json:"group_id"`
+	}
+	if err := json.Unmarshal(buf, &payload); err != nil {
+		return 0
+	}
+	return payload.GroupID
+}
 
 // PermissionMiddleware 权限检查中间件
 //
@@ -145,11 +174,23 @@ func (m *PermissionMiddleware) RequireServiceGroupAccess(action string) func(htt
 				return
 			}
 
-			// 3. 获取 group_id（从查询参数或路径参数）
+			// 3. 获取 group_id（查询参数 → 路径参数 → 请求体）
 			groupIdStr := r.URL.Query().Get("group_id")
 			if groupIdStr == "" {
-				// 尝试从路径参数获取（需要在路由中配置）
 				groupIdStr = r.URL.Query().Get("id")
+			}
+			if groupIdStr == "" {
+				// 路径参数（如 /api/groups/:id、/api/instances/:id）
+				if v := pathvar.Vars(r)["id"]; v != "" {
+					groupIdStr = v
+				}
+			}
+			if groupIdStr == "" {
+				// 请求体中的 group_id（如批量删除）；仅在查询/路径均无时兜底，
+				// 避免「查询参数与请求体不一致」造成的越权（见 BatchDeleteHandler）。
+				if body := peekBodyGroupID(r); body > 0 {
+					groupIdStr = strconv.FormatInt(body, 10)
+				}
 			}
 
 			// 如果没有 group_id，检查全局权限
@@ -172,6 +213,17 @@ func (m *PermissionMiddleware) RequireServiceGroupAccess(action string) func(htt
 				httpx.WriteJson(w, http.StatusBadRequest, map[string]interface{}{
 					"code":    400,
 					"message": "无效的服务组 ID",
+				})
+				return
+			}
+
+			// 一致性校验：请求体中的 group_id 若与查询/路径参数不一致，直接拒绝。
+			// 防止「用有权限的组通过中间件，再在请求体操作另一组」的越权。
+			if bodyGroup := peekBodyGroupID(r); bodyGroup > 0 && bodyGroup != groupId {
+				logx.Errorf("用户 %s 请求体 group_id=%d 与参数 group_id=%d 不一致，拒绝", username, bodyGroup, groupId)
+				httpx.WriteJson(w, http.StatusBadRequest, map[string]interface{}{
+					"code":    400,
+					"message": "请求参数不一致（group_id 与请求体不符）",
 				})
 				return
 			}

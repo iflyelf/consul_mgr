@@ -2,8 +2,11 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"os"
+	"regexp"
 	"strconv"
+	"strings"
 
 	"github.com/zeromicro/go-zero/rest"
 )
@@ -100,6 +103,41 @@ type Config struct {
 		EnableServiceGroupAuth bool     `json:",default=true,env=PERMISSION_ENABLE_SERVICE_GROUP_AUTH"`
 		DefaultPermissions     []string `json:",default=[read],env=PERMISSION_DEFAULT"`
 	}
+}
+
+// DSN 返回数据库连接串（优先 DATABASE_URL，否则由分项拼装）
+func (c *Config) DSN() string {
+	if c.Database.DSN != "" {
+		return c.Database.DSN
+	}
+	return fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
+		c.Database.Host, c.Database.Port, c.Database.User,
+		c.Database.Password, c.Database.DBName, c.Database.SSLMode)
+}
+
+// MaintenanceDSN 返回连接 postgres 维护库的连接串（用于首次自动建库）
+func (c *Config) MaintenanceDSN() string {
+	if c.Database.DSN != "" {
+		return replaceDBNameInDSN(c.Database.DSN, "postgres")
+	}
+	return fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=postgres sslmode=%s",
+		c.Database.Host, c.Database.Port, c.Database.User, c.Database.Password, c.Database.SSLMode)
+}
+
+// replaceDBNameInDSN 将 DSN 中的库名替换为指定值，兼容 URL 与 key=value 两种格式。
+func replaceDBNameInDSN(dsn, dbName string) string {
+	if strings.HasPrefix(dsn, "postgres://") || strings.HasPrefix(dsn, "postgresql://") {
+		if u, err := url.Parse(dsn); err == nil {
+			u.Path = "/" + dbName
+			return u.String()
+		}
+		return dsn
+	}
+	re := regexp.MustCompile(`(^|\s)dbname=[^\s]+`)
+	if re.MatchString(dsn) {
+		return re.ReplaceAllString(dsn, "${1}dbname="+dbName)
+	}
+	return dsn + " dbname=" + dbName
 }
 
 // Validate 校验必填配置（失败即退出，避免以错误配置运行）
