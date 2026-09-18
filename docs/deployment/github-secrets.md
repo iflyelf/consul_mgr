@@ -19,6 +19,10 @@
 | `DOCKER_PASSWORD` | Docker Hub 密码或访问令牌 |
 | `SWR_USERNAME` | 华为云 SWR 登录用户名（`docker login -u` 的值，如 `cn-east-3@<AccessKeyId>`） |
 | `SWR_PASSWORD` | 华为云 SWR 登录密码（`docker login -p` 的值） |
+| `SWR_AK` | 华为云账号 Access Key Id（用于将镜像仓库设为公开） |
+| `SWR_SK` | 华为云账号 Secret Access Key |
+
+> `SWR_AK` / `SWR_SK` 未配置时，「设置 SWR 镜像为公开」步骤会自动跳过（不影响构建发布）。
 
 ### 华为云 SWR（国内替代 docker.io）
 
@@ -37,6 +41,25 @@ gh secret set SWR_USERNAME -b "cn-east-3@<AccessKeyId>" -R iflyelf/consul_mgr
 gh secret set SWR_PASSWORD -b "<登录密码>" -R iflyelf/consul_mgr
 ```
 
+### 镜像公开（自动）
+
+华为云 SWR 的镜像仓库**默认私有**，且 `docker push` 无法改变该属性。
+工作流在推送镜像后，会调用 SWR `UpdateRepo` API 将该仓库设为 **公开**：
+
+```
+PATCH /v2/manage/namespaces/{namespace}/repos/{repository}
+{"is_public": true}
+```
+
+需配置具备 `swr:repo:updateRepo` 权限的账号 AK/SK：
+
+```bash
+gh secret set SWR_AK -b "<AccessKeyId>" -R iflyelf/consul_mgr
+gh secret set SWR_SK -b "<SecretAccessKey>" -R iflyelf/consul_mgr
+```
+
+> 公开后 `docker pull swr.cn-east-3.myhuaweicloud.com/danxiaonuo/consul-mgr:latest` 无需登录。
+
 ## 3. 配置方法
 
 ### 方法一：GitHub 网页
@@ -50,6 +73,8 @@ gh secret set DOCKER_USERNAME -b "your-username" -R iflyelf/consul_mgr
 gh secret set DOCKER_PASSWORD -b "your-password" -R iflyelf/consul_mgr
 gh secret set SWR_USERNAME -b "cn-east-3@<AccessKeyId>" -R iflyelf/consul_mgr
 gh secret set SWR_PASSWORD -b "<登录密码>" -R iflyelf/consul_mgr
+gh secret set SWR_AK -b "<AccessKeyId>" -R iflyelf/consul_mgr
+gh secret set SWR_SK -b "<SecretAccessKey>" -R iflyelf/consul_mgr
 ```
 
 ## 4. 手动触发
