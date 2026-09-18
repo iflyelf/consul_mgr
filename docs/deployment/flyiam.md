@@ -51,6 +51,12 @@ export CASDOOR_APPLICATION="flyiam"
 > - 前端不写死任何 Casdoor 地址，登录时由后端 `/api/auth/login` 按当前访问域名动态生成并 302
 > - 换域名后**无需重新构建前端**，只需更新回调白名单
 
+> **配置来源（DB 优先 / env 兜底）**：`CASDOOR_*` 环境变量仅是**首次启动的种子**。
+> 启动时会先加载数据库中的「系统设置」，**之后**才校验 Casdoor 连接（`ValidateCasdoor`），
+> 因此已有 `app_settings` 记录的实例可**完全去掉** `CASDOOR_*` 环境变量，
+> 仅由「系统设置 → Casdoor 连接」页面提供。首次全新部署仍建议保留 env 种子，
+> 否则登录前无法进入设置页。
+
 Kubernetes 部署请对应设置 `CONSUL_MGR_CASDOOR_*`（见 [Kubernetes 部署](kubernetes.md)）。
 
 > **Kubernetes 接入方式**：默认采用**外置域名方式**（`casdoorInCluster=false`）——

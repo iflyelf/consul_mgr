@@ -175,19 +175,30 @@ func replaceDBNameInDSN(dsn, dbName string) string {
 	return dsn + " dbname=" + dbName
 }
 
-// Validate 校验必填配置（失败即退出，避免以错误配置运行）
+// Validate 校验启动前置配置（不依赖数据库中的页面设置）。
+//
+// 说明：Casdoor 连接类配置可由「系统设置」页面（存 app_settings 表）提供，
+// 需在 settings.Load 之后才能读到，故由 ValidateCasdoor 单独校验。
 func (c *Config) Validate() error {
 	if c.JWT.Secret != "" && len(c.JWT.Secret) < 32 {
 		return fmt.Errorf("JWT 密钥长度不足: 至少需要 32 个字符，当前 %d 个", len(c.JWT.Secret))
 	}
+	return nil
+}
+
+// ValidateCasdoor 校验 Casdoor 连接配置。
+//
+// 必须在 settings.Load 之后调用：这些字段可由「系统设置」页面（数据库）配置，
+// 此时内存配置已合并 DB 值（DB 优先 / env 兜底）。
+func (c *Config) ValidateCasdoor() error {
 	if c.Casdoor.Endpoint == "" {
-		return fmt.Errorf("Casdoor 端点未设置: 请设置 CASDOOR_ENDPOINT 环境变量")
+		return fmt.Errorf("Casdoor 端点未设置: 请设置 CASDOOR_ENDPOINT 环境变量或在「系统设置」页面配置")
 	}
 	if c.Casdoor.ClientId == "" || c.Casdoor.ClientSecret == "" {
-		return fmt.Errorf("Casdoor 应用凭据未设置: 请设置 CASDOOR_CLIENT_ID / CASDOOR_CLIENT_SECRET")
+		return fmt.Errorf("Casdoor 应用凭据未设置: 请设置 CASDOOR_CLIENT_ID / CASDOOR_CLIENT_SECRET 或在「系统设置」页面配置")
 	}
 	if c.Casdoor.DefaultPassword == "" {
-		return fmt.Errorf("Casdoor 默认密码未设置: 请设置 CASDOOR_DEFAULT_PASSWORD 环境变量或 Secret（不再提供弱口令默认值）")
+		return fmt.Errorf("Casdoor 默认密码未设置: 请设置 CASDOOR_DEFAULT_PASSWORD 环境变量/Secret，或在「系统设置」页面配置")
 	}
 	return nil
 }

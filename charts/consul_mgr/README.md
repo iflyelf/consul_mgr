@@ -131,7 +131,10 @@ charts/consul_mgr/
 > `ADMIN_PASSWORD`、`CASDOOR_ENDPOINT` / `CASDOOR_PUBLIC_ENDPOINT` /
 > `CASDOOR_CLIENT_ID` / `CASDOOR_CLIENT_SECRET` / `CASDOOR_CERTIFICATE` /
 > `CASDOOR_ORGANIZATION` / `CASDOOR_APPLICATION` / `CASDOOR_DEFAULT_PASSWORD`。
-> 原因：登录与首次启动校验依赖它们，且登录前无法访问设置页（先有鸡还是蛋）。
+> 原因：登录与**首次**启动校验依赖它们，且登录前无法访问设置页（先有鸡还是蛋）。
+>
+> 启动时先加载数据库中的页面设置、**之后**才校验 Casdoor 连接，因此
+> **已有 `app_settings` 记录的实例可去掉上述 `CASDOOR_*` 环境变量**，仅靠数据库启动；
 > 其余配置保存于数据库，Pod 重启后仍生效。
 
 > ⚠️ 生产环境请通过环境变量或 `existingSecret` 覆盖 `CONSUL_MGR_DB_PASSWORD`、
