@@ -547,6 +547,7 @@ func (c *Client) ListUsers() ([]CasdoorUser, error) {
 type UserUpsert struct {
 	Name        string            `json:"name"`        // 域账号（唯一，创建后不可改）
 	DisplayName string            `json:"displayName"` // 姓名
+	Avatar      string            `json:"avatar"`      // 头像 URL
 	Email       string            `json:"email"`
 	Phone       string            `json:"phone"`
 	Password    string            `json:"password"`   // 仅创建时使用，留空用默认密码
@@ -570,6 +571,7 @@ func (c *Client) CreateUser(in UserUpsert, defaultPassword string) error {
 		Owner:             c.config.OrganizationName,
 		Name:              in.Name,
 		DisplayName:       in.DisplayName,
+		Avatar:            in.Avatar,
 		Email:             in.Email,
 		Phone:             in.Phone,
 		Password:          password,
@@ -595,6 +597,7 @@ func (c *Client) UpdateUser(in UserUpsert) error {
 	if in.DisplayName != "" {
 		user.DisplayName = in.DisplayName
 	}
+	user.Avatar = in.Avatar
 	user.Email = in.Email
 	user.Phone = in.Phone
 	if user.Properties == nil {

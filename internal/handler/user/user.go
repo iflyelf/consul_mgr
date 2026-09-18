@@ -23,6 +23,7 @@ import (
 type userUpsertRequest struct {
 	Name        string            `json:"name,optional"`
 	DisplayName string            `json:"displayName,optional"`
+	Avatar      string            `json:"avatar,optional"`
 	Email       string            `json:"email,optional"`
 	Phone       string            `json:"phone,optional"`
 	Password    string            `json:"password,optional"`
@@ -77,7 +78,7 @@ func CreateUserHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 		}
 		l := user.NewUserLogic(r.Context(), ctx.CasdoorClient, ctx.Cache)
 		if err := l.CreateUser(casdoor.UserUpsert{
-			Name: req.Name, DisplayName: req.DisplayName, Email: req.Email,
+			Name: req.Name, DisplayName: req.DisplayName, Avatar: req.Avatar, Email: req.Email,
 			Phone: req.Phone, Password: req.Password, Properties: req.Properties,
 		}, ctx.Config.Casdoor.DefaultPassword); err != nil {
 			httpx.WriteJson(w, http.StatusOK, map[string]interface{}{"code": 500, "message": err.Error()})
@@ -103,7 +104,7 @@ func UpdateUserHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 		req.Name = name
 		l := user.NewUserLogic(r.Context(), ctx.CasdoorClient, ctx.Cache)
 		if err := l.UpdateUser(casdoor.UserUpsert{
-			Name: req.Name, DisplayName: req.DisplayName, Email: req.Email,
+			Name: req.Name, DisplayName: req.DisplayName, Avatar: req.Avatar, Email: req.Email,
 			Phone: req.Phone, Properties: req.Properties,
 		}); err != nil {
 			httpx.WriteJson(w, http.StatusOK, map[string]interface{}{"code": 500, "message": err.Error()})

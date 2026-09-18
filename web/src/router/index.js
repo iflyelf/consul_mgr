@@ -78,6 +78,35 @@ const router = createRouter({
   routes
 })
 
+// 动态导入（懒加载 chunk）失败处理
+//
+// 场景：发版后旧页面仍引用已删除的旧 hash chunk，服务端返回 404/HTML，
+// 浏览器报 "Failed to fetch dynamically imported module"。
+// 处理：本地标记 + 强制刷新一次，让浏览器重新获取最新 index.html 与 chunk。
+const CHUNK_RELOAD_KEY = 'consul_mgr:chunk-reloaded'
+const isChunkLoadError = (err) => {
+  const msg = String(err?.message || err || '')
+  return (
+    msg.includes('Failed to fetch dynamically imported module') ||
+    msg.includes('Importing a module script failed') ||
+    msg.includes('error loading dynamically imported module') ||
+    err?.name === 'ChunkLoadError'
+  )
+}
+const reloadOnce = () => {
+  if (sessionStorage.getItem(CHUNK_RELOAD_KEY)) {
+    sessionStorage.removeItem(CHUNK_RELOAD_KEY)
+    return
+  }
+  sessionStorage.setItem(CHUNK_RELOAD_KEY, '1')
+  window.location.reload()
+}
+router.onError((err) => {
+  if (isChunkLoadError(err)) reloadOnce()
+})
+window.addEventListener('vite:preloadError', () => reloadOnce())
+window.addEventListener('load', () => sessionStorage.removeItem(CHUNK_RELOAD_KEY))
+
 // 路由守卫
 router.beforeEach(async (to, from, next) => {
   // 设置页面标题

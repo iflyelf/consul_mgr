@@ -129,6 +129,9 @@
         <el-form-item label="姓名" required>
           <el-input v-model="form.displayName" />
         </el-form-item>
+        <el-form-item label="头像地址">
+          <el-input v-model="form.avatar" placeholder="图片 URL（留空显示姓名首字）" />
+        </el-form-item>
         <el-form-item label="邮箱">
           <el-input v-model="form.email" />
         </el-form-item>
@@ -209,6 +212,7 @@ const propertyEntries = (row) =>
 const emptyForm = () => ({
   name: '',
   displayName: '',
+  avatar: '',
   email: '',
   phone: '',
   password: '',
@@ -276,6 +280,7 @@ const openEdit = (row) => {
     ...emptyForm(),
     name: row.name,
     displayName: row.displayName,
+    avatar: row.avatar,
     email: row.email,
     phone: row.phone,
     properties: { ...(row.properties || {}) }

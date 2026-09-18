@@ -4,8 +4,9 @@ import (
 	"io"
 	"io/fs"
 	"net/http"
+	"path"
 	"strings"
-	
+
 	"github.com/iflyelf/consul_mgr/web"
 )
 
@@ -34,7 +35,14 @@ func getSPAHandler() http.Handler {
 		// 尝试读取文件
 		file, err := distFS.Open(path)
 		if err != nil {
-			// 文件不存在，返回 index.html（SPA 路由处理）
+			// 静态资源（assets/*.js 等带扩展名）不存在时必须 404，不能回退 index.html：
+			// 否则浏览器把 HTML 当 JS 执行，动态 import 报
+			// "Failed to fetch dynamically imported module"（发版后旧 chunk 已被删除）。
+			if isStaticFile(path) {
+				http.NotFound(w, r)
+				return
+			}
+			// 前端路由（无扩展名）回退 index.html
 			path = "index.html"
 			file, err = distFS.Open(path)
 			if err != nil {
@@ -61,15 +69,24 @@ func getSPAHandler() http.Handler {
 			w.Header().Set("Content-Type", "image/png")
 		}
 		
-		// 设置缓存头
+		// 缓存头：带 hash 的资源长缓存；index.html 必须每次校验，
+		// 避免发版后仍使用旧 HTML（引用已删除的旧 chunk）。
 		if strings.HasPrefix(path, "assets/") {
 			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 		} else {
-			w.Header().Set("Cache-Control", "no-cache")
+			w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+			w.Header().Set("Pragma", "no-cache")
+			w.Header().Set("Expires", "0")
 		}
-		
+
 		// 使用 http.ServeContent 来处理文件服务
 		stat, _ := file.Stat()
 		http.ServeContent(w, r, path, stat.ModTime(), file.(io.ReadSeeker))
 	})
+}
+
+// isStaticFile 判断请求路径是否为静态资源文件（带扩展名，如 assets/xxx.js）。
+// 这类路径未命中时必须返回 404，不能回退 index.html。
+func isStaticFile(p string) bool {
+	return strings.HasPrefix(p, "assets/") || path.Ext(p) != ""
 }
