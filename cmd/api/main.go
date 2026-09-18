@@ -58,6 +58,11 @@ func main() {
 	// 环境变量覆盖监听地址/端口/模式/超时（支持容器编排自定义端口）
 	c.ApplyEnvOverrides()
 
+	// 必填项校验（失败即退出，避免以错误配置运行）
+	if err := c.Validate(); err != nil {
+		log.Fatalf("配置校验失败: %v", err)
+	}
+
 	// 创建服务上下文
 	ctx := svc.NewServiceContext(c)
 	

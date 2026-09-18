@@ -35,9 +35,9 @@ func NewOAuthLogic(ctx context.Context, client *casdoor.Client) *OAuthLogic {
 // 返回:
 //   *types.LoginResponse - 登录响应
 //   error - 错误信息
-func (l *OAuthLogic) GetLoginUrl(redirectUri string) (*types.LoginResponse, error) {
+func (l *OAuthLogic) GetLoginUrl(redirectUri, state string) (*types.LoginResponse, error) {
 	// 获取 Casdoor 登录 URL
-	loginUrl := l.client.GetSigninUrl(redirectUri)
+	loginUrl := l.client.GetSigninUrl(redirectUri, state)
 
 	l.Infof("生成登录 URL: %s", loginUrl)
 

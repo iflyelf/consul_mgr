@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/rest/httpx"
 	"github.com/zeromicro/go-zero/rest/pathvar"
 
@@ -127,6 +128,8 @@ func DeleteUserHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 			httpx.WriteJson(w, http.StatusOK, map[string]interface{}{"code": 500, "message": err.Error()})
 			return
 		}
+		// 级联清理本地关联（服务组授权、团队成员），避免悬挂授权
+		cleanupUserAssociations(r, ctx, name)
 		httpx.WriteJson(w, http.StatusOK, map[string]interface{}{"code": 200, "message": "已删除"})
 	}
 }
@@ -155,6 +158,26 @@ func ResetPasswordHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 		httpx.WriteJson(w, http.StatusOK, map[string]interface{}{
 			"code": 200, "message": "密码已重置", "data": map[string]string{"password": password},
 		})
+	}
+}
+
+// cleanupUserAssociations 级联清理用户在本地的关联数据。
+//
+// 用户体系由 Casdoor 维护，但本地 service_group_users / team_members 以
+// user_id（及 username）关联且无外键约束，删除用户后若不清理会残留悬挂授权；
+// 同名用户重建后可能继承旧权限。
+func cleanupUserAssociations(r *http.Request, ctx *svc.ServiceContext, name string) {
+	if ctx.RawDB == nil {
+		return
+	}
+	stmts := []string{
+		`DELETE FROM service_group_users WHERE user_id = $1 OR username = $1`,
+		`DELETE FROM team_members WHERE user_id = $1 OR username = $1`,
+	}
+	for _, q := range stmts {
+		if _, err := ctx.RawDB.ExecContext(r.Context(), q, name); err != nil {
+			logx.Errorf("清理用户关联失败（%s）: %v", name, err)
+		}
 	}
 }
 

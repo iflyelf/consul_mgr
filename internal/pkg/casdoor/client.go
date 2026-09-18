@@ -255,16 +255,19 @@ func genState() string {
 //
 // 返回:
 //   string - 登录 URL
-func (c *Client) GetSigninUrl(redirectUri string) string {
+func (c *Client) GetSigninUrl(redirectUri, state string) string {
 	base := strings.TrimRight(c.browserEndpoint(), "/")
 	return fmt.Sprintf(
 		"%s/login/oauth/authorize?client_id=%s&response_type=code&redirect_uri=%s&scope=profile&state=%s",
 		base,
 		url.QueryEscape(c.config.ClientId),
 		url.QueryEscape(redirectUri),
-		genState(),
+		url.QueryEscape(state),
 	)
 }
+
+// GenState 生成随机 OAuth state（供登录处理器写入 Cookie 并在回调时校验）
+func GenState() string { return genState() }
 
 // GetSignupUrl 获取注册 URL
 //

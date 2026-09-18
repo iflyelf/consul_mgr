@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/rest/httpx"
 
 	"github.com/iflyelf/consul_mgr/internal/config"
@@ -13,6 +14,9 @@ import (
 	"github.com/iflyelf/consul_mgr/internal/pkg/casdoor"
 	"github.com/iflyelf/consul_mgr/internal/types"
 )
+
+// oauthStateCookie OAuth state 校验用 Cookie 名
+const oauthStateCookie = "consul_mgr_oauth_state"
 
 // requestBaseURL 根据请求推导外部可访问的基础地址
 //
@@ -82,9 +86,21 @@ func LoginHandler(casdoorClient *casdoor.Client, c config.Config) http.HandlerFu
 		// 回调地址基于当前请求动态推导，避免写死
 		redirectUri := requestBaseURL(r) + "/callback"
 
+		// 生成随机 state 并写入 Cookie，回调时校验，防止登录 CSRF
+		state := casdoor.GenState()
+		http.SetCookie(w, &http.Cookie{
+			Name:     oauthStateCookie,
+			Value:    state,
+			Path:     "/",
+			MaxAge:   600,
+			HttpOnly: true,
+			SameSite: http.SameSiteLaxMode,
+			Secure:   r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https",
+		})
+
 		// 调用 Logic 层
 		logic := auth.NewOAuthLogic(r.Context(), casdoorClient)
-		resp, err := logic.GetLoginUrl(redirectUri)
+		resp, err := logic.GetLoginUrl(redirectUri, state)
 		if err != nil {
 			httpx.WriteJson(w, http.StatusInternalServerError, map[string]interface{}{
 				"code":    500,
@@ -129,6 +145,18 @@ func CallbackHandler(casdoorClient *casdoor.Client) http.HandlerFunc {
 			})
 			return
 		}
+
+		// 校验 OAuth state，防止登录 CSRF（Cookie 与回调参数必须一致）
+		stateCookie, err := r.Cookie(oauthStateCookie)
+		if err != nil || stateCookie.Value == "" || req.State != stateCookie.Value {
+			logx.Errorf("OAuth state 校验失败（可能存在 CSRF）")
+			httpx.WriteJson(w, http.StatusBadRequest, map[string]interface{}{
+				"code":    400,
+				"message": "登录校验失败（state 不匹配），请重新登录",
+			})
+			return
+		}
+		http.SetCookie(w, &http.Cookie{Name: oauthStateCookie, Value: "", Path: "/", MaxAge: -1})
 
 		// 调用 Logic 层
 		logic := auth.NewOAuthLogic(r.Context(), casdoorClient)

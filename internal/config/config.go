@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"strconv"
 
@@ -86,14 +87,33 @@ type Config struct {
 		Certificate      string `json:",optional,env=CASDOOR_CERTIFICATE"`
 		OrganizationName string `json:",default=flyiam,env=CASDOOR_ORGANIZATION"`
 		ApplicationName  string `json:",default=flyiam,env=CASDOOR_APPLICATION"`
-		// DefaultPassword 新增用户时的默认密码（留空则用该值）
-		DefaultPassword string `json:",default=ysyh!9Sky,env=CASDOOR_DEFAULT_PASSWORD"`
+		// DefaultPassword 新增用户时的默认密码。
+		// 不设代码默认值，必须显式注入（环境变量 CASDOOR_DEFAULT_PASSWORD / Secret），
+		// 避免弱口令被静默沿用。
+		DefaultPassword string `json:",optional,env=CASDOOR_DEFAULT_PASSWORD"`
 	}
 
 	Permission struct {
 		EnableServiceGroupAuth bool     `json:",default=true,env=PERMISSION_ENABLE_SERVICE_GROUP_AUTH"`
 		DefaultPermissions     []string `json:",default=[read],env=PERMISSION_DEFAULT"`
 	}
+}
+
+// Validate 校验必填配置（失败即退出，避免以错误配置运行）
+func (c *Config) Validate() error {
+	if c.JWT.Secret != "" && len(c.JWT.Secret) < 32 {
+		return fmt.Errorf("JWT 密钥长度不足: 至少需要 32 个字符，当前 %d 个", len(c.JWT.Secret))
+	}
+	if c.Casdoor.Endpoint == "" {
+		return fmt.Errorf("Casdoor 端点未设置: 请设置 CASDOOR_ENDPOINT 环境变量")
+	}
+	if c.Casdoor.ClientId == "" || c.Casdoor.ClientSecret == "" {
+		return fmt.Errorf("Casdoor 应用凭据未设置: 请设置 CASDOOR_CLIENT_ID / CASDOOR_CLIENT_SECRET")
+	}
+	if c.Casdoor.DefaultPassword == "" {
+		return fmt.Errorf("Casdoor 默认密码未设置: 请设置 CASDOOR_DEFAULT_PASSWORD 环境变量或 Secret（不再提供弱口令默认值）")
+	}
+	return nil
 }
 
 // ApplyEnvOverrides 用环境变量覆盖服务端口、监听地址、运行模式等基础配置
