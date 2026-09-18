@@ -127,6 +127,29 @@ export CONSUL_MGR_CORS_ALLOWED_ORIGINS="https://consul.example.com"
 | `invalid key: Key must be a PEM...` | 后端已改为不验证签名直接解析载荷，若仍出现请升级镜像 |
 | 启动报 `invalid character '<' looking for beginning of value` | `CASDOOR_ENDPOINT` 指向的不是 Casdoor API（返回了 HTML，如前端页面/Ingress 首页）。用 `curl -sS -i "$CASDOOR_ENDPOINT/api/health"` 确认应返回 JSON `{"status":"ok"}`；集群内正确值通常为 `http://casdoor.flyiam.svc.cluster.local:8000` |
 
+## 6.1 用户字段定义同步（可选）
+
+Consul Manager 的用户列表 / 表单由「用户字段定义」驱动（存本地库），
+内置字段与 FlyIAM 一致。若 FlyIAM 从数据源同步的用户字段发生变化，
+无需改代码，配置后一键同步即可：
+
+**Consul Manager 侧**：
+```bash
+export CONSUL_MGR_FLYIAM_API_ENDPOINT="https://flyiam.example.com"
+export CONSUL_MGR_FLYIAM_SERVICE_TOKEN="<与 FlyIAM 一致的服务令牌>"
+```
+
+**FlyIAM 侧**（开放字段导出接口）：
+```bash
+export FLYIAM_SERVICE_TOKEN="<同一个值>"
+```
+
+然后在「人员组织 → 用户字段」点击 **从 FlyIAM 同步**（按字段键幂等更新：
+新增缺失字段、更新显示名/类型/可见性/排序）。
+
+> 未配置时该功能按钮会提示未配置，其余功能不受影响。
+> 同步只更新字段定义，不修改任何用户数据。
+
 ## 7. 从内置 Casdoor 迁移
 
 1. 部署 FlyIAM，拿到 Casdoor 地址与 `flyiam` 应用凭据；

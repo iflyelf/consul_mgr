@@ -106,7 +106,7 @@
 import { useRouter } from 'vue-router'
 import { computed } from 'vue'
 import { ElMessageBox, ElMessage } from 'element-plus'
-import { UserFilled, User, Avatar, SwitchButton, Grid, Connection, Monitor, ArrowDown, OfficeBuilding } from '@element-plus/icons-vue'
+import { UserFilled, User, Avatar, SwitchButton, Grid, Connection, Monitor, ArrowDown, OfficeBuilding, SetUp } from '@element-plus/icons-vue'
 import { useUserStore } from '@/store/user'
 import { useThemeStore } from '@/store/theme'
 
@@ -124,6 +124,7 @@ const menus = [
 // 人员组织子菜单
 const orgMenus = [
   { path: '/users', label: '用户管理', icon: UserFilled },
+  { path: '/user-fields', label: '用户字段', icon: SetUp },
   { path: '/teams', label: '团队管理', icon: User },
   { path: '/roles', label: '角色管理', icon: Avatar }
 ]

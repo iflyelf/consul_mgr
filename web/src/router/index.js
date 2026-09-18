@@ -58,6 +58,12 @@ const routes = [
         meta: { title: '用户管理', requiresAdmin: true }
       },
       {
+        path: 'user-fields',
+        name: 'UserFields',
+        component: () => import('@/views/UserFields.vue'),
+        meta: { title: '用户字段', requiresAdmin: true }
+      },
+      {
         path: 'teams',
         name: 'Teams',
         component: () => import('@/views/Teams.vue'),

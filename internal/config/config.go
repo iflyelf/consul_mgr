@@ -104,6 +104,14 @@ type Config struct {
 		DefaultPermissions     []string `json:",default=[read],env=PERMISSION_DEFAULT"`
 	}
 
+	// FlyIAM 服务对接（用于同步用户字段定义等服务间调用）
+	FlyIAM struct {
+		// Endpoint FlyIAM 业务 API 地址（如 https://flyiam.example.com）
+		Endpoint string `json:",optional,env=CONSUL_MGR_FLYIAM_API_ENDPOINT"`
+		// ServiceToken 服务间凭证，需与 FlyIAM 的 SERVICE_TOKEN 一致
+		ServiceToken string `json:",optional,env=CONSUL_MGR_FLYIAM_SERVICE_TOKEN"`
+	}
+
 	// Security 登录凭证与跨域相关配置
 	Security struct {
 		// CookieSameSite 登录 Cookie 的 SameSite 策略：lax / strict / none

@@ -43,14 +43,15 @@
         </el-table-column>
         <el-table-column prop="email" label="邮箱" min-width="180" show-overflow-tooltip />
         <el-table-column prop="phone" label="电话" width="130" />
-        <el-table-column label="工号" width="110" show-overflow-tooltip>
-          <template #default="{ row }">{{ prop(row, 'empCode') || '-' }}</template>
-        </el-table-column>
-        <el-table-column label="一级部门" min-width="150" show-overflow-tooltip>
-          <template #default="{ row }">{{ prop(row, 'deptNameLv1') || '-' }}</template>
-        </el-table-column>
-        <el-table-column label="二级部门" min-width="150" show-overflow-tooltip>
-          <template #default="{ row }">{{ prop(row, 'deptNameLv2') || '-' }}</template>
+        <!-- 动态字段列：由「用户字段」定义驱动，新增字段无需改代码 -->
+        <el-table-column
+          v-for="f in listFields"
+          :key="f.fieldKey"
+          :label="f.label"
+          min-width="140"
+          show-overflow-tooltip
+        >
+          <template #default="{ row }">{{ prop(row, f.fieldKey) || '-' }}</template>
         </el-table-column>
         <el-table-column prop="owner" label="所属组织" width="120" />
         <el-table-column label="操作" width="200" fixed="right">
@@ -110,10 +111,14 @@
         <el-descriptions-item label="邮箱">{{ currentUser.email || '-' }}</el-descriptions-item>
         <el-descriptions-item label="电话">{{ currentUser.phone || '-' }}</el-descriptions-item>
         <el-descriptions-item label="创建时间" :span="2">{{ currentUser.createdTime || '-' }}</el-descriptions-item>
+        <!-- 动态字段：优先按字段定义展示，未定义的属性附加在后 -->
+        <el-descriptions-item v-for="f in allFields" :key="f.fieldKey" :label="f.label">
+          {{ prop(currentUser, f.fieldKey) || '-' }}
+        </el-descriptions-item>
         <el-descriptions-item
-          v-for="p in propertyEntries(currentUser)"
+          v-for="p in undefinedPropertyEntries(currentUser)"
           :key="p.key"
-          :label="propLabel(p.key)"
+          :label="p.key"
         >
           {{ p.value || '-' }}
         </el-descriptions-item>
@@ -138,8 +143,15 @@
         <el-form-item label="手机号">
           <el-input v-model="form.phone" />
         </el-form-item>
-        <el-form-item v-for="f in hrFields" :key="f.key" :label="f.label">
-          <el-input v-model="form.properties[f.key]" />
+        <!-- 动态字段表单项：由「用户字段」定义驱动 -->
+        <el-form-item v-for="f in formFields" :key="f.fieldKey" :label="f.label">
+          <el-input v-if="f.fieldType === 'text'" v-model="form.properties[f.fieldKey]" />
+          <el-input v-else-if="f.fieldType === 'textarea'" v-model="form.properties[f.fieldKey]" type="textarea" :rows="2" />
+          <el-input v-else-if="f.fieldType === 'number'" v-model="form.properties[f.fieldKey]" />
+          <el-select v-else-if="f.fieldType === 'select'" v-model="form.properties[f.fieldKey]" style="width: 100%" clearable>
+            <el-option v-for="opt in parseOptions(f.options)" :key="opt" :label="opt" :value="opt" />
+          </el-select>
+          <el-input v-else v-model="form.properties[f.fieldKey]" />
         </el-form-item>
         <el-form-item v-if="!formIsEdit" label="初始密码">
           <el-input v-model="form.password" type="password" show-password placeholder="留空使用系统默认密码" />
@@ -154,7 +166,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Refresh, MoreFilled, Key, EditPen, UserFilled } from '@element-plus/icons-vue'
 import {
@@ -165,6 +177,7 @@ import {
   resetUserPassword,
   setUserAdmin
 } from '@/api/org'
+import { listUserFields } from '@/api/userField'
 
 const loading = ref(false)
 const saving = ref(false)
@@ -179,35 +192,41 @@ const currentUser = ref(null)
 const formVisible = ref(false)
 const formIsEdit = ref(false)
 
-// 人事字段（与 FlyIAM 内置字段键一致，存储于 Casdoor Properties）
-const hrFields = [
-  { key: 'empCode', label: '工号' },
-  { key: 'deptNameLv0', label: '零级部门' },
-  { key: 'deptNameLv1', label: '一级部门' },
-  { key: 'deptNameLv2', label: '二级部门' },
-  { key: 'compileType', label: '编制类型' },
-  { key: 'superior', label: '上级账号' }
-]
+// 用户字段定义（页面可配置，与 FlyIAM 对齐）：驱动列表列与表单动态渲染
+const allFields = ref([])
+const listFields = computed(() => allFields.value.filter((f) => f.showInList))
+const formFields = computed(() => allFields.value.filter((f) => f.showInForm && f.editable))
 
-// 属性显示名（未知键直接显示键名）
-const propLabels = {
-  empCode: '工号',
-  deptNameLv0: '零级部门',
-  deptNameLv1: '一级部门',
-  deptNameLv2: '二级部门',
-  deptIdLv0: '零级部门ID',
-  deptIdLv1: '一级部门ID',
-  deptIdLv2: '二级部门ID',
-  compileType: '编制类型',
-  superior: '上级账号',
-  source: '来源'
-}
-const propLabel = (key) => propLabels[key] || key
 const prop = (row, key) => row?.properties?.[key] || ''
-const propertyEntries = (row) =>
-  Object.keys(row?.properties || {})
+
+// parseOptions 解析下拉选项（JSON 数组字符串）
+const parseOptions = (options) => {
+  if (!options) return []
+  try {
+    const arr = JSON.parse(options)
+    return Array.isArray(arr) ? arr : []
+  } catch (e) {
+    return String(options).split(',').map((s) => s.trim()).filter(Boolean)
+  }
+}
+
+// undefinedPropertyEntries 返回未在字段定义中声明的属性（保证不丢数据展示）
+const undefinedPropertyEntries = (row) => {
+  const defined = new Set(allFields.value.map((f) => f.fieldKey))
+  return Object.keys(row?.properties || {})
+    .filter((k) => !defined.has(k))
     .filter((k) => row.properties[k] !== '' && row.properties[k] != null)
     .map((k) => ({ key: k, value: row.properties[k] }))
+}
+
+const loadFields = async () => {
+  try {
+    const res = await listUserFields()
+    allFields.value = res || []
+  } catch (e) {
+    allFields.value = []
+  }
+}
 
 const emptyForm = () => ({
   name: '',
@@ -351,7 +370,10 @@ const handleDelete = async (row) => {
   loadData()
 }
 
-onMounted(loadData)
+onMounted(() => {
+  loadFields()
+  loadData()
+})
 </script>
 
 <style scoped>

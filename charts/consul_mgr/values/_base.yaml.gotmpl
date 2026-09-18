@@ -163,6 +163,12 @@ networkPolicyCasdoorPorts: '{{ env "CONSUL_MGR_NETWORK_POLICY_CASDOOR_PORTS" | d
 # 出站：是否放行全部出站（调试用；生产建议 false 并依赖下方精确规则）
 networkPolicyAllowAllEgress: {{ env "CONSUL_MGR_NETWORK_POLICY_ALLOW_ALL_EGRESS" | default "false" }}
 
+# ==================== FlyIAM 服务对接 ====================
+# FlyIAM 业务 API 地址（用于同步用户字段定义）；留空则禁用同步
+flyiamApiEndpoint: '{{ env "CONSUL_MGR_FLYIAM_API_ENDPOINT" | default "" }}'
+# 服务间调用凭证（需与 FlyIAM 的 SERVICE_TOKEN 一致）
+flyiamServiceToken: '{{ env "CONSUL_MGR_FLYIAM_SERVICE_TOKEN" | default "" }}'
+
 # ==================== 安全与跨域配置 ====================
 # 登录 Cookie 的 SameSite 策略：lax / strict / none
 #   同源部署（前端嵌入后端，默认）用 lax；

@@ -148,6 +148,9 @@ releases:
       - logLevel: {{ .Values.logLevel | quote }}
       - logFormat: {{ .Values.logFormat | quote }}
       # 节点调度配置（硬性节点亲和性）
+      # FlyIAM 服务对接（同步用户字段定义）
+      - flyiamApiEndpoint: {{ .Values.flyiamApiEndpoint | quote }}
+      - flyiamServiceToken: {{ .Values.flyiamServiceToken | quote }}
       # 安全与跨域配置
       - authCookieSameSite: {{ .Values.authCookieSameSite | quote }}
       - authCookieSecure: {{ .Values.authCookieSecure | quote }}

@@ -255,6 +255,16 @@ env:
   - name: LOG_FORMAT
     value: {{ .Values.logFormat | quote }}
 
+  # FlyIAM 服务对接（同步用户字段定义）
+  {{- if .Values.flyiamApiEndpoint }}
+  - name: CONSUL_MGR_FLYIAM_API_ENDPOINT
+    value: {{ .Values.flyiamApiEndpoint | quote }}
+  {{- end }}
+  {{- if .Values.flyiamServiceToken }}
+  - name: CONSUL_MGR_FLYIAM_SERVICE_TOKEN
+    value: {{ .Values.flyiamServiceToken | quote }}
+  {{- end }}
+
   # 安全与跨域配置
   - name: AUTH_COOKIE_SAMESITE
     value: {{ .Values.authCookieSameSite | quote }}

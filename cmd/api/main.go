@@ -21,6 +21,7 @@ import (
 	serviceHandler "github.com/iflyelf/consul_mgr/internal/handler/service"
 	teamHandler "github.com/iflyelf/consul_mgr/internal/handler/team"
 	userHandler "github.com/iflyelf/consul_mgr/internal/handler/user"
+	userFieldHandler "github.com/iflyelf/consul_mgr/internal/handler/userfield"
 	"github.com/iflyelf/consul_mgr/internal/middleware"
 	"github.com/iflyelf/consul_mgr/internal/svc"
 )
@@ -538,6 +539,34 @@ func registerHandlers(server *rest.Server, ctx *svc.ServiceContext) {
 		Method:  http.MethodPost,
 		Path:    "/api/users/:name/admin",
 		Handler: casdoorAuth.Handle(permissionMw.RequireAdmin()(userHandler.SetUserAdminHandler(ctx))),
+	})
+
+	// 用户字段定义（页面可配置，与 FlyIAM 对齐）
+	server.AddRoute(rest.Route{
+		Method:  http.MethodGet,
+		Path:    "/api/user-fields",
+		Handler: casdoorAuth.Handle(permissionMw.RequireAdmin()(userFieldHandler.ListUserFieldsHandler(ctx))),
+	})
+	server.AddRoute(rest.Route{
+		Method:  http.MethodPost,
+		Path:    "/api/user-fields",
+		Handler: casdoorAuth.Handle(permissionMw.RequireAdmin()(userFieldHandler.CreateUserFieldHandler(ctx))),
+	})
+	server.AddRoute(rest.Route{
+		Method:  http.MethodPut,
+		Path:    "/api/user-fields/:id",
+		Handler: casdoorAuth.Handle(permissionMw.RequireAdmin()(userFieldHandler.UpdateUserFieldHandler(ctx))),
+	})
+	server.AddRoute(rest.Route{
+		Method:  http.MethodDelete,
+		Path:    "/api/user-fields/:id",
+		Handler: casdoorAuth.Handle(permissionMw.RequireAdmin()(userFieldHandler.DeleteUserFieldHandler(ctx))),
+	})
+	// 从 FlyIAM 同步字段定义（数据源字段变化时无需改代码）
+	server.AddRoute(rest.Route{
+		Method:  http.MethodPost,
+		Path:    "/api/user-fields/sync",
+		Handler: casdoorAuth.Handle(permissionMw.RequireAdmin()(userFieldHandler.SyncUserFieldsHandler(ctx))),
 	})
 
 	// 角色管理

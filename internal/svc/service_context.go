@@ -12,6 +12,7 @@ import (
 	"github.com/zeromicro/go-zero/core/stores/sqlx"
 
 	"github.com/iflyelf/consul_mgr/internal/config"
+	"github.com/iflyelf/consul_mgr/internal/logic/userfield"
 	"github.com/iflyelf/consul_mgr/internal/pkg/cache"
 	"github.com/iflyelf/consul_mgr/internal/pkg/casdoor"
 	"github.com/iflyelf/consul_mgr/internal/pkg/consul"
@@ -254,6 +255,13 @@ func initSchema(db *sql.DB, c config.Config) error {
 	if err := createServiceGroupTables(db); err != nil {
 		return err
 	}
+	// 用户字段定义表（与 FlyIAM 对齐）并写入内置字段（幂等）
+	if err := createUserFieldDefsTable(db); err != nil {
+		return err
+	}
+	if err := userfield.NewLogic(sqlx.NewSqlConnFromDB(db)).SeedBuiltin(context.Background()); err != nil {
+		log.Printf("⚠️ 初始化内置用户字段失败: %v", err)
+	}
 	// 自动清理废弃的表与列（白名单，幂等），升级无需人工干预
 	cleanupDeprecatedSchema(db)
 	// 旧库结构迁移（历史版本表结构变更，幂等）
@@ -262,6 +270,28 @@ func initSchema(db *sql.DB, c config.Config) error {
 	}
 	log.Println("数据库初始化完成")
 	return nil
+}
+
+// createUserFieldDefsTable 创建用户字段定义表（与 FlyIAM 结构对齐）
+func createUserFieldDefsTable(db *sql.DB) error {
+	schema := `
+	CREATE TABLE IF NOT EXISTS user_field_defs (
+		id BIGSERIAL PRIMARY KEY,
+		field_key VARCHAR(64) NOT NULL UNIQUE,
+		label VARCHAR(128) NOT NULL,
+		field_type VARCHAR(32) NOT NULL DEFAULT 'text',
+		options TEXT DEFAULT '',
+		show_in_list BOOLEAN NOT NULL DEFAULT TRUE,
+		show_in_form BOOLEAN NOT NULL DEFAULT TRUE,
+		editable BOOLEAN NOT NULL DEFAULT TRUE,
+		builtin BOOLEAN NOT NULL DEFAULT FALSE,
+		sort_order INT NOT NULL DEFAULT 0,
+		created_at TIMESTAMPTZ DEFAULT NOW(),
+		updated_at TIMESTAMPTZ DEFAULT NOW()
+	);
+	`
+	_, err := db.Exec(schema)
+	return err
 }
 
 // deprecatedTables 明确废弃的表（程序不再读写，启动时自动清理）。

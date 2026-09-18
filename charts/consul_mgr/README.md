@@ -121,6 +121,8 @@ charts/consul_mgr/
 | `CONSUL_MGR_AUTH_COOKIE_SECURE` | 登录 Cookie Secure（`auto`/`true`/`false`） | `auto` |
 | `CONSUL_MGR_AUTH_COOKIE_DOMAIN` | 登录 Cookie 作用域（跨子域共享） | 空 |
 | `CONSUL_MGR_CORS_ALLOWED_ORIGINS` | 允许的跨域来源（逗号分隔，为空关闭） | 空 |
+| `CONSUL_MGR_FLYIAM_API_ENDPOINT` | FlyIAM 业务 API 地址（同步用户字段用） | 空 |
+| `CONSUL_MGR_FLYIAM_SERVICE_TOKEN` | 服务间凭证（与 FlyIAM `SERVICE_TOKEN` 一致） | 空 |
 
 > ⚠️ 生产环境请通过环境变量或 `existingSecret` 覆盖 `CONSUL_MGR_DB_PASSWORD`、
 > `CONSUL_MGR_JWT_SECRET`、`CONSUL_MGR_ADMIN_PASSWORD`、
