@@ -29,7 +29,7 @@
 ```yaml
 env:
   SWR_REGISTRY: swr.cn-east-3.myhuaweicloud.com
-  SWR_ORGANIZATION: danxiaonuo
+  SWR_ORGANIZATION: iflyelf
 ```
 
 配置 Secrets（值取自华为云 SWR 控制台的「登录指令」）：
@@ -56,7 +56,7 @@ gh secret set SWR_AK -b "<AccessKeyId>" -R iflyelf/consul_mgr
 gh secret set SWR_SK -b "<SecretAccessKey>" -R iflyelf/consul_mgr
 ```
 
-> 公开后 `docker pull swr.cn-east-3.myhuaweicloud.com/danxiaonuo/consul-mgr:latest` 无需登录。
+> 公开后 `docker pull swr.cn-east-3.myhuaweicloud.com/iflyelf/consul-mgr:latest` 无需登录。
 
 ## 3. 配置方法
 
@@ -90,21 +90,21 @@ gh run watch -R iflyelf/consul_mgr
 
 # 验证镜像
 docker pull iflyelf/consul-mgr:latest
-docker pull swr.cn-east-3.myhuaweicloud.com/danxiaonuo/consul-mgr:latest
+docker pull swr.cn-east-3.myhuaweicloud.com/iflyelf/consul-mgr:latest
 ```
 
 ## 6. 发布产物
 
 - Release `latest`：二进制压缩包与 `checksums.txt`
 - Docker Hub：`iflyelf/consul-mgr:latest`（amd64 / arm64）
-- 华为云 SWR：`swr.cn-east-3.myhuaweicloud.com/danxiaonuo/consul-mgr:latest`（amd64 / arm64）
+- 华为云 SWR：`swr.cn-east-3.myhuaweicloud.com/iflyelf/consul-mgr:latest`（amd64 / arm64）
 
 本地手动推送华为云：
 
 ```bash
 docker login -u cn-east-3@<AccessKeyId> -p <登录密码> swr.cn-east-3.myhuaweicloud.com
-docker tag iflyelf/consul-mgr:latest swr.cn-east-3.myhuaweicloud.com/danxiaonuo/consul-mgr:latest
-docker push swr.cn-east-3.myhuaweicloud.com/danxiaonuo/consul-mgr:latest
+docker tag iflyelf/consul-mgr:latest swr.cn-east-3.myhuaweicloud.com/iflyelf/consul-mgr:latest
+docker push swr.cn-east-3.myhuaweicloud.com/iflyelf/consul-mgr:latest
 ```
 
 ## 7. 相关文档
