@@ -99,11 +99,12 @@ func main() {
 	schedCtx, cancelScheduler := context.WithCancel(context.Background())
 	defer cancelScheduler()
 	// 首次启动写入配置种子（已存在则不覆盖）
+	seedCfg := ctx.Config()
 	if err := userfieldLogic.NewLogic(ctx.DB).SeedSyncConfig(schedCtx,
-		c.FlyIAM.SyncEnabled, c.FlyIAM.SyncOnStartup, c.FlyIAM.SyncInterval); err != nil {
+		seedCfg.FlyIAM.SyncEnabled, seedCfg.FlyIAM.SyncOnStartup, seedCfg.FlyIAM.SyncInterval); err != nil {
 		logx.Errorf("写入同步配置种子失败: %v", err)
 	}
-	userfieldLogic.StartScheduler(schedCtx, ctx.DB, ctx.RawDB, &c)
+	userfieldLogic.StartScheduler(schedCtx, ctx.DB, ctx.RawDB, ctx.Config)
 
 	// 启动信息
 	fmt.Printf("🚀 Starting Consul Manager Server\n")

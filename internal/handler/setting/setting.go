@@ -44,8 +44,14 @@ func UpdateSettingsHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 			return
 		}
 
+		// 若刚配置了 FlyIAM 对接且尚未有 Casdoor 应用凭据，尝试自动获取
+		// （免去手工填写 ClientID/Secret）。
+		if needsAutoCreds(applied) {
+			ctx.EnsureCasdoorCredentials()
+		}
+
 		// 若修改了 Casdoor 连接配置，热重载客户端（免重启）
-		if setting.NeedsCasdoorReload(applied) {
+		if setting.NeedsCasdoorReload(applied) || needsAutoCreds(applied) {
 			if err := ctx.ReloadCasdoor(r.Context()); err != nil {
 				// 保存已成功，但重建失败：提示用户（旧客户端仍可用）
 				response.Error(w, 502, "配置已保存，但 Casdoor 客户端重建失败: "+err.Error())
@@ -54,4 +60,14 @@ func UpdateSettingsHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 		}
 		response.Success(w, nil)
 	}
+}
+
+// needsAutoCreds 判断本次变更是否涉及 FlyIAM 对接（可能触发自动获取 Casdoor 凭据）
+func needsAutoCreds(applied []string) bool {
+	for _, k := range applied {
+		if k == "flyiam.api_endpoint" || k == "flyiam.service_token" {
+			return true
+		}
+	}
+	return false
 }

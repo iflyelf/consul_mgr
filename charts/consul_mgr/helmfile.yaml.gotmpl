@@ -108,6 +108,9 @@ releases:
       - casdoorOrganization: {{ .Values.casdoorOrganization | quote }}
       - casdoorApplication: {{ .Values.casdoorApplication | quote }}
       - casdoorDefaultPassword: {{ .Values.casdoorDefaultPassword | quote }}
+      # FlyIAM 服务对接（字段同步 + 自动获取 Casdoor 凭据；留空则不启用）
+      - flyiamApiEndpoint: {{ .Values.flyiamApiEndpoint | quote }}
+      - flyiamServiceToken: {{ .Values.flyiamServiceToken | quote }}
       # Casdoor 部署形态（外置域名 / 集群内）
       - casdoorInCluster: {{ .Values.casdoorInCluster }}
       # Casdoor 集群内引用
@@ -168,14 +171,16 @@ releases:
             fi
 
             # 检查 Casdoor 应用凭据（认证复用外部 FlyIAM）
+            # 满足其一即可：① 已提供 ClientID/Secret；② 提供 existingSecret；
+            # ③ 配置了 FlyIAM 地址 + 服务令牌（启动时自动获取凭据，免手工填写）。
             if [ -z "{{ .Values.casdoorClientId }}" ] || [ -z "{{ .Values.casdoorClientSecret }}" ]; then
-              if [ -z "{{ .Values.existingSecret }}" ]; then
-                echo "❌ 错误: 必须提供 Casdoor ClientID/Secret（从 FlyIAM 获取）或 existingSecret"
+              if [ -z "{{ .Values.existingSecret }}" ] && { [ -z "{{ .Values.flyiamApiEndpoint }}" ] || [ -z "{{ .Values.flyiamServiceToken }}" ]; }; then
+                echo "❌ 错误: 需提供 Casdoor ClientID/Secret、existingSecret，或配置 FlyIAM 地址+服务令牌以自动获取"
                 exit 1
               fi
             fi
 
-            # 检查 Casdoor 地址
+            # 检查 Casdoor 地址（非敏感，需显式提供；凭据可经 FlyIAM 自动获取）
             if [ -z "{{ .Values.casdoorEndpoint }}" ]; then
               echo "❌ 错误: 必须提供 CASDOOR_ENDPOINT（FlyIAM 提供的 Casdoor 地址）"
               exit 1

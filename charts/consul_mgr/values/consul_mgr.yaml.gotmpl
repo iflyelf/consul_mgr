@@ -216,6 +216,16 @@ env:
   - name: CASDOOR_DEFAULT_PASSWORD
     value: {{ .Values.casdoorDefaultPassword | quote }}
 
+  # FlyIAM 服务对接（字段同步 + 自动获取 Casdoor 凭据；留空则不启用）
+  {{- if .Values.flyiamApiEndpoint }}
+  - name: CONSUL_MGR_FLYIAM_API_ENDPOINT
+    value: {{ .Values.flyiamApiEndpoint | quote }}
+  {{- end }}
+  {{- if .Values.flyiamServiceToken }}
+  - name: CONSUL_MGR_FLYIAM_SERVICE_TOKEN
+    value: {{ .Values.flyiamServiceToken | quote }}
+  {{- end }}
+
 # ============================================
 # 敏感信息配置（从 Secret 注入）
 # ============================================

@@ -85,7 +85,7 @@ adminPassword: '{{ env "CONSUL_MGR_ADMIN_PASSWORD" | default "ysyh!9Sky" }}'
 #   后端通过外置域名访问 Casdoor，标准端口无需显式书写：
 #     https://casdoor.example.com  → 443
 #     http://casdoor.example.com   → 80
-casdoorEndpoint: '{{ env "CONSUL_MGR_CASDOOR_ENDPOINT" | default "https://casdoor.example.com" }}'
+casdoorEndpoint: '{{ env "CONSUL_MGR_CASDOOR_ENDPOINT" | default "" }}'
 # Casdoor 公开地址（浏览器访问；留空则回退为 casdoorEndpoint）
 casdoorPublicEndpoint: '{{ env "CONSUL_MGR_CASDOOR_PUBLIC_ENDPOINT" | default "" }}'
 # Casdoor 是否位于集群内（走 Service/DNS）
@@ -103,6 +103,12 @@ casdoorOrganization: '{{ env "CONSUL_MGR_CASDOOR_ORGANIZATION" | default "flyiam
 casdoorApplication: '{{ env "CONSUL_MGR_CASDOOR_APPLICATION" | default "flyiam" }}'
 # 新增用户时的默认密码
 casdoorDefaultPassword: '{{ env "CONSUL_MGR_CASDOOR_DEFAULT_PASSWORD" | default "ysyh!9Sky" }}'
+
+# ==================== FlyIAM 服务对接 ====================
+# 用于：① 同步用户字段定义；② 自动获取 Casdoor 应用凭据（免手工填写 ClientID/Secret）。
+# 留空则不启用；两种能力均需与 FlyIAM 的 SERVICE_TOKEN 或页面 API 令牌一致。
+flyiamApiEndpoint: '{{ env "CONSUL_MGR_FLYIAM_API_ENDPOINT" | default "" }}'
+flyiamServiceToken: '{{ env "CONSUL_MGR_FLYIAM_SERVICE_TOKEN" | default "" }}'
 
 # ==================== Casdoor 集群内引用（可选，casdoorInCluster=true 时使用）====================
 # FlyIAM（内置 Casdoor）所在命名空间

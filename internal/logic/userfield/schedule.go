@@ -177,14 +177,15 @@ func (l *Logic) SeedSyncConfig(ctx context.Context, enabled bool, onStartup bool
 
 // StartScheduler 启动后台调度：启动时按配置同步一次，之后按间隔检查。
 //
-// cfg 为共享指针：FlyIAM 地址/令牌可在页面修改并即时生效（无需重启）。
+// cfgFn 运行时返回最新配置快照：FlyIAM 地址/令牌可在页面修改并即时生效。
 // rawDB 用于跨副本互斥（多副本部署时避免重复执行同一任务）。
 // 说明：进度写入内存（供前端轮询），结果落库（供历史查询）。
-func StartScheduler(ctx context.Context, db sqlx.SqlConn, rawDB *sql.DB, cfg *config.Config) {
+func StartScheduler(ctx context.Context, db sqlx.SqlConn, rawDB *sql.DB, cfgFn func() *config.Config) {
 	l := NewLogicWithRaw(db, rawDB)
 
 	// 启动时同步（可选）
-	if cfg.FlyIAM.SyncOnStartup && cfg.FlyIAM.Endpoint != "" && cfg.FlyIAM.ServiceToken != "" {
+	cur := cfgFn()
+	if cur.FlyIAM.SyncOnStartup && cur.FlyIAM.Endpoint != "" && cur.FlyIAM.ServiceToken != "" {
 		go func() {
 			time.Sleep(5 * time.Second) // 等待服务就绪
 			// panic 兜底：后台 goroutine 内 panic 会终止整个进程
@@ -193,6 +194,7 @@ func StartScheduler(ctx context.Context, db sqlx.SqlConn, rawDB *sql.DB, cfg *co
 					log.Printf("💥 启动时同步 panic（已恢复）: %v\n%s", r, debug.Stack())
 				}
 			}()
+			cfg := cfgFn()
 			runAutoSync(ctx, l, cfg.FlyIAM.Endpoint, cfg.FlyIAM.ServiceToken, "startup")
 		}()
 	}
@@ -216,7 +218,8 @@ func StartScheduler(ctx context.Context, db sqlx.SqlConn, rawDB *sql.DB, cfg *co
 							log.Printf("💥 用户字段调度器 panic（已恢复）: %v\n%s", r, debug.Stack())
 						}
 					}()
-					// 每次读取最新配置（页面可改）
+					// 每次读取最新配置快照（页面可改）
+					cfg := cfgFn()
 					if cfg.FlyIAM.Endpoint == "" || cfg.FlyIAM.ServiceToken == "" {
 						return
 					}

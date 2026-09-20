@@ -6,6 +6,14 @@ Expand the name of the chart.
 {{- end }}
 
 {{/*
+Create the container name. Must be a valid RFC 1123 label (lowercase
+alphanumeric and '-'), so underscores in the chart name are replaced.
+*/}}
+{{- define "consul_mgr.containerName" -}}
+{{- default .Chart.Name .Values.nameOverride | replace "_" "-" | trunc 63 | trimSuffix "-" }}
+{{- end }}
+
+{{/*
 Create a default fully qualified app name.
 */}}
 {{- define "consul_mgr.fullname" -}}

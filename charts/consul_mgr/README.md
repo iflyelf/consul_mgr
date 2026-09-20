@@ -111,12 +111,20 @@ charts/consul_mgr/
 | `CONSUL_MGR_JWT_SECRET` | JWT 密钥 | - |
 | `CONSUL_MGR_ADMIN_PASSWORD` | 管理员密码 | - |
 | `CONSUL_MGR_CASDOOR_DEFAULT_PASSWORD` | 新增用户默认密码（生产请覆盖） | `ysyh!9Sky` |
-| `CONSUL_MGR_CASDOOR_ENDPOINT` | Casdoor 地址（默认外置域名） | `https://casdoor.example.com` |
+| `CONSUL_MGR_CASDOOR_ENDPOINT` | Casdoor 地址（必填；集群内方式见下） | - |
 | `CONSUL_MGR_CASDOOR_PUBLIC_ENDPOINT` | Casdoor 浏览器地址（留空回退 Endpoint） | - |
 | `CONSUL_MGR_CASDOOR_IN_CLUSTER` | Casdoor 是否在集群内 | `false` |
-| `CONSUL_MGR_CASDOOR_CLIENT_ID` / `..._SECRET` | 应用凭据（FlyIAM 获取） | - |
+| `CONSUL_MGR_CASDOOR_CLIENT_ID` / `..._SECRET` | 应用凭据（可留空，见下方「自动获取」） | - |
 | `CONSUL_MGR_CASDOOR_ORGANIZATION` | 组织 | `flyiam` |
 | `CONSUL_MGR_CASDOOR_APPLICATION` | 应用 | `flyiam` |
+| `CONSUL_MGR_FLYIAM_API_ENDPOINT` | FlyIAM 地址（用于字段同步 + 自动获取 Casdoor 凭据） | - |
+| `CONSUL_MGR_FLYIAM_SERVICE_TOKEN` | FlyIAM 服务令牌（API 令牌或 `SERVICE_TOKEN`） | - |
+
+> **自动获取 Casdoor 凭据（推荐）**：配置 `CONSUL_MGR_FLYIAM_API_ENDPOINT` +
+> `CONSUL_MGR_FLYIAM_SERVICE_TOKEN` 后，`CASDOOR_CLIENT_ID` / `CASDOOR_CLIENT_SECRET`
+> **可留空**——启动时（以及页面保存 FlyIAM 配置后）会自动向 FlyIAM
+> `GET /api/casdoor/app-credentials` 获取并落库，**无需手工填写**。
+> `CASDOOR_ENDPOINT` 仍须显式提供（非敏感，且 FlyIAM 的地址可能是其命名空间内短名）。
 
 > **页面可配置（推荐）**：安全/跨域、审计、权限、日志、JWT 过期/签发者、
 > 管理员用户名/邮箱、Consul 默认、FlyIAM 对接、Casdoor 连接（组织/应用/证书等）
@@ -129,8 +137,10 @@ charts/consul_mgr/
 
 > **引导必需（Chart 保留）**：`DATABASE_URL`（或 DB 分项）、`REDIS_*`、`JWT_SECRET`、
 > `ADMIN_PASSWORD`、`CASDOOR_ENDPOINT` / `CASDOOR_PUBLIC_ENDPOINT` /
-> `CASDOOR_CLIENT_ID` / `CASDOOR_CLIENT_SECRET` / `CASDOOR_CERTIFICATE` /
-> `CASDOOR_ORGANIZATION` / `CASDOOR_APPLICATION` / `CASDOOR_DEFAULT_PASSWORD`。
+> `CASDOOR_CERTIFICATE` / `CASDOOR_ORGANIZATION` / `CASDOOR_APPLICATION` /
+> `CASDOOR_DEFAULT_PASSWORD`，以及二选一的凭据来源：
+> ① `CASDOOR_CLIENT_ID` / `CASDOOR_CLIENT_SECRET`，或
+> ② `CONSUL_MGR_FLYIAM_API_ENDPOINT` + `CONSUL_MGR_FLYIAM_SERVICE_TOKEN`（自动获取）。
 > 原因：登录与**首次**启动校验依赖它们，且登录前无法访问设置页（先有鸡还是蛋）。
 >
 > 启动时先加载数据库中的页面设置、**之后**才校验 Casdoor 连接，因此

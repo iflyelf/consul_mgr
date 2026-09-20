@@ -46,6 +46,19 @@ export CASDOOR_ORGANIZATION="flyiam"
 export CASDOOR_APPLICATION="flyiam"
 ```
 
+> **自动获取 ClientID/Secret（免手工填写）**：配置 FlyIAM 地址与服务令牌后，
+> 上述 `CASDOOR_CLIENT_ID` / `CASDOOR_CLIENT_SECRET` **可留空**：
+>
+> ```bash
+> export CONSUL_MGR_FLYIAM_API_ENDPOINT="http://flyiam.flyiam.svc.cluster.local:8081"
+> export CONSUL_MGR_FLYIAM_SERVICE_TOKEN="<FlyIAM 页面生成的 API 令牌>"
+> ```
+>
+> 启动时（及页面保存 FlyIAM 配置后）会自动调用 FlyIAM
+> `GET /api/casdoor/app-credentials` 获取应用凭据并落库。
+> `CASDOOR_ENDPOINT` 仍须显式提供（非敏感；FlyIAM 的地址可能是其命名空间内短名，
+> 跨命名空间不可达，不能直接沿用）。
+
 > **跨域名/多机部署要点**：
 > - `CASDOOR_PUBLIC_ENDPOINT` 必须是浏览器能直接访问的地址
 > - 前端不写死任何 Casdoor 地址，登录时由后端 `/api/auth/login` 按当前访问域名动态生成并 302

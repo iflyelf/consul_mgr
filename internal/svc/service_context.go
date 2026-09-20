@@ -17,6 +17,7 @@ import (
 	"github.com/iflyelf/consul_mgr/internal/pkg/cache"
 	"github.com/iflyelf/consul_mgr/internal/pkg/casdoor"
 	"github.com/iflyelf/consul_mgr/internal/pkg/consul"
+	"github.com/iflyelf/consul_mgr/internal/pkg/flyiam"
 	"github.com/iflyelf/consul_mgr/internal/pkg/perm"
 	"github.com/iflyelf/consul_mgr/internal/setting"
 )
@@ -188,6 +189,11 @@ func NewServiceContext(c *config.Config) *ServiceContext {
 	if err := settings.Load(context.Background()); err != nil {
 		log.Printf("⚠️ 加载应用设置失败（将使用环境变量默认值）: %v", err)
 	}
+	// 若未手工配置 Casdoor 应用凭据，尝试通过 FlyIAM 服务间接口自动获取。
+	// 本系统与 FlyIAM 复用同一 Casdoor，配置了 FlyIAM 地址 + 服务令牌即可
+	// 免去手工填写 ClientID/Secret。
+	ensureCasdoorCredentials(cfgStore, settings)
+
 	svcCfg := cfgStore.Get()
 
 	// Casdoor 连接配置校验须在 settings.Load 之后：
@@ -229,9 +235,63 @@ func NewServiceContext(c *config.Config) *ServiceContext {
 	return svcCtx
 }
 
-// initDB 初始化数据库连接
-// ensureDatabase 确保目标数据库存在（首次部署时自动创建）。
+// ensureCasdoorCredentials 在未配置 Casdoor 应用凭据时，尝试从 FlyIAM 自动获取。
 //
+// 触发条件：Casdoor ClientId/Secret 任一为空，且已配置 FlyIAM 地址与服务令牌。
+// 获取成功后写回配置（页面持久化，DB 优先）并即时应用到内存快照；失败仅告警，
+// 交由后续 ValidateCasdoor 给出明确提示。
+func ensureCasdoorCredentials(store *config.Store, settings *setting.Service) {
+	cur := store.Get()
+	if cur.Casdoor.ClientId != "" && cur.Casdoor.ClientSecret != "" {
+		return
+	}
+	if cur.FlyIAM.Endpoint == "" || cur.FlyIAM.ServiceToken == "" {
+		// 未配置 FlyIAM 对接：保持原状，由页面或环境变量提供凭据
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	creds, err := flyiam.FetchAppCredentials(ctx, cur.FlyIAM.Endpoint, cur.FlyIAM.ServiceToken)
+	if err != nil {
+		log.Printf("⚠️ 从 FlyIAM 自动获取 Casdoor 凭据失败（可稍后在「系统设置」页面配置）: %v", err)
+		return
+	}
+
+	// 只自动补全「凭据」：endpoint 由本系统自行配置（FlyIAM 的 endpoint 可能是
+	// 其命名空间内的短名，跨命名空间不可达，不能直接沿用）。
+	kv := map[string]string{
+		"casdoor.client_id":     creds.ClientId,
+		"casdoor.client_secret": creds.ClientSecret,
+	}
+	if cur.Casdoor.OrganizationName == "" && creds.Organization != "" {
+		kv["casdoor.organization"] = creds.Organization
+	}
+	if cur.Casdoor.ApplicationName == "" && creds.Application != "" {
+		kv["casdoor.application"] = creds.Application
+	}
+	if _, err := settings.Apply(ctx, kv); err != nil {
+		log.Printf("⚠️ 自动获取的 Casdoor 凭据保存失败: %v", err)
+		return
+	}
+	log.Printf("✅ 已从 FlyIAM 自动获取 Casdoor 应用凭据（application=%s，clientId=%s）",
+		creds.Application, creds.ClientId)
+}
+
+// EnsureCasdoorCredentials 供运行期（页面保存设置后）尝试自动获取 Casdoor 凭据。
+//
+// 典型场景：管理员先在「系统设置」填入 FlyIAM 地址与令牌，随后自动补全
+// Casdoor ClientID/Secret，无需手工填写。
+func (s *ServiceContext) EnsureCasdoorCredentials() {
+	if s == nil || s.cfgStore == nil || s.Settings == nil {
+		return
+	}
+	ensureCasdoorCredentials(s.cfgStore, s.Settings)
+}
+
+// initDB 初始化数据库连接
+// ensureDatabase 确保目标数据库存在（首次部署时自动创建）。//
 // 先尝试连接目标库；若因「库不存在」失败，则连接 postgres 维护库执行
 // CREATE DATABASE。权限不足或其它错误仅告警，交由后续连接给出明确报错。
 func ensureDatabase(c config.Config) {
