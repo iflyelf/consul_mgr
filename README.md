@@ -85,8 +85,12 @@ export ADMIN_USERNAME=admin ADMIN_PASSWORD=your-password
 # 使用 FlyIAM 提供的 Casdoor 服务
 export CASDOOR_ENDPOINT=http://localhost:8000 \
        CASDOOR_ORGANIZATION=flyiam \
-       CASDOOR_APPLICATION=flyiam \
-       CASDOOR_CLIENT_ID=xxx CASDOOR_CLIENT_SECRET=xxx
+       CASDOOR_APPLICATION=flyiam
+# 方式一：显式提供 Casdoor 凭据
+# export CASDOOR_CLIENT_ID=xxx CASDOOR_CLIENT_SECRET=xxx
+# 方式二（推荐）：配置 FlyIAM 对接，自动获取 Casdoor 凭据（无需手工填写上面两项）
+export CONSUL_MGR_FLYIAM_API_ENDPOINT=http://localhost:8081 \
+       CONSUL_MGR_FLYIAM_SERVICE_TOKEN=<FlyIAM 页面生成的 API 令牌>
 go run ./cmd/api -c etc/config.yaml
 ```
 
@@ -105,7 +109,8 @@ go run ./cmd/api -c etc/config.yaml
 | `ADMIN_USERNAME` / `ADMIN_PASSWORD` | 管理员（必填） | — |
 | `CASDOOR_ENDPOINT` / `CASDOOR_PUBLIC_ENDPOINT` | Casdoor 地址（FlyIAM 提供） | — |
 | `CASDOOR_ORGANIZATION` / `CASDOOR_APPLICATION` | Casdoor 组织/应用（使用 FlyIAM） | `flyiam` / `flyiam` |
-| `CASDOOR_CLIENT_ID` / `CASDOOR_CLIENT_SECRET` | Casdoor 凭据（从 FlyIAM 获取） | — |
+| `CASDOOR_CLIENT_ID` / `CASDOOR_CLIENT_SECRET` | Casdoor 凭据（可留空，见下方「自动获取」） | — |
+| `CONSUL_MGR_FLYIAM_API_ENDPOINT` / `_SERVICE_TOKEN` | FlyIAM 对接（字段同步 + 自动获取 Casdoor 凭据） | — |
 | `REDIS_ENABLED` / `REDIS_HOST` / `REDIS_PORT` / `REDIS_PASSWORD` | 缓存 | `true`/`localhost`/`6379`/空 |
 | `CONSUL_ADDRESS` / `CONSUL_TOKEN` / `CONSUL_DATACENTER` | 默认 Consul | — / 空 / `dc1` |
 | `CONSUL_MAX_CONCURRENCY` | 批量查询/操作并发上限 | `16` |
@@ -113,6 +118,10 @@ go run ./cmd/api -c etc/config.yaml
 > **页面可配置（推荐）**：安全/跨域、审计、权限、日志、JWT、Casdoor 连接、Consul 默认、
 > FlyIAM 集成等均已支持在「人员组织 → 系统设置」页面配置（存于数据库，**DB 优先 / env 兜底**），
 > **保存即生效**。其中 **Casdoor 连接**修改后会**原子热重载**客户端，**无需重启**。
+>
+> **自动获取 Casdoor 凭据（推荐）**：配置 `CONSUL_MGR_FLYIAM_API_ENDPOINT` +
+> `CONSUL_MGR_FLYIAM_SERVICE_TOKEN` 后，`CASDOOR_CLIENT_ID` / `CASDOOR_CLIENT_SECRET`
+> 可留空——启动时（及页面保存 FlyIAM 配置后）自动向 FlyIAM 获取并落库，免手工填写。
 
 完整清单见 [systemd 部署文档](docs/deployment/systemd.md#环境变量配置)。
 

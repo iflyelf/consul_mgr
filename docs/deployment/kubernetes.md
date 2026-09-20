@@ -53,10 +53,16 @@ export CONSUL_MGR_ADMIN_PASSWORD="your-admin-password"
 # 认证：默认「外置域名方式」（Casdoor 已通过域名对外暴露）
 export CONSUL_MGR_CASDOOR_ENDPOINT="https://casdoor.example.com"
 export CONSUL_MGR_CASDOOR_PUBLIC_ENDPOINT="https://casdoor.example.com"
-export CONSUL_MGR_CASDOOR_CLIENT_ID="<从 FlyIAM 获取>"
-export CONSUL_MGR_CASDOOR_CLIENT_SECRET="<从 FlyIAM 获取>"
 export CONSUL_MGR_CASDOOR_ORGANIZATION="flyiam"
 export CONSUL_MGR_CASDOOR_APPLICATION="flyiam"
+
+# Casdoor 凭据：二选一
+#   方式一：显式提供
+# export CONSUL_MGR_CASDOOR_CLIENT_ID="<从 FlyIAM 获取>"
+# export CONSUL_MGR_CASDOOR_CLIENT_SECRET="<从 FlyIAM 获取>"
+#   方式二（推荐）：配置 FlyIAM 对接，启动时自动获取（上面两项可留空）
+export CONSUL_MGR_FLYIAM_API_ENDPOINT="http://flyiam.flyiam.svc.cluster.local:8081"
+export CONSUL_MGR_FLYIAM_SERVICE_TOKEN="<FlyIAM 页面生成的 API 令牌>"
 
 # 可选：Redis
 export CONSUL_MGR_REDIS_HOST="redis.default.svc.cluster.local"
@@ -125,10 +131,10 @@ export CONSUL_MGR_NODE_LABEL_VALUE="true"
 
 | 项 | 说明 | 环境变量 |
 |----|------|---------|
-| Casdoor 地址 | 后端访问（默认外置域名） | `CONSUL_MGR_CASDOOR_ENDPOINT` |
+| Casdoor 地址 | 后端访问（必填，非敏感） | `CONSUL_MGR_CASDOOR_ENDPOINT` |
 | Casdoor 浏览器地址 | 浏览器可达，用于登录跳转 | `CONSUL_MGR_CASDOOR_PUBLIC_ENDPOINT` |
 | 部署形态 | 外置域名 / 集群内 | `CONSUL_MGR_CASDOOR_IN_CLUSTER` |
-| 应用凭据 | 从 FlyIAM 获取 | `CONSUL_MGR_CASDOOR_CLIENT_ID` / `..._SECRET` |
+| 应用凭据 | 显式提供，或经 FlyIAM 自动获取 | `CONSUL_MGR_CASDOOR_CLIENT_ID` / `..._SECRET`，或 `CONSUL_MGR_FLYIAM_API_ENDPOINT` + `..._SERVICE_TOKEN` |
 | 组织 / 应用 | 与 FlyIAM 一致 | `CONSUL_MGR_CASDOOR_ORGANIZATION` / `..._APPLICATION` |
 
 **回调白名单**：需在 FlyIAM/Casdoor 应用中把本服务的回调地址加入白名单：
@@ -284,11 +290,13 @@ egress:
 | `CONSUL_MGR_REDIS_HOST` / `CONSUL_MGR_REDIS_PASSWORD` | 缓存 | - |
 | `CONSUL_MGR_JWT_SECRET` | JWT 密钥（≥32 位） | - |
 | `CONSUL_MGR_ADMIN_PASSWORD` | 管理员密码 | - |
-| `CONSUL_MGR_CASDOOR_ENDPOINT` | Casdoor 地址（默认外置域名） | `https://casdoor.example.com` |
+| `CONSUL_MGR_CASDOOR_ENDPOINT` | Casdoor 地址（必填） | - |
 | `CONSUL_MGR_CASDOOR_PUBLIC_ENDPOINT` | Casdoor 浏览器地址（留空回退 Endpoint） | - |
 | `CONSUL_MGR_CASDOOR_IN_CLUSTER` | Casdoor 是否在集群内 | `false` |
 | `CONSUL_MGR_CASDOOR_ORGANIZATION` | 组织 | `flyiam` |
 | `CONSUL_MGR_CASDOOR_APPLICATION` | 应用 | `flyiam` |
+| `CONSUL_MGR_CASDOOR_CLIENT_ID` / `..._SECRET` | Casdoor 凭据（可留空，见下） | - |
+| `CONSUL_MGR_FLYIAM_API_ENDPOINT` / `..._SERVICE_TOKEN` | FlyIAM 对接（字段同步 + 自动获取 Casdoor 凭据） | - |
 | `CONSUL_MGR_HPA_ENABLED` | 是否启用 HPA | `false` |
 
 ## 7. 访问

@@ -42,10 +42,16 @@ export CONSUL_MGR_ADMIN_PASSWORD="your-admin-password"
 # 认证：默认「外置域名方式」，后端通过域名访问 Casdoor
 export CONSUL_MGR_CASDOOR_ENDPOINT="https://casdoor.example.com"
 export CONSUL_MGR_CASDOOR_PUBLIC_ENDPOINT="https://casdoor.example.com"
-export CONSUL_MGR_CASDOOR_CLIENT_ID="<从 FlyIAM 获取>"
-export CONSUL_MGR_CASDOOR_CLIENT_SECRET="<从 FlyIAM 获取>"
 export CONSUL_MGR_CASDOOR_ORGANIZATION="flyiam"
 export CONSUL_MGR_CASDOOR_APPLICATION="flyiam"
+
+# Casdoor 凭据：二选一
+#   方式一：显式提供
+# export CONSUL_MGR_CASDOOR_CLIENT_ID="<从 FlyIAM 获取>"
+# export CONSUL_MGR_CASDOOR_CLIENT_SECRET="<从 FlyIAM 获取>"
+#   方式二（推荐）：配置 FlyIAM 对接，启动时自动获取（上面两项可留空）
+export CONSUL_MGR_FLYIAM_API_ENDPOINT="http://flyiam.flyiam.svc.cluster.local:8081"
+export CONSUL_MGR_FLYIAM_SERVICE_TOKEN="<FlyIAM 页面生成的 API 令牌>"
 
 # 为目标节点打标签（硬性节点亲和性要求）
 kubectl get nodes

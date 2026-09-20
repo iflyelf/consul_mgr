@@ -34,7 +34,7 @@ docker compose logs -f          # 容器 stdout
 
 ```bash
 docker run -d \
-  --name consul_mgr \
+  --name consul-mgr \
   --network host \
   --restart always \
   -e SERVER_PORT=8080 \
@@ -46,13 +46,33 @@ docker run -d \
   -e CASDOOR_PUBLIC_ENDPOINT="http://your-domain:8000" \
   -e CASDOOR_ORGANIZATION="flyiam" \
   -e CASDOOR_APPLICATION="flyiam" \
-  -e CASDOOR_CLIENT_ID="xxx" \
-  -e CASDOOR_CLIENT_SECRET="xxx" \
+  -e CONSUL_MGR_FLYIAM_API_ENDPOINT="http://127.0.0.1:8081" \
+  -e CONSUL_MGR_FLYIAM_SERVICE_TOKEN="<FlyIAM 页面生成的 API 令牌>" \
   -e REDIS_ENABLED="true" \
   -e REDIS_HOST="127.0.0.1" \
   -e REDIS_PORT="6379" \
   -v /etc/consul_mgr/config.yaml:/etc/consul_mgr/config.yaml:ro \
   iflyelf/consul-mgr:latest
+```
+
+> 上例通过 FlyIAM 自动获取 Casdoor 凭据（`CASDOOR_CLIENT_ID/SECRET` 无需填写）。
+> 若不便配置 FlyIAM 对接，也可显式传入 `-e CASDOOR_CLIENT_ID=... -e CASDOOR_CLIENT_SECRET=...`。
+
+## 构建自定义镜像
+
+Dockerfile 采用**多阶段构建**：
+
+| 阶段 | 基础镜像 | 作用 |
+|------|----------|------|
+| builder | `iflyelf/ubuntu:latest` | 预装 Go / Node 与工具链；编译 Go 二进制（前端 `web/dist` 已随仓库提供、走 `go:embed`） |
+| runtime | `iflyelf/ubuntu:lite` | 精简运行镜像，仅拷贝编译产物与默认配置 |
+
+基础镜像可用 `--build-arg BUILDER_IMAGE=... --build-arg RUNTIME_IMAGE=...` 覆盖。
+
+```bash
+# 多架构构建（amd64 / arm64）
+docker buildx build --platform linux/amd64,linux/arm64 \
+  -t iflyelf/consul-mgr:latest --push .
 ```
 
 ## 环境变量
@@ -70,8 +90,13 @@ docker run -d \
 | `ADMIN_USERNAME` / `ADMIN_PASSWORD` | 管理员（必填） | — |
 | `CASDOOR_ENDPOINT` / `CASDOOR_PUBLIC_ENDPOINT` | Casdoor 地址（FlyIAM 提供） | — |
 | `CASDOOR_ORGANIZATION` / `CASDOOR_APPLICATION` | 组织 / 应用 | `flyiam` / `flyiam` |
-| `CASDOOR_CLIENT_ID` / `CASDOOR_CLIENT_SECRET` | Casdoor 凭据（从 FlyIAM 获取） | — |
+| `CASDOOR_CLIENT_ID` / `CASDOOR_CLIENT_SECRET` | Casdoor 凭据（可留空，见下） | — |
+| `CONSUL_MGR_FLYIAM_API_ENDPOINT` / `_SERVICE_TOKEN` | FlyIAM 对接（字段同步 + 自动获取 Casdoor 凭据） | — |
 | `REDIS_*` | 缓存配置 | `true` / `localhost` / `6379` |
+
+> **自动获取 Casdoor 凭据（推荐）**：配置 `CONSUL_MGR_FLYIAM_API_ENDPOINT` +
+> `CONSUL_MGR_FLYIAM_SERVICE_TOKEN` 后，`CASDOOR_CLIENT_ID` / `CASDOOR_CLIENT_SECRET`
+> 可留空——启动时自动向 FlyIAM 获取并落库，免手工填写。
 
 ## 网络模式说明
 

@@ -39,8 +39,13 @@ export ADMIN_PASSWORD="your-password"
 export CASDOOR_ENDPOINT="http://localhost:8000"
 export CASDOOR_ORGANIZATION="flyiam"
 export CASDOOR_APPLICATION="flyiam"
+# Casdoor 凭据：二选一
+#   方式一：显式提供
 export CASDOOR_CLIENT_ID="xxx"      # 从 FlyIAM 获取
 export CASDOOR_CLIENT_SECRET="xxx"  # 从 FlyIAM 获取
+#   方式二（推荐）：配置 FlyIAM 对接，自动获取（上面两项可省略）
+# export CONSUL_MGR_FLYIAM_API_ENDPOINT="http://localhost:8081"
+# export CONSUL_MGR_FLYIAM_SERVICE_TOKEN="<FlyIAM 页面生成的 API 令牌>"
 ```
 
 > 认证依赖 FlyIAM：本地开发请先启动 FlyIAM（内置 Casdoor），并确保组织的回调白名单包含

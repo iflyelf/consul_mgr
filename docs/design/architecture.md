@@ -109,6 +109,40 @@ Consul Manager 是一个 Consul 服务与实例管理平台，采用 **单二进
 - **三套主题**：暖沙米（默认）/ 冷蓝 / 暗黑，Mac 圆角风格，H5 自适应。
 - 主题选择本地记忆，首次访问按系统深色偏好选择。
 
+### 3.7 多副本与并发安全
+
+**多副本（默认 2 副本）下的定时任务去重**
+
+每个副本都有独立调度器，进程内标记无法跨 Pod 互斥。用户字段自动同步执行前，
+通过 `internal/pkg/distlock`（PostgreSQL 会话级 advisory lock）获取**全局锁**：
+
+- 抢到锁的副本执行，其余直接跳过（`ErrSyncRunning`，视为正常）；
+- 锁绑定专用连接，副本异常退出时连接断开、锁自动释放，不会死锁；
+- 获取连接带 10s 超时；锁服务异常时降级为进程内互斥（仅告警）。
+
+**配置的并发安全（原子快照）**
+
+`Config` 由 `internal/config.Store`（`atomic.Pointer[Config]`）承载，采用**写时复制**：
+页面保存设置时先 `Clone()` 副本、在副本上修改，再原子替换；读者经
+`ServiceContext.Config()` 获取不可变快照，消除「页面保存」与「请求读取」的数据竞争。
+
+**并发原语与 panic 兜底**
+
+- `internal/pkg/parallel` 提供统一的有界并发原语：信号量在**派发前**获取，
+  同时在跑的 goroutine 数严格受限（不预创建大量 goroutine）；单项 panic 被
+  捕获为该下标的错误，不终止进程。
+- 后台 goroutine（调度器、同步、令牌校验等）均加 `recover`：Go 的 `recover`
+  仅对**同 goroutine** 有效，worker / 后台循环内 panic 会终止整个进程。
+
+### 3.8 自动获取 Casdoor 凭据
+
+本系统与 FlyIAM 复用同一 Casdoor，但无法自行获取应用凭据。配置 FlyIAM 地址
+（`CONSUL_MGR_FLYIAM_API_ENDPOINT`）与服务令牌（`CONSUL_MGR_FLYIAM_SERVICE_TOKEN`）后，
+启动时（及页面保存 FlyIAM 配置后）会自动调用 FlyIAM
+`GET /api/casdoor/app-credentials` 获取 `ClientID/Secret` 并落库（DB 优先），
+**免手工填写**。`CASDOOR_ENDPOINT` 仍须显式提供（非敏感；FlyIAM 的地址可能是
+其命名空间内短名，跨命名空间不可达）。
+
 ## 4. 配置原则
 
 **零硬编码**：所有地址、端口、凭据均通过环境变量注入，详见 [部署文档](../deployment/systemd.md)。

@@ -57,7 +57,8 @@ journalctl -u consul_mgr -f
 | `CASDOOR_ENDPOINT` | Casdoor 后端地址（FlyIAM 提供，必填） | — |
 | `CASDOOR_PUBLIC_ENDPOINT` | 浏览器可达地址（跨域名部署必填） | 同 Endpoint |
 | `CASDOOR_ORGANIZATION` / `CASDOOR_APPLICATION` | 组织 / 应用 | `flyiam` / `flyiam` |
-| `CASDOOR_CLIENT_ID` / `CASDOOR_CLIENT_SECRET` | Casdoor 凭据（从 FlyIAM 获取，必填） | — |
+| `CASDOOR_CLIENT_ID` / `CASDOOR_CLIENT_SECRET` | Casdoor 凭据（可留空，见下方自动获取） | — |
+| `CONSUL_MGR_FLYIAM_API_ENDPOINT` / `CONSUL_MGR_FLYIAM_SERVICE_TOKEN` | FlyIAM 对接（字段同步 + 自动获取 Casdoor 凭据） | — |
 | `REDIS_ENABLED` / `REDIS_HOST` / `REDIS_PORT` / `REDIS_PASSWORD` | 缓存 | `true` / `localhost` / `6379` / 空 |
 | `CONSUL_ADDRESS` / `CONSUL_TOKEN` / `CONSUL_DATACENTER` | 默认 Consul | — / 空 / `dc1` |
 | `CONSUL_MAX_CONCURRENCY` | 批量查询/操作并发上限 | `16` |
@@ -75,8 +76,12 @@ CASDOOR_ENDPOINT=http://127.0.0.1:8000
 CASDOOR_PUBLIC_ENDPOINT=http://your-domain:8000
 CASDOOR_ORGANIZATION=flyiam
 CASDOOR_APPLICATION=flyiam
-CASDOOR_CLIENT_ID=xxx
-CASDOOR_CLIENT_SECRET=xxx
+# 方式一：显式提供 Casdoor 凭据
+#CASDOOR_CLIENT_ID=xxx
+#CASDOOR_CLIENT_SECRET=xxx
+# 方式二（推荐）：配置 FlyIAM 对接，自动获取 Casdoor 凭据（上面两项可留空）
+CONSUL_MGR_FLYIAM_API_ENDPOINT=http://127.0.0.1:8081
+CONSUL_MGR_FLYIAM_SERVICE_TOKEN=<FlyIAM 页面生成的 API 令牌>
 REDIS_ENABLED=true
 REDIS_HOST=127.0.0.1
 REDIS_PORT=6379
