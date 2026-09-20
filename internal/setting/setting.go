@@ -123,13 +123,6 @@ var Registry = []Item{
 	{Key: "casdoor.client_secret", Group: "Casdoor 连接", Label: "Client Secret", Type: "secret", Secret: true,
 		Get: func(c *config.Config) string { return c.Casdoor.ClientSecret },
 		Set: func(c *config.Config, v string) { c.Casdoor.ClientSecret = v }},
-	{Key: "casdoor.user_cache_ttl", Group: "Casdoor 连接", Label: "用户缓存(秒)", Type: "int",
-		Get: func(c *config.Config) string { return strconv.Itoa(c.Casdoor.UserCacheTTL) },
-		Set: func(c *config.Config, v string) {
-			if n, err := strconv.Atoi(v); err == nil {
-				c.Casdoor.UserCacheTTL = n
-			}
-		}},
 	{Key: "casdoor.default_password", Group: "Casdoor 连接", Label: "新增用户默认密码", Type: "secret", Secret: true,
 		Get: func(c *config.Config) string { return c.Casdoor.DefaultPassword },
 		Set: func(c *config.Config, v string) { c.Casdoor.DefaultPassword = v }},

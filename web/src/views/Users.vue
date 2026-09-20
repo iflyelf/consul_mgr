@@ -8,9 +8,15 @@
             <el-tag type="success" size="small">数据来源：Casdoor</el-tag>
           </div>
           <div class="header-actions">
+            <el-select v-model="searchField" style="width: 120px">
+              <el-option label="域账号" value="name" />
+              <el-option label="姓名" value="displayName" />
+              <el-option label="邮箱" value="email" />
+              <el-option label="手机号" value="phone" />
+            </el-select>
             <el-input
               v-model="keyword"
-              placeholder="搜索用户名 / 姓名 / 邮箱"
+              placeholder="输入关键词（服务端搜索）"
               clearable
               style="width: 240px"
               @keyup.enter="handleSearch"
@@ -182,6 +188,7 @@ import { listUserFields } from '@/api/userField'
 const loading = ref(false)
 const saving = ref(false)
 const keyword = ref('')
+const searchField = ref('name')
 const users = ref([])
 const total = ref(0)
 const currentPage = ref(1)
@@ -255,6 +262,7 @@ const loadData = async () => {
   loading.value = true
   try {
     const res = await getUsers({
+      field: searchField.value,
       keyword: keyword.value,
       page: currentPage.value,
       page_size: pageSize.value

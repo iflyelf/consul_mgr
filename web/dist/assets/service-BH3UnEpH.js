@@ -1,0 +1,1 @@
+import{r as t}from"./request-BI5iX9wN.js";function s(e){return t({url:"/services",method:"get",params:e})}function i(e){return t({url:"/services/detail",method:"get",params:e})}function c(e){return t({url:"/services",method:"delete",params:e})}function u(e){return t({url:"/services/batch-delete",method:"post",data:e})}export{i as a,u as b,c as d,s as g};

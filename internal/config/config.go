@@ -94,9 +94,6 @@ type Config struct {
 		// 不设代码默认值，必须显式注入（环境变量 CASDOOR_DEFAULT_PASSWORD / Secret），
 		// 避免弱口令被静默沿用。
 		DefaultPassword string `json:",optional,env=CASDOOR_DEFAULT_PASSWORD"`
-		// UserCacheTTL 用户列表缓存时长（秒）。用户列表可能被外部（Casdoor）
-		// 直接修改，故使用较短 TTL，缩短「外部改动不可见」窗口。
-		UserCacheTTL int `json:",default=30,env=CASDOOR_USER_CACHE_TTL"`
 	}
 
 	Permission struct {
