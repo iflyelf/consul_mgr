@@ -103,7 +103,7 @@ func main() {
 		c.FlyIAM.SyncEnabled, c.FlyIAM.SyncOnStartup, c.FlyIAM.SyncInterval); err != nil {
 		logx.Errorf("写入同步配置种子失败: %v", err)
 	}
-	userfieldLogic.StartScheduler(schedCtx, ctx.DB, &c)
+	userfieldLogic.StartScheduler(schedCtx, ctx.DB, ctx.RawDB, &c)
 
 	// 启动信息
 	fmt.Printf("🚀 Starting Consul Manager Server\n")

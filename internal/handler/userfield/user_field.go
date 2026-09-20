@@ -2,6 +2,7 @@
 package userfield
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 
@@ -98,9 +99,14 @@ func SyncUserFieldsHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 			response.BadRequest(w, "未配置 FlyIAM 地址或服务令牌（CONSUL_MGR_FLYIAM_API_ENDPOINT / _SERVICE_TOKEN）")
 			return
 		}
-		l := userfield.NewLogic(ctx.DB)
+		l := userfield.NewLogicWithRaw(ctx.DB, ctx.RawDB)
 		added, updated, total, err := l.RunSync(r.Context(), cfg.Endpoint, cfg.ServiceToken, "manual")
 		if err != nil {
+			// 已有同步在执行（本进程或其它副本）：返回 409 业务码而非 502
+			if errors.Is(err, userfield.ErrSyncRunning) {
+				response.Error(w, http.StatusConflict, err.Error())
+				return
+			}
 			response.Error(w, 502, "同步失败: "+err.Error())
 			return
 		}

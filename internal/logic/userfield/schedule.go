@@ -2,6 +2,7 @@ package userfield
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"log"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/iflyelf/consul_mgr/internal/config"
 	"github.com/iflyelf/consul_mgr/internal/model"
+	"github.com/iflyelf/consul_mgr/internal/pkg/distlock"
 )
 
 // syncConfigID 单例配置行 ID
@@ -176,9 +178,10 @@ func (l *Logic) SeedSyncConfig(ctx context.Context, enabled bool, onStartup bool
 // StartScheduler 启动后台调度：启动时按配置同步一次，之后按间隔检查。
 //
 // cfg 为共享指针：FlyIAM 地址/令牌可在页面修改并即时生效（无需重启）。
+// rawDB 用于跨副本互斥（多副本部署时避免重复执行同一任务）。
 // 说明：进度写入内存（供前端轮询），结果落库（供历史查询）。
-func StartScheduler(ctx context.Context, db sqlx.SqlConn, cfg *config.Config) {
-	l := NewLogic(db)
+func StartScheduler(ctx context.Context, db sqlx.SqlConn, rawDB *sql.DB, cfg *config.Config) {
+	l := NewLogicWithRaw(db, rawDB)
 
 	// 启动时同步（可选）
 	if cfg.FlyIAM.SyncOnStartup && cfg.FlyIAM.Endpoint != "" && cfg.FlyIAM.ServiceToken != "" {
@@ -235,12 +238,30 @@ func StartScheduler(ctx context.Context, db sqlx.SqlConn, cfg *config.Config) {
 	}()
 }
 
+// ErrSyncRunning 已有同步任务在执行（可能为本进程或其它副本）
+var ErrSyncRunning = fmt.Errorf("已有同步任务在执行中，请稍后再试")
+
+// syncLockKey 跨副本同步互斥的 advisory lock 键（固定值，保证多副本互斥）
+const syncLockKey int64 = 0x636F6E73756C02 // "consul\x02"
+
 // RunSync 执行一次字段同步（带进度与日志），供手动与自动共用。
 //
-// 并发保护：已有同步在运行时直接返回错误，避免重复执行。
+// 并发保护：进程内标记 + 跨副本 advisory lock，避免多副本重复执行。
 func (l *Logic) RunSync(ctx context.Context, endpoint, serviceToken, trigger string) (added, updated, total int, err error) {
 	if getProgress().Running {
-		return 0, 0, 0, fmt.Errorf("已有同步任务在执行中，请稍后再试")
+		return 0, 0, 0, ErrSyncRunning
+	}
+
+	// 跨副本互斥：多副本各自调度时，仅允许一个副本真正执行。
+	// advisory lock 绑定专用连接；副本异常退出时连接断开、锁自动释放。
+	lock, ok, lerr := distlock.TryAcquire(ctx, l.rawDB, syncLockKey)
+	if lerr != nil {
+		// 锁服务异常时不阻塞同步（降级为进程内互斥），仅告警
+		log.Printf("⚠️ 获取跨副本同步锁失败（降级为进程内互斥）: %v", lerr)
+	} else if !ok {
+		return 0, 0, 0, ErrSyncRunning
+	} else {
+		defer lock.Release()
 	}
 
 	// panic 兜底：本方法会在后台 goroutine 中被调用，panic 默认会终止进程。

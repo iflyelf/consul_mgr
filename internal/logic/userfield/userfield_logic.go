@@ -3,6 +3,7 @@ package userfield
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"strings"
@@ -16,11 +17,18 @@ import (
 // Logic 用户字段定义业务逻辑
 type Logic struct {
 	db sqlx.SqlConn
+	// rawDB 原生连接：用于跨副本同步互斥（advisory lock），可为 nil
+	rawDB *sql.DB
 }
 
 // NewLogic 创建用户字段定义业务逻辑
 func NewLogic(db sqlx.SqlConn) *Logic {
 	return &Logic{db: db}
+}
+
+// NewLogicWithRaw 创建业务逻辑，并注入原生连接以启用跨副本互斥
+func NewLogicWithRaw(db sqlx.SqlConn, rawDB *sql.DB) *Logic {
+	return &Logic{db: db, rawDB: rawDB}
 }
 
 // isUniqueViolation 判断是否为 PostgreSQL 唯一约束冲突（23505）
