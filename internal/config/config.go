@@ -114,6 +114,16 @@ type Config struct {
 		SyncInterval  string `json:",default=6h,env=CONSUL_MGR_FLYIAM_SYNC_INTERVAL"`
 	}
 
+	// ServiceAPI 入站服务间调用（供 upgrade_mgr 等平台只读拉取主机清单）。
+	//
+	// 与 FlyIAM 的协议一致：请求头 X-Service-Token 携带令牌。
+	// 令牌为空时接口返回 503 并提示先配置，即默认关闭。
+	// 这些接口只读，且不返回 consul_token 等凭据。
+	ServiceAPI struct {
+		// Token 入站服务令牌；留空表示不开放服务间 API。
+		Token string `json:",optional,env=CONSUL_MGR_SERVICE_API_TOKEN"`
+	}
+
 	// Security 登录凭证与跨域相关配置
 	Security struct {
 		// CookieSameSite 登录 Cookie 的 SameSite 策略：lax / strict / none

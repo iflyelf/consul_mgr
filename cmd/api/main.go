@@ -130,6 +130,10 @@ func registerHandlers(server *rest.Server, ctx *svc.ServiceContext) {
 	casdoorAuth := middleware.NewCasdoorAuthMiddleware(ctx.Casdoor)
 	permissionMw := middleware.NewPermissionMiddleware(ctx.Casdoor, ctx.RawDB)
 	auditMw := middleware.NewAuditMiddleware(ctx)
+	// 服务间只读 API 的令牌校验；每次请求读当前配置快照，页面改完即时生效。
+	serviceTokenMw := middleware.NewServiceTokenMiddleware(func() string {
+		return ctx.Config().ServiceAPI.Token
+	})
 
 	// ============================================================
 	// 公开路由（无需认证）
@@ -442,6 +446,21 @@ func registerHandlers(server *rest.Server, ctx *svc.ServiceContext) {
 		Path:   "/api/instances/services",
 		Handler: casdoorAuth.Handle(
 			instance.GetServicesHandler(ctx),
+		),
+	})
+
+	// ============================================================
+	// 服务间只读 API（X-Service-Token 认证，不走用户会话）
+	//
+	// 供 upgrade_mgr 等平台按 IP 粒度拉取主机清单与 ServiceMeta。
+	// 只读、不改任何数据；令牌在「设置 → 服务间 API」配置。
+	// ============================================================
+
+	server.AddRoute(rest.Route{
+		Method: http.MethodGet,
+		Path:   "/api/service/hosts",
+		Handler: serviceTokenMw.Handle(
+			instance.ExportHostsHandler(ctx),
 		),
 	})
 

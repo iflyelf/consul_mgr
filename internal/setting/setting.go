@@ -152,6 +152,13 @@ var Registry = []Item{
 			}
 		}},
 
+	// 服务间 API（入站）：供 upgrade_mgr 等平台只读拉取主机清单
+	{Key: "service_api.token", Group: "服务间 API",
+		Label: "入站服务令牌（留空关闭；upgrade_mgr 用 X-Service-Token 携带此值拉取主机清单）",
+		Type:  "secret", Secret: true,
+		Get: func(c *config.Config) string { return c.ServiceAPI.Token },
+		Set: func(c *config.Config, v string) { c.ServiceAPI.Token = strings.TrimSpace(v) }},
+
 	// FlyIAM 集成（同步用户字段定义）
 	{Key: "flyiam.api_endpoint", Group: "FlyIAM 集成", Label: "FlyIAM API 地址", Type: "string",
 		Get: func(c *config.Config) string { return c.FlyIAM.Endpoint },

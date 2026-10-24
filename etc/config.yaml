@@ -91,3 +91,11 @@ Audit:
 Permission:
   EnableServiceGroupAuth: true
   DefaultPermissions: [read]
+
+# 服务间 API（入站）：供 upgrade_mgr 等平台只读拉取主机清单
+#
+# 留空表示关闭：相关路由仍注册，但一律返回 503，不暴露任何数据。
+# upgrade_mgr 在「设置 → consul_mgr 对接」填写同一个令牌即可同步。
+# 建议用环境变量 CONSUL_MGR_SERVICE_API_TOKEN 覆盖，不要提交到仓库。
+ServiceAPI:
+  Token: ""
