@@ -37,3 +37,21 @@ func ExportHostsHandler(ctx *svc.ServiceContext) http.HandlerFunc {
 		response.Success(w, res)
 	}
 }
+
+// ExportGroupsHandler 列出可同步的服务组（服务间只读接口）。
+//
+// 路径：GET /api/service/groups
+// 鉴权：X-Service-Token，不走用户会话。
+//
+// 用途：让 upgrade_mgr 在页面上用下拉选择服务组，而不是在配置文件里写死 group_id。
+// 只返回 id/name/code/datacenter，不含 consul_address 与 consul_token。
+func ExportGroupsHandler(ctx *svc.ServiceContext) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		groups, err := instance.ExportGroups(r.Context(), ctx)
+		if err != nil {
+			response.InternalError(w, err.Error())
+			return
+		}
+		response.Success(w, map[string]any{"groups": groups, "total": len(groups)})
+	}
+}

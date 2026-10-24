@@ -174,6 +174,32 @@ func listEnabledGroups(ctx context.Context, svcCtx *svc.ServiceContext, groupID 
 	return groups, nil
 }
 
+// ExportedGroup 服务组的只读视图（服务间接口返回，绝不含 consul_token）。
+type ExportedGroup struct {
+	ID         int64  `json:"id"`
+	Name       string `json:"name"`
+	Code       string `json:"code"`
+	Datacenter string `json:"datacenter"`
+}
+
+// ExportGroups 列出可同步的服务组，供调用方（upgrade_mgr）在页面上选择。
+//
+// 只返回「启用且已配置 Consul 地址」的组，与 ExportHosts 的筛选口径一致：
+// 页面上能选到的组，同步时一定会被实际处理。
+func ExportGroups(ctx context.Context, svcCtx *svc.ServiceContext) ([]ExportedGroup, error) {
+	groups, err := listEnabledGroups(ctx, svcCtx, 0)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]ExportedGroup, 0, len(groups))
+	for _, g := range groups {
+		out = append(out, ExportedGroup{
+			ID: g.ID, Name: g.Name, Code: g.Code, Datacenter: g.Datacenter,
+		})
+	}
+	return out, nil
+}
+
 // listGroupInstances 取某服务组下全部服务的实例（复用实例列表的缓存路径）。
 func listGroupInstances(ctx context.Context, svcCtx *svc.ServiceContext, groupID int64) ([]types.ConsulInstanceInfo, error) {
 	l := NewListInstancesLogic(ctx, svcCtx)

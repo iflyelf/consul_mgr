@@ -464,6 +464,17 @@ func registerHandlers(server *rest.Server, ctx *svc.ServiceContext) {
 		),
 	})
 
+	// 服务组清单：供 upgrade_mgr 在页面上用下拉选择同步范围，
+	// 不必在配置文件里手写 group_id。只返回 id/名称/编码/数据中心，
+	// 不含 consul_address / consul_token 等连接凭据。
+	server.AddRoute(rest.Route{
+		Method: http.MethodGet,
+		Path:   "/api/service/groups",
+		Handler: serviceTokenMw.Handle(
+			instance.ExportGroupsHandler(ctx),
+		),
+	})
+
 	// ============================================================
 	// 权限管理（需要权限：admin）
 	// ============================================================
